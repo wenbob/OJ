@@ -5,11 +5,13 @@ import {
   History,
   PenLine,
   Settings,
+  Trophy,
   Users,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requirePageUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getStudentRankings } from "@/lib/ranking";
 import { getAdminDisplaySettings } from "@/lib/settings";
 
 const adminNav = [
@@ -30,6 +32,7 @@ export default async function AdminHomePage() {
     userCount,
     dailySubmissionCount,
     examSubmissionCount,
+    rankings,
     settings,
   ] = await Promise.all([
     prisma.problem.count(),
@@ -37,6 +40,7 @@ export default async function AdminHomePage() {
     prisma.user.count(),
     prisma.submission.count({ where: { submissionType: "practice" } }),
     prisma.submission.count({ where: { submissionType: "exam" } }),
+    getStudentRankings(),
     getAdminDisplaySettings(),
   ]);
 
@@ -73,6 +77,13 @@ export default async function AdminHomePage() {
           icon={<Users size={22} />}
           label="用户管理"
           text="学生账号、管理员账号与密码重置"
+        />
+        <AdminEntry
+          count={rankings.length}
+          href="/admin/leaderboard"
+          icon={<Trophy size={22} />}
+          label="天梯排行榜"
+          text="查看学生段位积分并管理自定义头衔"
         />
         <AdminEntry
           count={dailySubmissionCount}

@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { requirePageUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getStudentRankings } from "@/lib/ranking";
 import { UserManager } from "./user-manager";
 
 const adminNav = [
@@ -15,16 +16,21 @@ const adminNav = [
 
 export default async function AdminUsersPage() {
   const user = await requirePageUser("admin");
-  const users = await prisma.user.findMany({
-    select: {
-      id: true,
-      username: true,
-      role: true,
-      createdAt: true,
-      _count: { select: { submissions: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const [users, rankings] = await Promise.all([
+    prisma.user.findMany({
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        createdAt: true,
+        studentProfile: { select: { customTitle: true } },
+        _count: { select: { submissions: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    getStudentRankings(),
+  ]);
+  const rankingByUserId = new Map(rankings.map((item) => [item.userId, item]));
 
   return (
     <AppShell nav={adminNav} title="管理员端" user={user}>
@@ -34,6 +40,8 @@ export default async function AdminUsersPage() {
           username: item.username,
           role: item.role,
           createdAt: item.createdAt.toISOString(),
+          customTitle: item.studentProfile?.customTitle ?? "",
+          ranking: rankingByUserId.get(item.id) ?? null,
           submissions: item._count.submissions,
         }))}
       />

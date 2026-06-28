@@ -6,15 +6,26 @@ import { useState } from "react";
 import { formatDate } from "@/lib/format";
 
 type UserItem = {
+  customTitle?: string | null;
   id: number;
+  ranking?: {
+    acCount: number;
+    acceptedSubmissionCount: number;
+    displayTitle: string;
+    points: number;
+    rank: number;
+    tierTitle: string;
+  } | null;
   username: string;
   role: string;
   createdAt: string;
+  studentProfile?: { customTitle: string | null } | null;
   submissions?: number;
   _count?: { submissions: number };
 };
 
 const blankForm = {
+  customTitle: "",
   username: "",
   password: "",
   role: "student",
@@ -34,6 +45,7 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
       setUsers(
         data.users.map((item: UserItem) => ({
           ...item,
+          customTitle: item.customTitle ?? item.studentProfile?.customTitle ?? "",
           submissions: item.submissions ?? item._count?.submissions ?? 0,
         })),
       );
@@ -42,7 +54,12 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
 
   function editUser(user: UserItem) {
     setEditingId(user.id);
-    setForm({ username: user.username, password: "", role: user.role });
+    setForm({
+      customTitle: user.customTitle ?? "",
+      username: user.username,
+      password: "",
+      role: user.role,
+    });
     setError("");
   }
 
@@ -60,6 +77,10 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
     }
     if (!editingId && !form.password) {
       setError("新增用户时密码不能为空");
+      return;
+    }
+    if (form.customTitle.trim().length > 20) {
+      setError("自定义头衔不能超过 20 个字符");
       return;
     }
     setPending(true);
@@ -108,6 +129,8 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
               <tr className="border-b border-ink-950/10 bg-white/55 text-left">
                 <th className="table-head px-5 py-3">用户名</th>
                 <th className="table-head px-5 py-3">角色</th>
+                <th className="table-head px-5 py-3">头衔</th>
+                <th className="table-head px-5 py-3">段位积分</th>
                 <th className="table-head px-5 py-3">提交</th>
                 <th className="table-head px-5 py-3">创建时间</th>
                 <th className="table-head px-5 py-3 text-right">操作</th>
@@ -119,6 +142,32 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
                   <td className="px-5 py-4 font-black">{user.username}</td>
                   <td className="px-5 py-4 text-sm font-semibold text-ink-700">
                     {user.role}
+                  </td>
+                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                    {user.ranking ? (
+                      <span>
+                        {user.ranking.displayTitle}
+                        {user.customTitle ? (
+                          <span className="ml-2 text-ink-500">自定义</span>
+                        ) : null}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                    {user.ranking ? (
+                      <div>
+                        <p className="font-black text-ink-950">
+                          {user.ranking.tierTitle} · {user.ranking.points} 分
+                        </p>
+                        <p className="mt-1 text-xs text-ink-600">
+                          唯一 AC {user.ranking.acCount} 题 · AC {user.ranking.acceptedSubmissionCount} 次
+                        </p>
+                      </div>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td className="px-5 py-4 text-sm font-semibold text-ink-700">
                     {user.submissions ?? 0}
@@ -183,6 +232,19 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
               <option value="student">student</option>
               <option value="admin">admin</option>
             </select>
+          </label>
+          <label className="grid gap-2 text-sm font-bold text-ink-800">
+            自定义头衔（仅学生，最多 20 字）
+            <input
+              className="field"
+              maxLength={20}
+              placeholder="留空则使用自动段位名"
+              value={form.customTitle}
+              onChange={(event) => setForm((current) => ({ ...current, customTitle: event.target.value }))}
+            />
+            <span className="text-xs font-semibold text-ink-600">
+              留空使用自动段位名；自定义头衔只影响展示，不影响积分和排名。
+            </span>
           </label>
         </div>
         {error ? (

@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS "ExamProblem";
 DROP TABLE IF EXISTS "Exam";
 DROP TABLE IF EXISTS "TestCase";
 DROP TABLE IF EXISTS "Problem";
+DROP TABLE IF EXISTS "StudentProfile";
 DROP TABLE IF EXISTS "User";
 DROP TABLE IF EXISTS "SystemSetting";
 
@@ -19,6 +20,17 @@ CREATE TABLE "User" (
 );
 
 CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
+
+CREATE TABLE "StudentProfile" (
+  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "userId" INTEGER NOT NULL,
+  "customTitle" TEXT,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "StudentProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE UNIQUE INDEX "StudentProfile_userId_key" ON "StudentProfile"("userId");
 
 CREATE TABLE "Problem" (
   "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,

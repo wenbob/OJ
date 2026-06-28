@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Code2 } from "lucide-react";
 import { CurrentUser } from "@/lib/auth";
 import { LogoutButton } from "@/components/LogoutButton";
+import { findRankingByUserId, getStudentRankings } from "@/lib/ranking";
 import { getPublicSettings } from "@/lib/settings";
 
 type NavItem = {
@@ -21,6 +22,16 @@ export async function AppShell({
   children: React.ReactNode;
 }) {
   const { siteName } = await getPublicSettings();
+  const currentRanking = user.role === "student"
+    ? findRankingByUserId(await getStudentRankings(), user.id)
+    : null;
+  const leaderboardItem =
+    user.role === "admin"
+      ? { href: "/admin/leaderboard", label: "天梯榜" }
+      : { href: "/student/leaderboard", label: "天梯榜" };
+  const shellNav = nav.some((item) => item.href === leaderboardItem.href)
+    ? nav
+    : [...nav, leaderboardItem];
 
   return (
     <div className="min-h-screen">
@@ -40,13 +51,15 @@ export async function AppShell({
 
           <div className="flex flex-wrap items-center gap-2">
             <span className="border border-ink-950/10 bg-white/55 px-3 py-2 text-sm font-semibold text-ink-800">
-              {user.username} · {user.role}
+              {currentRanking
+                ? `${user.username} · ${currentRanking.displayTitle} · ${currentRanking.points} 分`
+                : `${user.username} · ${user.role}`}
             </span>
             <LogoutButton />
           </div>
         </div>
         <nav className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-4 md:px-6">
-          {nav.map((item) => (
+          {shellNav.map((item) => (
             <Link
               className="border border-ink-950/10 bg-white/58 px-3 py-2 text-sm font-bold text-ink-800 hover:border-steel hover:text-steel"
               href={item.href}

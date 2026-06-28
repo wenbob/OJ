@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ClipboardList, History, PenLine, Timer } from "lucide-react";
+import { ClipboardList, History, PenLine, Timer, Trophy } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requirePageUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { findRankingByUserId, getStudentRankings } from "@/lib/ranking";
 import { getPublicSettings } from "@/lib/settings";
 
 const studentNav = [
@@ -22,6 +23,7 @@ export default async function StudentHomePage() {
     examSubmissionCount,
     acceptedCount,
     settings,
+    rankings,
   ] = await Promise.all([
     prisma.problem.count(),
     prisma.exam.count({ where: { status: "published" } }),
@@ -33,7 +35,9 @@ export default async function StudentHomePage() {
     }),
     prisma.submission.count({ where: { userId: user.id, status: "Accepted" } }),
     getPublicSettings(),
+    getStudentRankings(),
   ]);
+  const currentRanking = findRankingByUserId(rankings, user.id);
 
   return (
     <AppShell nav={studentNav} title="学生端" user={user}>
@@ -55,6 +59,31 @@ export default async function StudentHomePage() {
             <StatCard icon={<Timer size={22} />} label="考试提交" value={examSubmissionCount} />
             <StatCard icon={<Timer size={22} />} label="通过记录" value={acceptedCount} />
           </div>
+          {currentRanking ? (
+            <div className="mt-6 border border-clay/30 bg-clay/10 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+                    My Rank
+                  </p>
+                  <h2 className="mt-1 text-2xl font-black text-ink-950">
+                    {currentRanking.displayTitle}
+                  </h2>
+                  <p className="mt-1 text-sm font-semibold text-ink-600">
+                    自动段位 {currentRanking.tierTitle} · 唯一 AC {currentRanking.acCount} 题
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-black text-steel">
+                    #{currentRanking.rank}
+                  </p>
+                  <p className="text-sm font-bold text-ink-600">
+                    {currentRanking.points} 积分
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div className="mt-6 flex flex-wrap gap-3">
             <Link className="btn btn-primary" href="/student/problems">
               <PenLine size={16} />
@@ -63,6 +92,10 @@ export default async function StudentHomePage() {
             <Link className="btn btn-secondary" href="/student/exams">
               <Timer size={16} />
               模拟考试
+            </Link>
+            <Link className="btn btn-secondary" href="/student/leaderboard">
+              <Trophy size={16} />
+              天梯榜
             </Link>
           </div>
         </div>
@@ -91,6 +124,12 @@ export default async function StudentHomePage() {
             href="/student/exam-submissions"
             text="只查看模拟考试产生的提交记录。"
             title="考试提交记录"
+          />
+          <HomeLink
+            eyebrow="Ladder"
+            href="/student/leaderboard"
+            text="查看按唯一 AC 题数计算的段位积分和全站排名。"
+            title="天梯排行榜"
           />
         </div>
       </section>

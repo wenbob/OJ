@@ -1,6 +1,6 @@
 # C++ 在线 OJ 练习平台 Demo
 
-这是一个基于 Next.js 的 C++ 在线 OJ 练习平台 Demo。当前版本已经覆盖编程题与选择判断题两种独立题型、日常刷题、模拟考试、代码提交、自动评测、提交详情、管理员题目管理、用户管理、系统设置、Markdown 批量导入、Docker Judge 和基础提交队列等核心流程。
+这是一个基于 Next.js 的 C++ 在线 OJ 练习平台 Demo。当前版本已经覆盖编程题与选择判断题两种独立题型、日常刷题、模拟考试、代码提交、自动评测、提交详情、学生头衔和天梯榜、管理员题目管理、用户管理、系统设置、Markdown 批量导入、Docker Judge 和基础提交队列等核心流程。
 
 当前项目适合作为本地教学演示、功能验证和 3 名学生左右的小规模正式使用基础。线上使用时必须启用 Docker Judge、强随机 `SESSION_SECRET`、定期 SQLite 备份和管理员密码安全管理；它仍不适合作为大规模公网 OJ 或高并发竞赛平台。
 
@@ -15,9 +15,11 @@
 -> 提交评测
 -> 查看整体结果和每个测试点结果
 -> 查看日常提交记录或考试提交记录
+-> 查看头衔、段位积分和天梯榜
 
 管理员登录
 -> 管理题目、用户、考试、系统设置
+-> 为学生设置自定义头衔
 -> Markdown 批量导入题目
 -> 查看日常提交、考试提交和考试记录
 ```
@@ -179,6 +181,23 @@ npm run db:status
   - `admin` -> `/admin`
 - 学生首页显示系统设置中的 `studentNotice`。
 - 页面顶部平台名称读取系统设置中的 `siteName`。
+- 学生首页和顶部用户信息会显示当前头衔、段位积分和天梯排名。
+
+### 头衔与天梯榜
+
+页面：
+
+```text
+/student/leaderboard
+```
+
+规则：
+
+- 段位积分 = 唯一 Accepted 题数 × 10。
+- 同一题多次 Accepted 只计 1 题，日常刷题和考试提交都会纳入统计。
+- 晋级门槛为：青铜学徒 0、白银新秀 65、黄金精英 130、铂金高手 260、钻石强者 455、星耀大师 715、最强王者 1040、荣耀王者 1560。
+- 管理员自定义头衔只覆盖展示文案，不改变段位积分和排名。
+- 天梯榜排序为：积分、唯一 AC 题数、AC 次数、用户名、用户 ID。
 
 ### 日常刷题
 
@@ -489,6 +508,7 @@ POST /api/admin/problems/bulk-delete
 - 查看用户列表。
 - 新增学生或管理员账号。
 - 编辑用户名和角色。
+- 设置或清空学生自定义头衔。
 - 重置密码。
 - 删除用户。
 - 删除前二次确认。
@@ -912,6 +932,7 @@ JUDGE_CONCURRENCY=1
 核心表：
 
 - `User`：用户账号，包含 `student` 和 `admin` 两种角色。
+- `StudentProfile`：学生扩展档案，保存管理员自定义头衔；积分和段位实时从提交记录计算，不写入该表。
 - `Problem`：题目主体信息，包含标题、描述、难度、分类和第一组样例。
 - `Problem.problemType`：`programming` 或 `objective`；客观题小题 JSON 保存于 `objectiveItems`。
 - `TestCase`：测试点，包含样例测试点和隐藏测试点。
@@ -1031,6 +1052,7 @@ Windows 可以使用“任务计划程序”定时运行 `scripts/backup-sqlite.
 /student/submissions
 /student/submissions/[id]
 /student/exam-submissions
+/student/leaderboard
 /student/exams
 /student/exams/[id]
 /student/exams/[id]/take
@@ -1046,6 +1068,7 @@ Windows 可以使用“任务计划程序”定时运行 `scripts/backup-sqlite.
 /admin/practice
 /admin/practice/problems/[id]
 /admin/users
+/admin/leaderboard
 /admin/submissions
 /admin/submissions/[id]
 /admin/exam-submissions
@@ -1144,6 +1167,8 @@ POST   /api/admin/exams/[id]/import/confirm
 GET    /api/admin/settings
 PUT    /api/admin/settings
 ```
+
+管理员用户接口支持 `customTitle` 字段：创建或编辑学生时可设置最多 20 字的自定义头衔；留空则使用自动段位名。
 
 ## 分页与筛选
 
