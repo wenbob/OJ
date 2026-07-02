@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  AI_ASSIST_TIMEOUT_MS,
   buildAiAssistPrompt,
+  isAiAssistTimeoutError,
   sanitizeAiAssistResponse,
   type AiAssistProblemContext,
 } from "./aiAssist";
@@ -43,6 +45,19 @@ describe("AI assist settings", () => {
 });
 
 describe("AI assist prompts", () => {
+  it("allows long-running V4 Pro reasoning before timing out", () => {
+    expect(AI_ASSIST_TIMEOUT_MS).toBe(120_000);
+  });
+
+  it("recognizes Node fetch timeout errors even when the error name is generic", () => {
+    expect(
+      isAiAssistTimeoutError(
+        new Error("The operation was aborted due to timeout"),
+      ),
+    ).toBe(true);
+    expect(isAiAssistTimeoutError(new Error("network failed"))).toBe(false);
+  });
+
   it("builds a hint prompt that forbids complete code", () => {
     const prompt = buildAiAssistPrompt({
       mode: "hint",

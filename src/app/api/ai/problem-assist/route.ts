@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildAiAssistPrompt,
+  isAiAssistTimeoutError,
   requestDeepSeekAdvice,
   type AiAssistMode,
 } from "@/lib/aiAssist";
@@ -51,13 +52,15 @@ function isRetryableAiAssistError(error: unknown) {
   return (
     error.message.includes("没有返回清楚的思路") ||
     error.message.includes("返回格式异常") ||
-    error.message.includes("响应超时") ||
     error.message.includes("请求失败：5")
   );
 }
 
 function safeAiAssistErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "";
+  if (isAiAssistTimeoutError(error)) {
+    return "AI 服务响应超时，请稍后再试。";
+  }
   if (message.includes("未配置")) return "AI 服务暂未配置，请联系老师。";
   if (message.includes("没有返回清楚的思路")) {
     return "AI 这次没有返回清楚的思路，请稍后再试。";

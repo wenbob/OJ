@@ -190,6 +190,21 @@ describe("POST /api/ai/problem-assist", () => {
     expect(requestDeepSeekAdvice).toHaveBeenCalledTimes(1);
   });
 
+  it("reports timeout errors clearly without retrying for another two minutes", async () => {
+    vi.mocked(requestDeepSeekAdvice).mockRejectedValueOnce(
+      new Error("The operation was aborted due to timeout"),
+    );
+
+    const response = await POST(
+      request({ problemId: 10, mode: "hint", code: "" }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body.error).toBe("AI 服务响应超时，请稍后再试。");
+    expect(requestDeepSeekAdvice).toHaveBeenCalledTimes(1);
+  });
+
   it("does not leak internal configuration names to students", async () => {
     vi.mocked(requestDeepSeekAdvice).mockRejectedValueOnce(
       new Error("AI 服务未配置，请管理员设置 DEEPSEEK_API_KEY"),

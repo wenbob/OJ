@@ -92,7 +92,7 @@ export function ProblemAiAssist({
             type="button"
           >
             <Lightbulb size={16} />
-            {pending ? "分析中..." : "AI 思路"}
+            {pending ? "AI 正在思考中..." : "AI 思路"}
           </button>
         </div>
       </div>
@@ -100,6 +100,12 @@ export function ProblemAiAssist({
       {remainingSeconds > 0 ? (
         <p className="mt-3 text-xs font-bold text-indigo-800">
           请 {remainingSeconds} 秒后再使用 AI。
+        </p>
+      ) : null}
+
+      {pending ? (
+        <p className="mt-3 text-xs font-bold text-indigo-800">
+          AI 正在思考中，难题可能需要一两分钟，请不要重复点击。
         </p>
       ) : null}
 

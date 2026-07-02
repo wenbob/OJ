@@ -9,6 +9,17 @@ export type AiAssistProblemContext = {
   samples: { input: string; output: string }[];
 };
 
+export const AI_ASSIST_TIMEOUT_MS = 120_000;
+
+export function isAiAssistTimeoutError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.name === "TimeoutError" ||
+    error.name === "AbortError" ||
+    /aborted due to timeout|signal timed out|timeout/i.test(error.message)
+  );
+}
+
 function limitText(value: string | null | undefined, maxChars: number) {
   const normalized = (value || "未提供").trim() || "未提供";
   if (normalized.length <= maxChars) return normalized;
@@ -137,7 +148,7 @@ export async function requestDeepSeekAdvice(prompt: string) {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(AI_ASSIST_TIMEOUT_MS),
       body: JSON.stringify({
         model,
         messages: [
@@ -153,7 +164,7 @@ export async function requestDeepSeekAdvice(prompt: string) {
       }),
     });
   } catch (error) {
-    if (error instanceof Error && error.name === "TimeoutError") {
+    if (isAiAssistTimeoutError(error)) {
       throw new Error("AI 服务响应超时，请稍后再试。");
     }
     throw new Error("AI 服务请求失败，请稍后再试。");
@@ -163,7 +174,17 @@ export async function requestDeepSeekAdvice(prompt: string) {
     throw new Error(`AI 服务请求失败：${response.status}`);
   }
 
-  const data = await response.json();
+  let data: {
+    choices?: { message?: { content?: unknown } }[];
+  };
+  try {
+    data = await response.json();
+  } catch (error) {
+    if (isAiAssistTimeoutError(error)) {
+      throw new Error("AI 服务响应超时，请稍后再试。");
+    }
+    throw new Error("AI 服务返回格式异常");
+  }
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== "string") {
     throw new Error("AI 服务返回格式异常");
