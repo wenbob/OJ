@@ -8,6 +8,11 @@ import {
 import { normalizeProblemPayload } from "@/lib/problemPayload";
 import { prisma } from "@/lib/prisma";
 import { getPracticeSubmissionCountsByProblem } from "@/lib/problemSubmissionCounts";
+import {
+  PayloadTooLargeError,
+  REQUEST_LIMITS,
+  readJsonWithLimit,
+} from "@/lib/requestLimits";
 
 export async function GET(request: NextRequest) {
   const auth = await requireApiUser(request, "admin");
@@ -55,7 +60,9 @@ export async function POST(request: NextRequest) {
   if (auth.response) return auth.response;
 
   try {
-    const payload = normalizeProblemPayload(await request.json());
+    const payload = normalizeProblemPayload(
+      await readJsonWithLimit(request, REQUEST_LIMITS.problemPayloadJsonBytes),
+    );
     const problem = await prisma.problem.create({
       data: {
         title: payload.title,
@@ -83,7 +90,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "创建题目失败" },
-      { status: 400 },
+      { status: error instanceof PayloadTooLargeError ? 413 : 400 },
     );
   }
 }

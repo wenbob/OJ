@@ -19,6 +19,15 @@
 
 发布包必须排除 `.env`、数据库文件、备份文件、`.next/cache` 和压缩包；服务器继续使用 `/www/oj/.env` 和 `/www/oj/prisma/prod.db`。Next standalone 包必须把 `.next/static` 复制到 `.next/standalone/.next/static`，把 `public` 复制到 `.next/standalone/public`，否则页面会无样式且无前端交互。`npm run start` 通过 `scripts/load-env.mjs` 预加载 `.env` 后启动 `.next/standalone/server.js`，不要改成裸跑 `node .next/standalone/server.js`。
 
+2GB 服务器上常规发布也不要执行 `npm ci`。依赖未变时复用当前 `/www/oj/node_modules`；依赖变更时应在本地 Linux/Docker 环境生成可用于 Ubuntu 的根 `node_modules` 并随包上传，或安排维护窗口停 PM2 后再处理。切换前不要在 `/www/oj-new` 直接执行 `npm run db:deploy`，因为生产 `.env` 使用绝对 `DATABASE_URL=file:/www/oj/prisma/prod.db`，会迁移旧目录数据库；应停 PM2、备份并复制最新 DB、切换目录后在新的 `/www/oj` 执行迁移。
+
+## 服务器磁盘清理边界
+
+- 常规清理只允许动 OJ 明确路径：`/www/oj-old-*`、失败发布残留的 `/www/oj-new`、OJ 发布压缩包 `/www/oj-release.tgz` 或历史 `/www/oj.zip`。
+- 清理前先确认当前 `/www/oj` 存在、PM2 进程 `oj` 在线、`/api/health` 正常；清理后再次检查健康状态。
+- 不要为了 OJ 清理去删除其它站点目录、股票系统目录，或 `stock-fund-advisor*` Docker 容器/镜像。
+- `docker system df` 只读可用；`docker system prune`、`docker builder prune` 属于全局清理，可能影响股票系统构建缓存，除非用户明确确认，否则不要执行。
+
 只有无法本地生成 Linux standalone 产物时，才在服务器停 PM2 后使用单 worker 低内存构建：
 
 ```bash
@@ -54,6 +63,15 @@ Generating static pages using 1 worker
 - 管理员自定义头衔保存在 `StudentProfile.customTitle`，只覆盖展示文案，不影响积分、自动段位和排名。
 - 天梯排序固定为：积分降序 → 唯一 AC 题数降序 → AC 总次数降序 → 用户名升序 → 用户 ID 升序。
 
+## AI 助手规则
+
+- DeepSeek API Key 只能保存在本地或生产 `.env`，不得进入前端、Git、日志、测试快照或文档示例。
+- AI 请求必须走服务端 API；浏览器不得直接调用 DeepSeek。
+- 学生 AI 使用频率必须由服务端强制限制，当前为每次使用后至少等待 20 秒。
+- AI 提示不得返回完整可提交代码；服务端要保留输出拦截。
+- AI 只对编程题开放；选择判断题默认不显示 AI，避免泄露答案。
+- 日常练习 AI 思路由 `SystemSetting.aiPracticeEnabled` 控制，考试 AI 思路由 `Exam.aiEnabled` 按单场考试控制，默认关闭。
+
 ## 题型与考试规则
 
 - `Problem.problemType` 和 `Exam.examType` 只允许 `programming`、`objective`。
@@ -88,3 +106,6 @@ npm run build
 | `docs/ops-review-2026-06-07.md` | Monaco 代码提示关闭发布记录 |
 | `docs/ops-review-2026-06-13.md` | 编辑器字号调节和 AC 透明弹窗发布记录 |
 | `docs/ops-review-2026-06-28.md` | 选择判断题型和本地 Linux standalone 发布记录 |
+| `docs/ops-review-2026-06-29.md` | OJ 旧版本目录磁盘清理记录 |
+| `docs/ops-review-2026-07-01.md` | 头衔天梯与安全加固上线记录 |
+| `docs/ops-review-2026-07-02.md` | AI 思路上线与低内存发布事故修正记录 |

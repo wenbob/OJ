@@ -7,6 +7,10 @@ import type {
   JudgeInput,
   JudgeResult,
 } from "@/lib/judge";
+import {
+  DEFAULT_PROCESS_OUTPUT_LIMIT_BYTES,
+  createLimitedOutputCollector,
+} from "@/lib/processOutputLimit";
 import type { SubmissionStatus } from "@/lib/status";
 
 type ProcessResult = {
@@ -42,6 +46,28 @@ function dockerImage() {
   return process.env.JUDGE_DOCKER_IMAGE?.trim() || "oj-cpp-judge";
 }
 
+const dockerUnavailableMessage =
+  "评测服务暂时没有启动，请老师检查 Docker Judge。你可以先保存代码，稍后再提交。";
+
+function isDockerUnavailableMessage(value: string) {
+  const message = value.toLowerCase();
+  return (
+    message.includes("enoent") ||
+    message.includes("spawn docker") ||
+    message.includes("docker api") ||
+    message.includes("dockerdesktoplinuxengine") ||
+    message.includes("cannot connect to the docker daemon") ||
+    message.includes("error during connect") ||
+    message.includes("is the docker daemon running") ||
+    message.includes("npipe:////./pipe/docker") ||
+    message.includes("//./pipe/docker")
+  );
+}
+
+export function normalizeDockerErrorMessage(value: string) {
+  return isDockerUnavailableMessage(value) ? dockerUnavailableMessage : value;
+}
+
 function createContainerName() {
   return `oj-cpp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -59,15 +85,30 @@ function runProcess({
 }): Promise<ProcessResult> {
   return new Promise((resolve) => {
     const startedAt = Date.now();
-    let stdout = "";
-    let stderr = "";
+    const outputLimitBytes = readPositiveInt(
+      process.env.JUDGE_OUTPUT_LIMIT_BYTES,
+      DEFAULT_PROCESS_OUTPUT_LIMIT_BYTES,
+    );
+    const stdout = createLimitedOutputCollector(outputLimitBytes);
+    const stderr = createLimitedOutputCollector(outputLimitBytes);
     let settled = false;
     let timedOut = false;
+    let cleanupStarted = false;
 
     const child = spawn("docker", args, {
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
     });
+
+    const cleanupContainer = () => {
+      if (cleanupStarted) return;
+      cleanupStarted = true;
+      const cleanup = spawn("docker", ["rm", "-f", containerName], {
+        windowsHide: true,
+        stdio: "ignore",
+      });
+      cleanup.on("error", () => {});
+    };
 
     const finish = (result: Omit<ProcessResult, "runtimeMs">) => {
       if (settled) return;
@@ -79,19 +120,23 @@ function runProcess({
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill();
-      const cleanup = spawn("docker", ["rm", "-f", containerName], {
-        windowsHide: true,
-        stdio: "ignore",
-      });
-      cleanup.on("error", () => {});
+      cleanupContainer();
     }, timeoutMs);
 
     child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
+      stdout.append(chunk);
+      if (stdout.exceeded()) {
+        child.kill();
+        cleanupContainer();
+      }
     });
 
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      stderr.append(chunk);
+      if (stderr.exceeded()) {
+        child.kill();
+        cleanupContainer();
+      }
     });
 
     child.stdin.on("error", () => {
@@ -100,23 +145,22 @@ function runProcess({
 
     child.on("error", (error) => {
       finish({
-        stdout,
-        stderr,
+        stdout: stdout.value(),
+        stderr: stderr.value(),
         exitCode: null,
         timedOut: false,
-        errorMessage:
-          error.message.includes("ENOENT") || error.message.includes("spawn docker")
-            ? "无法启动 Docker，请确认已安装 Docker 并且 docker 命令可用"
-            : error.message,
+        errorMessage: normalizeDockerErrorMessage(error.message),
       });
     });
 
     child.on("close", (exitCode) => {
+      const outputExceeded = stdout.exceeded() || stderr.exceeded();
       finish({
-        stdout,
-        stderr,
+        stdout: stdout.value(),
+        stderr: stderr.value(),
         exitCode,
         timedOut,
+        errorMessage: outputExceeded ? "程序输出超过限制" : undefined,
       });
     });
 
@@ -140,6 +184,8 @@ function dockerRunArgs({
     "run",
     "--rm",
     "-i",
+    "--log-driver",
+    "none",
     "--name",
     containerName,
     "--network",
@@ -219,12 +265,13 @@ export async function dockerJudgeCppCode({
     }
 
     if (compile.exitCode !== 0) {
+      const compileMessage = compile.stderr || compile.stdout || "编译失败";
       return {
         status: "Compile Error",
         passedCount: 0,
         totalCount: testCases.length,
         runtimeMs: compile.runtimeMs,
-        errorMessage: compile.stderr || compile.stdout || "编译失败",
+        errorMessage: normalizeDockerErrorMessage(compileMessage),
         caseResults: [],
       };
     }
@@ -260,10 +307,12 @@ export async function dockerJudgeCppCode({
         errorMessage = `运行超过 ${timeLimitMs}ms`;
       } else if (run.errorMessage || run.exitCode !== 0) {
         caseStatus = "Runtime Error";
-        errorMessage =
+        const runMessage =
           run.errorMessage ||
           run.stderr ||
           "程序运行时异常，可能触发了容器资源限制";
+        errorMessage =
+          normalizeDockerErrorMessage(runMessage);
       } else if (normalizeOutput(run.stdout) !== normalizeOutput(testCase.output)) {
         caseStatus = "Wrong Answer";
         errorMessage = "程序输出与标准输出不一致";

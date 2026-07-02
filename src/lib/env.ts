@@ -85,6 +85,13 @@ export function validateProductionEnv(env: RuntimeEnv = process.env): EnvValidat
     errors.push("JUDGE_MEMORY_LIMIT_MB 必须是大于 0 的整数");
   }
 
+  if (
+    env.DEEPSEEK_BASE_URL &&
+    !env.DEEPSEEK_BASE_URL.trim().startsWith("https://")
+  ) {
+    errors.push("DEEPSEEK_BASE_URL 必须使用 https:// 地址");
+  }
+
   return { ok: errors.length === 0, errors };
 }
 

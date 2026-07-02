@@ -23,6 +23,10 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/password", () => ({
   hashPassword: mocks.hashPassword,
+  validateAccountPassword(password: string) {
+    if (password.length < 8) return "密码至少需要 8 位";
+    return null;
+  },
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -141,7 +145,7 @@ describe("admin users API custom title handling", () => {
     const response = await POST(
       jsonRequest({
         customTitle: "  算法新星  ",
-        password: "secret",
+        password: "secret123",
         role: "student",
         username: "alice",
       }),
@@ -163,7 +167,7 @@ describe("admin users API custom title handling", () => {
     const response = await POST(
       jsonRequest({
         customTitle: "一二三四五六七八九十一二三四五六七八九十一",
-        password: "secret",
+        password: "secret123",
         role: "student",
         username: "alice",
       }),
@@ -227,13 +231,29 @@ describe("admin users API custom title handling", () => {
     const response = await POST(
       jsonRequest({
         customTitle: "算法新星",
-        password: "secret",
+        password: "secret123",
         role: "student",
         username: "alice",
       }),
     );
 
     expect(response.status).toBe(403);
+    expect(mocks.prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects weak passwords when creating users", async () => {
+    const response = await POST(
+      jsonRequest({
+        customTitle: "",
+        password: "short",
+        role: "student",
+        username: "alice",
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("密码至少需要 8 位");
     expect(mocks.prisma.user.create).not.toHaveBeenCalled();
   });
 });

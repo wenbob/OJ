@@ -7,6 +7,11 @@ import {
   validateParsedProblems,
 } from "@/lib/problemImport";
 import { prisma } from "@/lib/prisma";
+import {
+  PayloadTooLargeError,
+  REQUEST_LIMITS,
+  readJsonWithLimit,
+} from "@/lib/requestLimits";
 
 function readDefaults(record: Record<string, unknown>) {
   const defaultDifficulty =
@@ -45,7 +50,10 @@ export async function POST(request: NextRequest) {
   if (auth.response) return auth.response;
 
   try {
-    const body = await request.json().catch(() => null);
+    const body = await readJsonWithLimit(
+      request,
+      REQUEST_LIMITS.markdownImportJsonBytes,
+    );
     const record =
       typeof body === "object" && body ? (body as Record<string, unknown>) : {};
     const defaults = readDefaults(record);
@@ -71,6 +79,9 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
     const message =
       error instanceof Error ? error.message : "Markdown 导入失败";
     return NextResponse.json({ error: message }, { status: 400 });

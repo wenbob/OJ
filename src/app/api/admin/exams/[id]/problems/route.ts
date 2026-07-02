@@ -6,6 +6,11 @@ import {
   validateObjectiveItems,
 } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import {
+  PayloadTooLargeError,
+  REQUEST_LIMITS,
+  readJsonWithLimit,
+} from "@/lib/requestLimits";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -17,16 +22,27 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const { id } = await context.params;
   const examId = Number(id);
-  const body = await request.json().catch(() => null);
-  const rawProblemIds: unknown[] = Array.isArray(body?.problemIds)
-    ? body.problemIds
-    : [body?.problemId];
+  let body: unknown;
+  try {
+    body = await readJsonWithLimit(request, REQUEST_LIMITS.smallJsonBytes);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
+    return NextResponse.json({ error: "请求格式不合法" }, { status: 400 });
+  }
+  const record =
+    typeof body === "object" && body ? (body as Record<string, unknown>) : {};
+  const rawProblemIds: unknown[] = Array.isArray(record.problemIds)
+    ? record.problemIds
+    : [record.problemId];
   const problemIds: number[] = Array.from(
     new Set<number>(rawProblemIds.map((value) => Number(value))),
   );
-  const score = body?.score === undefined || body?.score === "" ? 100 : Number(body.score);
+  const score =
+    record.score === undefined || record.score === "" ? 100 : Number(record.score);
   const order =
-    body?.order === undefined || body?.order === "" ? null : Number(body.order);
+    record.order === undefined || record.order === "" ? null : Number(record.order);
 
   if (
     !Number.isInteger(examId) ||
@@ -137,7 +153,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       ),
     );
 
-    if (Array.isArray(body?.problemIds)) {
+    if (Array.isArray(record.problemIds)) {
       return NextResponse.json({ examProblems }, { status: 201 });
     }
 

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Code2 } from "lucide-react";
 import { CurrentUser } from "@/lib/auth";
 import { LogoutButton } from "@/components/LogoutButton";
-import { findRankingByUserId, getStudentRankings } from "@/lib/ranking";
+import { getStudentRankingSummaryForUser } from "@/lib/ranking";
 import { getPublicSettings } from "@/lib/settings";
 
 type NavItem = {
@@ -23,7 +23,7 @@ export async function AppShell({
 }) {
   const { siteName } = await getPublicSettings();
   const currentRanking = user.role === "student"
-    ? findRankingByUserId(await getStudentRankings(), user.id)
+    ? await getStudentRankingSummaryForUser(user.id)
     : null;
   const leaderboardItem =
     user.role === "admin"

@@ -17,6 +17,7 @@ export const defaultSystemSettings = {
   defaultTimeLimitMs: "2000",
   defaultMemoryLimitMb: "128",
   allowStudentRegister: "false",
+  aiPracticeEnabled: "false",
 };
 
 export type SystemSettingKey = keyof typeof defaultSystemSettings;
@@ -108,7 +109,7 @@ export function normalizeSystemSettingsPayload(body: unknown): SystemSettings {
   const settings = { ...defaultSystemSettings };
   for (const key of settingKeys) {
     const value = record[key];
-    if (key === "allowStudentRegister") {
+    if (key === "allowStudentRegister" || key === "aiPracticeEnabled") {
       settings[key] = value === true || value === "true" ? "true" : "false";
     } else {
       settings[key] = typeof value === "string" ? value : "";

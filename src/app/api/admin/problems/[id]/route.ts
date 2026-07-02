@@ -6,6 +6,11 @@ import {
 } from "@/lib/objectiveProblem";
 import { normalizeProblemPayload } from "@/lib/problemPayload";
 import { prisma } from "@/lib/prisma";
+import {
+  PayloadTooLargeError,
+  REQUEST_LIMITS,
+  readJsonWithLimit,
+} from "@/lib/requestLimits";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -27,7 +32,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const payload = normalizeProblemPayload(await request.json());
+    const payload = normalizeProblemPayload(
+      await readJsonWithLimit(request, REQUEST_LIMITS.problemPayloadJsonBytes),
+    );
     const problem = await prisma.$transaction(async (tx) => {
       const examLinks = await tx.examProblem.findMany({
         where: { problemId },
@@ -88,7 +95,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "更新题目失败" },
-      { status: 400 },
+      { status: error instanceof PayloadTooLargeError ? 413 : 400 },
     );
   }
 }

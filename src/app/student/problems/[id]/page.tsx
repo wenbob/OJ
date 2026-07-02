@@ -3,10 +3,8 @@ import { AppShell } from "@/components/AppShell";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
 import { ProblemSamples } from "@/components/ProblemSamples";
-import { StatusBadge } from "@/components/StatusBadge";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import { requirePageUser } from "@/lib/auth";
-import { formatDate, formatRuntime } from "@/lib/format";
 import { getDisplaySamples } from "@/lib/problemSamples";
 import {
   getPublicObjectiveItems,
@@ -14,7 +12,7 @@ import {
   parseObjectiveItems,
 } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
-import { getDefaultCppTemplate } from "@/lib/settings";
+import { boolSetting, getDefaultCppTemplate, getSetting } from "@/lib/settings";
 import { SubmitForm } from "./submit-form";
 
 const studentNav = [
@@ -46,7 +44,7 @@ export default async function StudentProblemDetailPage({
   const problemId = Number(id);
   if (!Number.isInteger(problemId)) notFound();
 
-  const [problem, latestSubmission, defaultCodeTemplate] = await Promise.all([
+  const [problem, defaultCodeTemplate, aiPracticeEnabled] = await Promise.all([
     prisma.problem.findUnique({
       where: { id: problemId },
       include: {
@@ -56,11 +54,8 @@ export default async function StudentProblemDetailPage({
         },
       },
     }),
-    prisma.submission.findFirst({
-      where: { userId: user.id, problemId, submissionType: "practice" },
-      orderBy: { createdAt: "desc" },
-    }),
     getDefaultCppTemplate(),
+    getSetting("aiPracticeEnabled"),
   ]);
 
   if (!problem) notFound();
@@ -81,7 +76,7 @@ export default async function StudentProblemDetailPage({
 
   return (
     <AppShell nav={studentNav} title="学生端" user={user}>
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(520px,44%)]">
         <article className="surface p-6">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-black">{problem.title}</h1>
@@ -118,34 +113,11 @@ export default async function StudentProblemDetailPage({
           )}
         </article>
 
-        <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:self-start">
-          {latestSubmission ? (
-            <section className="surface p-5">
-              <h2 className="text-lg font-black">最近一次提交</h2>
-              <div className="mt-3 grid gap-2 text-sm font-semibold text-ink-700">
-                {problemType === "objective" ? (
-                  <span>
-                    答对 {latestSubmission.passedCount}/{latestSubmission.totalCount} 小题
-                  </span>
-                ) : (
-                  <>
-                    <StatusBadge status={latestSubmission.status} />
-                    <span>
-                      {latestSubmission.passedCount}/{latestSubmission.totalCount} 测试点
-                    </span>
-                    <span>{formatRuntime(latestSubmission.runtimeMs)}</span>
-                    <span>{formatDate(latestSubmission.createdAt)}</span>
-                    {latestSubmission.errorMessage ? (
-                      <pre className="mt-2 max-h-44 overflow-auto border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-                        {latestSubmission.errorMessage}
-                      </pre>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            </section>
-          ) : null}
+        <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-auto xl:self-start">
           <SubmitForm
+            aiEnabled={
+              problemType === "programming" && boolSetting(aiPracticeEnabled)
+            }
             defaultCodeTemplate={defaultCodeTemplate}
             fromSubmissionId={
               Number.isInteger(fromSubmissionId) ? fromSubmissionId : undefined

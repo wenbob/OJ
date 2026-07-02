@@ -63,4 +63,46 @@ describe("enqueueJudgeTask", () => {
       }
     }
   });
+
+  it("rejects new judge tasks when the pending queue is full", async () => {
+    const previousConcurrency = process.env.JUDGE_CONCURRENCY;
+    const previousMaxQueueSize = process.env.JUDGE_MAX_QUEUE_SIZE;
+    process.env.JUDGE_CONCURRENCY = "1";
+    process.env.JUDGE_MAX_QUEUE_SIZE = "1";
+
+    let releaseFirstTask: (() => void) | undefined;
+    const first = enqueueJudgeTask(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseFirstTask = resolve;
+        }),
+    );
+    const second = enqueueJudgeTask(async () => {});
+
+    try {
+      const result = await Promise.race([
+        enqueueJudgeTask(async () => {}).then(
+          () => "resolved",
+          (error) => (error instanceof Error ? error.message : "rejected"),
+        ),
+        new Promise<string>((resolve) => {
+          setTimeout(() => resolve("still-pending"), 25);
+        }),
+      ]);
+      expect(result).toBe("评测队列繁忙，请稍后再提交");
+    } finally {
+      releaseFirstTask?.();
+      await Promise.all([first, second]);
+      if (previousConcurrency === undefined) {
+        delete process.env.JUDGE_CONCURRENCY;
+      } else {
+        process.env.JUDGE_CONCURRENCY = previousConcurrency;
+      }
+      if (previousMaxQueueSize === undefined) {
+        delete process.env.JUDGE_MAX_QUEUE_SIZE;
+      } else {
+        process.env.JUDGE_MAX_QUEUE_SIZE = previousMaxQueueSize;
+      }
+    }
+  });
 });

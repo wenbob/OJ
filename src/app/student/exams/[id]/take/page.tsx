@@ -230,7 +230,7 @@ export default async function StudentExamTakePage({
             </aside>
           ) : null}
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(500px,42%)]">
             <article className="surface p-6">
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-3xl font-black">{selectedProblem.title}</h2>
@@ -296,6 +296,7 @@ export default async function StudentExamTakePage({
                 </section>
               ) : null}
               <ProblemSubmitForm
+                aiEnabled={selectedProblemType === "programming" && exam.aiEnabled}
                 key={`exam-${exam.id}-problem-${selectedProblem.id}-${
                   Number.isInteger(fromSubmissionId) ? fromSubmissionId : "draft"
                 }`}

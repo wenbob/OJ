@@ -10,7 +10,14 @@ import {
   validateObjectiveItems,
 } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import {
+  PayloadTooLargeError,
+  REQUEST_LIMITS,
+  ensureTextWithinByteLimit,
+  readJsonWithLimit,
+} from "@/lib/requestLimits";
 import { getJudgeDefaultSettings } from "@/lib/settings";
+import { sanitizeSubmissionForStudent } from "@/lib/submissionVisibility";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -24,12 +31,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const { id } = await context.params;
   const problemId = Number(id);
-  const body = await request.json().catch(() => null);
-  const code = typeof body?.code === "string" ? body.code : "";
+  let body: unknown;
+  try {
+    body = await readJsonWithLimit(request, REQUEST_LIMITS.codeBytes + 16 * 1024);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
+    return NextResponse.json({ error: "请求格式不合法" }, { status: 400 });
+  }
+  const record =
+    typeof body === "object" && body ? (body as Record<string, unknown>) : {};
+  const code = typeof record.code === "string" ? record.code : "";
   const examId =
-    body?.examId === undefined || body?.examId === null || body?.examId === ""
+    record.examId === undefined || record.examId === null || record.examId === ""
       ? null
-      : Number(body.examId);
+      : Number(record.examId);
 
   if (!Number.isInteger(problemId)) {
     return NextResponse.json({ error: "题目 ID 不合法" }, { status: 400 });
@@ -54,6 +71,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
       },
       { status: 400 },
     );
+  }
+  try {
+    ensureTextWithinByteLimit(
+      code,
+      problem.problemType === "objective" ? 16 * 1024 : REQUEST_LIMITS.codeBytes,
+      problem.problemType === "objective" ? "答案" : "代码",
+    );
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
+    throw error;
   }
   if (problem.problemType === "programming" && problem.testCases.length === 0) {
     return NextResponse.json({ error: "该题还没有测试点" }, { status: 400 });
@@ -231,5 +260,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     },
   });
 
-  return NextResponse.json({ submission, submissionId: submission.id });
+  return NextResponse.json({
+    submission: sanitizeSubmissionForStudent(submission),
+    submissionId: submission.id,
+  });
 }

@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { assertDestructiveDbOperationAllowed } from "../src/lib/destructiveDbGuard";
 import { hashPassword } from "../src/lib/password";
 
 const prisma = new PrismaClient();
@@ -13,6 +14,8 @@ int main() {
 `;
 
 async function main() {
+  assertDestructiveDbOperationAllowed();
+
   await prisma.submissionCaseResult.deleteMany();
   await prisma.submission.deleteMany();
   await prisma.examProblem.deleteMany();
@@ -32,6 +35,7 @@ async function main() {
       { key: "defaultTimeLimitMs", value: "2000" },
       { key: "defaultMemoryLimitMb", value: "128" },
       { key: "allowStudentRegister", value: "false" },
+      { key: "aiPracticeEnabled", value: "false" },
     ],
   });
 
@@ -127,6 +131,7 @@ async function main() {
       description: "覆盖输入输出、条件判断和基础表达式，适合用来完整测试考试提交流程。",
       durationMin: 90,
       status: "published",
+      aiEnabled: false,
       problems: {
         create: [
           { problemId: abProblem.id, order: 1, score: 100 },
@@ -143,6 +148,7 @@ async function main() {
       description: "草稿考试不会出现在学生端。",
       durationMin: 60,
       status: "draft",
+      aiEnabled: false,
       problems: {
         create: [{ problemId: abProblem.id, order: 1, score: 100 }],
       },

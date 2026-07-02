@@ -3,6 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { SubmissionDetailView } from "@/components/SubmissionDetailView";
 import { requirePageUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { sanitizeSubmissionForStudent } from "@/lib/submissionVisibility";
 
 const studentNav = [
   { href: "/student", label: "首页" },
@@ -58,11 +59,11 @@ export default async function StudentSubmissionDetailPage({ params }: PageProps)
 
   return (
     <AppShell nav={studentNav} title="学生端" user={user}>
-      <SubmissionDetailView
-        continueHref={continueHref}
-        problemHref={problemHref}
-        submission={submission}
-      />
+        <SubmissionDetailView
+          continueHref={continueHref}
+          problemHref={problemHref}
+          submission={sanitizeSubmissionForStudent(submission)}
+        />
     </AppShell>
   );
 }

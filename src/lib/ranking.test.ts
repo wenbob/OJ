@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildStudentRankings,
+  buildStudentRankingSummary,
+  getRankTierProgress,
   getRankTierTitle,
   normalizeCustomTitle,
   validateCustomTitle,
@@ -28,6 +30,39 @@ describe("student rankings", () => {
     expect(getRankTierTitle(715)).toBe("星耀大师");
     expect(getRankTierTitle(1040)).toBe("最强王者");
     expect(getRankTierTitle(1560)).toBe("荣耀王者");
+  });
+
+  it("calculates progress toward the next rank tier", () => {
+    expect(getRankTierProgress(60)).toMatchObject({
+      acceptedProblemsToNextTier: 1,
+      currentTierTitle: "青铜学徒",
+      nextTierMinPoints: 65,
+      nextTierTitle: "白银新秀",
+      pointsForCurrentTier: 65,
+      pointsIntoTier: 60,
+      pointsToNextTier: 5,
+      progressPercent: 92,
+    });
+
+    expect(getRankTierProgress(65)).toMatchObject({
+      acceptedProblemsToNextTier: 7,
+      currentTierTitle: "白银新秀",
+      nextTierTitle: "黄金精英",
+      pointsIntoTier: 0,
+      pointsToNextTier: 65,
+      progressPercent: 0,
+    });
+  });
+
+  it("marks the highest rank tier as complete", () => {
+    expect(getRankTierProgress(1600)).toMatchObject({
+      acceptedProblemsToNextTier: 0,
+      currentTierTitle: "荣耀王者",
+      isMaxTier: true,
+      nextTierTitle: null,
+      pointsToNextTier: 0,
+      progressPercent: 100,
+    });
   });
 
   it("counts unique accepted problems for points and keeps accepted submission count as tie-breaker", () => {
@@ -70,6 +105,26 @@ describe("student rankings", () => {
       displayTitle: "C++ 小霸王",
       points: 10,
       tierTitle: "青铜学徒",
+    });
+  });
+
+  it("builds a current-student summary without computing the full leaderboard", () => {
+    const summary = buildStudentRankingSummary({
+      submissions: [
+        { userId: 2, problemId: 1, status: "Accepted" },
+        { userId: 2, problemId: 1, status: "Accepted" },
+        { userId: 2, problemId: 2, status: "Accepted" },
+      ],
+      user: users[1],
+    });
+
+    expect(summary).toMatchObject({
+      acceptedSubmissionCount: 3,
+      acCount: 2,
+      displayTitle: "C++ 小霸王",
+      points: 20,
+      tierTitle: "青铜学徒",
+      userId: 2,
     });
   });
 

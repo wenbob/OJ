@@ -7,6 +7,11 @@ import {
   validateObjectiveItems,
 } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import {
+  PayloadTooLargeError,
+  REQUEST_LIMITS,
+  readJsonWithLimit,
+} from "@/lib/requestLimits";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -27,8 +32,9 @@ function readExamPayload(body: unknown) {
   const status = typeof record.status === "string" ? record.status : "draft";
   const examType =
     typeof record.examType === "string" ? record.examType : "programming";
+  const aiEnabled = record.aiEnabled === true || record.aiEnabled === "true";
 
-  return { title, description, durationMin, status, examType };
+  return { title, description, durationMin, status, examType, aiEnabled };
 }
 
 function validateExamPayload(payload: ReturnType<typeof readExamPayload>) {
@@ -90,7 +96,16 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "考试 ID 不合法" }, { status: 400 });
   }
 
-  const payload = readExamPayload(await request.json().catch(() => null));
+  let body: unknown;
+  try {
+    body = await readJsonWithLimit(request, REQUEST_LIMITS.smallJsonBytes);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
+    return NextResponse.json({ error: "请求格式不合法" }, { status: 400 });
+  }
+  const payload = readExamPayload(body);
   const error = validateExamPayload(payload);
   if (error) return NextResponse.json({ error }, { status: 400 });
   const examProblems = await prisma.examProblem.findMany({
@@ -161,6 +176,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       durationMin: payload.durationMin,
       status: payload.status,
       examType: payload.examType,
+      aiEnabled: payload.aiEnabled,
     },
   });
 

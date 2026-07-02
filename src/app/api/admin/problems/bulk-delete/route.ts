@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  PayloadTooLargeError,
+  REQUEST_LIMITS,
+  readJsonWithLimit,
+} from "@/lib/requestLimits";
 
 function normalizeProblemIds(value: unknown) {
   if (!Array.isArray(value)) {
@@ -31,8 +36,10 @@ export async function POST(request: NextRequest) {
   if (auth.response) return auth.response;
 
   try {
-    const body = await request.json().catch(() => null);
-    const { ids, error } = normalizeProblemIds(body?.problemIds);
+    const body = await readJsonWithLimit(request, REQUEST_LIMITS.smallJsonBytes);
+    const record =
+      typeof body === "object" && body ? (body as Record<string, unknown>) : {};
+    const { ids, error } = normalizeProblemIds(record.problemIds);
     if (error) {
       return NextResponse.json({ error }, { status: 400 });
     }
@@ -52,7 +59,10 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ deletedCount });
-  } catch {
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
     return NextResponse.json({ error: "批量删除题目失败" }, { status: 500 });
   }
 }

@@ -3,6 +3,10 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  isSameOriginMutationRequest,
+  sameOriginMutationErrorResponse,
+} from "@/lib/requestSecurity";
 
 export type Role = "student" | "admin";
 
@@ -13,6 +17,8 @@ export type CurrentUser = {
 };
 
 export const SESSION_COOKIE = "oj_session";
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+const SESSION_MAX_AGE_MS = SESSION_MAX_AGE_SECONDS * 1000;
 
 const secret = process.env.SESSION_SECRET ?? "dev-only-change-me";
 
@@ -62,10 +68,13 @@ export function readSessionToken(token?: string): CurrentUser | null {
     if (
       typeof payload.id !== "number" ||
       typeof payload.username !== "string" ||
-      (payload.role !== "student" && payload.role !== "admin")
+      (payload.role !== "student" && payload.role !== "admin") ||
+      typeof payload.iat !== "number"
     ) {
       return null;
     }
+    const tokenAgeMs = Date.now() - payload.iat;
+    if (tokenAgeMs < 0 || tokenAgeMs > SESSION_MAX_AGE_MS) return null;
     return {
       id: payload.id,
       username: payload.username,
@@ -103,6 +112,13 @@ export async function requirePageUser(role?: Role) {
 }
 
 export async function requireApiUser(request: NextRequest, role?: Role) {
+  if (!isSameOriginMutationRequest(request)) {
+    return {
+      user: null,
+      response: sameOriginMutationErrorResponse(),
+    };
+  }
+
   const user = await getUserFromRequest(request);
   if (!user) {
     return {
@@ -125,6 +141,7 @@ export function clearSessionResponse(response: NextResponse) {
     sameSite: "lax",
     path: "/",
     maxAge: 0,
+    secure: shouldUseSecureCookies(),
   });
   return response;
 }
@@ -134,7 +151,15 @@ export function attachSessionResponse(response: NextResponse, user: CurrentUser)
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: SESSION_MAX_AGE_SECONDS,
+    secure: shouldUseSecureCookies(),
   });
   return response;
+}
+
+function shouldUseSecureCookies() {
+  const configured = process.env.SESSION_COOKIE_SECURE?.trim().toLowerCase();
+  if (configured === "true") return true;
+  if (configured === "false") return false;
+  return process.env.APP_ORIGIN?.trim().toLowerCase().startsWith("https://") ?? false;
 }

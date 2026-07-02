@@ -12,7 +12,7 @@ export type CodeEditorProps = {
 
 const defaultFontSize = 14;
 const minFontSize = 12;
-const maxFontSize = 22;
+const maxFontSize = 26;
 const fontSizeStorageKey = "oj-code-editor-font-size";
 
 function readInitialFontSize() {

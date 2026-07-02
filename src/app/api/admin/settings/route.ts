@@ -7,6 +7,11 @@ import {
   systemSettingsEntries,
   validateSystemSettings,
 } from "@/lib/settings";
+import {
+  PayloadTooLargeError,
+  REQUEST_LIMITS,
+  readJsonWithLimit,
+} from "@/lib/requestLimits";
 
 export async function GET(request: NextRequest) {
   const auth = await requireApiUser(request, "admin");
@@ -20,7 +25,17 @@ export async function PUT(request: NextRequest) {
   const auth = await requireApiUser(request, "admin");
   if (auth.response) return auth.response;
 
-  const settings = normalizeSystemSettingsPayload(await request.json().catch(() => null));
+  let body: unknown;
+  try {
+    body = await readJsonWithLimit(request, REQUEST_LIMITS.smallJsonBytes);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
+    return NextResponse.json({ error: "请求格式不合法" }, { status: 400 });
+  }
+
+  const settings = normalizeSystemSettingsPayload(body);
   const error = validateSystemSettings(settings);
   if (error) return NextResponse.json({ error }, { status: 400 });
 

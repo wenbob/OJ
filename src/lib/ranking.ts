@@ -44,6 +44,21 @@ export type StudentRankingEntry = {
   username: string;
 };
 
+export type StudentRankingSummary = Omit<StudentRankingEntry, "rank">;
+
+export type RankTierProgress = {
+  acceptedProblemsToNextTier: number;
+  currentTierMinPoints: number;
+  currentTierTitle: string;
+  isMaxTier: boolean;
+  nextTierMinPoints: number | null;
+  nextTierTitle: string | null;
+  pointsForCurrentTier: number;
+  pointsIntoTier: number;
+  pointsToNextTier: number;
+  progressPercent: number;
+};
+
 export function normalizeCustomTitle(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -67,6 +82,59 @@ export function getRankTierTitle(points: number) {
     }
   }
   return current;
+}
+
+export function getRankTierProgress(points: number): RankTierProgress {
+  const safePoints = Math.max(0, points);
+  let currentTierIndex = 0;
+
+  for (const [index, tier] of rankTiers.entries()) {
+    if (safePoints >= tier.minPoints) {
+      currentTierIndex = index;
+    } else {
+      break;
+    }
+  }
+
+  const currentTier = rankTiers[currentTierIndex];
+  const nextTier = rankTiers[currentTierIndex + 1] ?? null;
+
+  if (!nextTier) {
+    return {
+      acceptedProblemsToNextTier: 0,
+      currentTierMinPoints: currentTier.minPoints,
+      currentTierTitle: currentTier.title,
+      isMaxTier: true,
+      nextTierMinPoints: null,
+      nextTierTitle: null,
+      pointsForCurrentTier: 0,
+      pointsIntoTier: Math.max(0, safePoints - currentTier.minPoints),
+      pointsToNextTier: 0,
+      progressPercent: 100,
+    };
+  }
+
+  const pointsForCurrentTier = nextTier.minPoints - currentTier.minPoints;
+  const pointsIntoTier = Math.min(
+    pointsForCurrentTier,
+    Math.max(0, safePoints - currentTier.minPoints),
+  );
+  const pointsToNextTier = Math.max(0, nextTier.minPoints - safePoints);
+
+  return {
+    acceptedProblemsToNextTier: Math.ceil(
+      pointsToNextTier / RANK_POINT_PER_UNIQUE_ACCEPTED,
+    ),
+    currentTierMinPoints: currentTier.minPoints,
+    currentTierTitle: currentTier.title,
+    isMaxTier: false,
+    nextTierMinPoints: nextTier.minPoints,
+    nextTierTitle: nextTier.title,
+    pointsForCurrentTier,
+    pointsIntoTier,
+    pointsToNextTier,
+    progressPercent: Math.round((pointsIntoTier / pointsForCurrentTier) * 100),
+  };
 }
 
 export function buildStudentRankings({
@@ -133,6 +201,43 @@ export function buildStudentRankings({
   }));
 }
 
+export function buildStudentRankingSummary({
+  submissions,
+  user,
+}: {
+  submissions: RankingSubmissionInput[];
+  user: RankingUserInput;
+}): StudentRankingSummary | null {
+  if (user.role !== "student") return null;
+
+  const acceptedProblemIds = new Set<number>();
+  let acceptedSubmissionCount = 0;
+
+  for (const submission of submissions) {
+    if (submission.status !== "Accepted") continue;
+    if (submission.userId !== user.id) continue;
+
+    acceptedProblemIds.add(submission.problemId);
+    acceptedSubmissionCount += 1;
+  }
+
+  const acCount = acceptedProblemIds.size;
+  const points = acCount * RANK_POINT_PER_UNIQUE_ACCEPTED;
+  const tierTitle = getRankTierTitle(points);
+  const customTitle = normalizeCustomTitle(user.studentProfile?.customTitle ?? null);
+
+  return {
+    acceptedSubmissionCount,
+    acCount,
+    customTitle,
+    displayTitle: customTitle ?? tierTitle,
+    points,
+    tierTitle,
+    userId: user.id,
+    username: user.username,
+  };
+}
+
 export async function getStudentRankings(db: DbClient = prisma) {
   const [users, submissions] = await Promise.all([
     db.user.findMany({
@@ -154,6 +259,33 @@ export async function getStudentRankings(db: DbClient = prisma) {
   ]);
 
   return buildStudentRankings({ submissions, users });
+}
+
+export async function getStudentRankingSummaryForUser(
+  userId: number,
+  db: DbClient = prisma,
+) {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      username: true,
+      role: true,
+      studentProfile: { select: { customTitle: true } },
+    },
+  });
+  if (!user) return null;
+
+  const submissions = await db.submission.findMany({
+    where: { status: "Accepted", userId },
+    select: {
+      problemId: true,
+      status: true,
+      userId: true,
+    },
+  });
+
+  return buildStudentRankingSummary({ submissions, user });
 }
 
 export function findRankingByUserId(

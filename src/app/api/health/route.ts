@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getJudgeMode, validateProductionEnv } from "@/lib/env";
+import { validateProductionEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -9,9 +9,7 @@ export async function GET() {
       {
         ok: false,
         database: "unknown",
-        judgeMode: getJudgeMode(),
         timestamp: new Date().toISOString(),
-        errors: envStatus.errors,
       },
       { status: 500 },
     );
@@ -22,7 +20,6 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       database: "ok",
-      judgeMode: getJudgeMode(),
       timestamp: new Date().toISOString(),
     });
   } catch {
@@ -30,7 +27,6 @@ export async function GET() {
       {
         ok: false,
         database: "error",
-        judgeMode: getJudgeMode(),
         timestamp: new Date().toISOString(),
       },
       { status: 500 },

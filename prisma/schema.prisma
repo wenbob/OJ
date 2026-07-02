@@ -108,6 +108,7 @@ model Exam {
   durationMin Int?
   status      String        @default("draft")
   examType    String        @default("programming")
+  aiEnabled   Boolean       @default(false)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   problems    ExamProblem[]

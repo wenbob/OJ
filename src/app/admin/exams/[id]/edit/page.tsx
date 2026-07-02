@@ -60,6 +60,7 @@ export default async function AdminEditExamPage({ params }: PageProps) {
     durationMin: exam.durationMin,
     status: exam.status,
     examType: normalizeProblemType(exam.examType),
+    aiEnabled: exam.aiEnabled,
     problems: exam.problems.map((item) => ({
       ...item,
       problem: {

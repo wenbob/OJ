@@ -58,6 +58,7 @@ CREATE TABLE "Exam" (
   "durationMin" INTEGER,
   "status" TEXT NOT NULL DEFAULT 'draft',
   "examType" TEXT NOT NULL DEFAULT 'programming',
+  "aiEnabled" BOOLEAN NOT NULL DEFAULT false,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -153,5 +154,8 @@ CREATE TABLE "SystemSetting" (
 );
 
 CREATE UNIQUE INDEX "SystemSetting_key_key" ON "SystemSetting"("key");
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiPracticeEnabled', 'false', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 PRAGMA foreign_keys=ON;

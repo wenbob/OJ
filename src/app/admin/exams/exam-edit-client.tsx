@@ -29,6 +29,7 @@ type ExamValue = {
   durationMin: number | null;
   status: string;
   examType: ProblemType;
+  aiEnabled: boolean;
   problems: ExamProblemItem[];
 };
 
@@ -293,6 +294,7 @@ export function ExamEditClient({
           durationMin: exam.durationMin?.toString() ?? "",
           status: exam.status,
           examType: exam.examType,
+          aiEnabled: exam.aiEnabled,
         }}
         lockExamType={problems.length > 0}
         mode="edit"

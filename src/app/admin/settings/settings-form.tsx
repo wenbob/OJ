@@ -108,6 +108,23 @@ export function SettingsForm({ initialSettings }: { initialSettings: SystemSetti
       </section>
 
       <section className="surface p-5">
+        <h2 className="text-xl font-black">AI 助手设置</h2>
+        <label className="mt-5 inline-flex items-center gap-3 text-sm font-bold text-ink-800">
+          <input
+            checked={settings.aiPracticeEnabled === "true"}
+            type="checkbox"
+            onChange={(event) =>
+              update("aiPracticeEnabled", event.target.checked ? "true" : "false")
+            }
+          />
+          日常练习开启 AI 思路
+        </label>
+        <p className="mt-2 text-sm font-semibold text-ink-600">
+          关闭后，学生日常刷题页不会显示 AI 按钮；服务端接口也会拒绝请求。
+        </p>
+      </section>
+
+      <section className="surface p-5">
         <h2 className="text-xl font-black">注册设置</h2>
         <label className="mt-5 inline-flex items-center gap-3 text-sm font-bold text-ink-800">
           <input

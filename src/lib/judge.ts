@@ -4,6 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { dockerJudgeCppCode } from "@/lib/dockerJudge";
 import { assertProductionJudgeMode, getJudgeMode } from "@/lib/env";
+import {
+  DEFAULT_PROCESS_OUTPUT_LIMIT_BYTES,
+  createLimitedOutputCollector,
+} from "@/lib/processOutputLimit";
 import type { SubmissionStatus } from "@/lib/status";
 
 export type JudgeTestCase = {
@@ -61,8 +65,12 @@ function runProcess(
 ): Promise<ProcessResult> {
   return new Promise((resolve) => {
     const startedAt = Date.now();
-    let stdout = "";
-    let stderr = "";
+    const outputLimitBytes = readPositiveInt(
+      process.env.JUDGE_OUTPUT_LIMIT_BYTES,
+      DEFAULT_PROCESS_OUTPUT_LIMIT_BYTES,
+    );
+    const stdout = createLimitedOutputCollector(outputLimitBytes);
+    const stderr = createLimitedOutputCollector(outputLimitBytes);
     let settled = false;
     let timedOut = false;
 
@@ -85,11 +93,13 @@ function runProcess(
     }, timeoutMs);
 
     child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
+      stdout.append(chunk);
+      if (stdout.exceeded()) child.kill();
     });
 
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      stderr.append(chunk);
+      if (stderr.exceeded()) child.kill();
     });
 
     child.stdin.on("error", () => {
@@ -98,8 +108,8 @@ function runProcess(
 
     child.on("error", (error) => {
       finish({
-        stdout,
-        stderr,
+        stdout: stdout.value(),
+        stderr: stderr.value(),
         exitCode: null,
         timedOut: false,
         errorMessage: error.message,
@@ -107,11 +117,13 @@ function runProcess(
     });
 
     child.on("close", (exitCode) => {
+      const outputExceeded = stdout.exceeded() || stderr.exceeded();
       finish({
-        stdout,
-        stderr,
+        stdout: stdout.value(),
+        stderr: stderr.value(),
         exitCode,
         timedOut,
+        errorMessage: outputExceeded ? "程序输出超过限制" : undefined,
       });
     });
 

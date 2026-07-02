@@ -1,6 +1,6 @@
 # C++ 在线 OJ 练习平台 Demo
 
-这是一个基于 Next.js 的 C++ 在线 OJ 练习平台 Demo。当前版本已经覆盖编程题与选择判断题两种独立题型、日常刷题、模拟考试、代码提交、自动评测、提交详情、学生头衔和天梯榜、管理员题目管理、用户管理、系统设置、Markdown 批量导入、Docker Judge 和基础提交队列等核心流程。
+这是一个基于 Next.js 的 C++ 在线 OJ 练习平台 Demo。当前版本已经覆盖编程题与选择判断题两种独立题型、日常刷题、模拟考试、代码提交、自动评测、AI 思路提示、提交详情、学生头衔和天梯榜、管理员题目管理、用户管理、系统设置、Markdown 批量导入、Docker Judge 和基础提交队列等核心流程。
 
 当前项目适合作为本地教学演示、功能验证和 3 名学生左右的小规模正式使用基础。线上使用时必须启用 Docker Judge、强随机 `SESSION_SECRET`、定期 SQLite 备份和管理员密码安全管理；它仍不适合作为大规模公网 OJ 或高并发竞赛平台。
 
@@ -10,6 +10,7 @@
 学生登录
 -> 日常刷题或模拟考试
 -> 查看题目
+-> 按管理员开关使用 AI 思路提示（仅编程题）
 -> 使用 Monaco Editor 编写 C++17 代码
    或逐行填写选择判断题答案
 -> 提交评测
@@ -38,6 +39,9 @@
 - [2026-06-07 Monaco 代码提示关闭上线记录](docs/ops-review-2026-06-07.md)
 - [2026-06-13 编辑器字号与 AC 弹窗上线记录](docs/ops-review-2026-06-13.md)
 - [2026-06-28 选择判断题型与 standalone 发布记录](docs/ops-review-2026-06-28.md)
+- [2026-06-29 OJ 旧版本目录磁盘清理记录](docs/ops-review-2026-06-29.md)
+- [2026-07-01 头衔天梯与安全加固上线记录](docs/ops-review-2026-07-01.md)
+- [2026-07-02 AI 思路上线与低内存发布事故修正记录](docs/ops-review-2026-07-02.md)
 
 ## 技术栈
 
@@ -95,7 +99,12 @@ JUDGE_CONCURRENCY=1
 JUDGE_TIME_LIMIT_MS=2000
 JUDGE_MEMORY_LIMIT_MB=128
 JUDGE_COMPILE_TIMEOUT_MS=30000
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-pro
 ```
+
+`DEEPSEEK_API_KEY` 只在启用 AI 助手并真实调用 DeepSeek 时需要；不要提交 `.env` 或把真实 key 写进代码。
 
 ### 3. 本地开发初始化数据库
 
@@ -637,6 +646,7 @@ ended      已结束，学生端不可继续答题和提交
 - 默认 C++ 代码模板 `defaultCppTemplate`
 - 默认评测时间限制 `defaultTimeLimitMs`
 - 默认评测内存限制 `defaultMemoryLimitMb`
+- 日常练习 AI 助手开关 `aiPracticeEnabled`
 - 是否允许学生自助注册 `allowStudentRegister`
 
 说明：
@@ -645,6 +655,7 @@ ended      已结束，学生端不可继续答题和提交
 - 登录页、学生端布局、管理员端布局和首页公告会读取系统设置。
 - 默认 C++ 模板已接入 Monaco Editor。
 - 默认评测时间和内存已接入提交接口。
+- 日常练习 AI 关闭时，学生日常刷题页不显示 AI 按钮，服务端接口也会拒绝请求。
 - 环境变量仍作为系统设置缺失时的兜底。
 
 默认评测限制优先级：
@@ -1108,7 +1119,6 @@ GET /api/health
 {
   "ok": true,
   "database": "ok",
-  "judgeMode": "docker",
   "timestamp": "2026-05-04T00:00:00.000Z"
 }
 ```
@@ -1261,6 +1271,9 @@ JUDGE_CONCURRENCY=1
 JUDGE_TIME_LIMIT_MS=2000
 JUDGE_MEMORY_LIMIT_MB=128
 JUDGE_COMPILE_TIMEOUT_MS=30000
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-pro
 ```
 
 上线前检查：
@@ -1279,6 +1292,8 @@ npm run check:env
 - `JUDGE_TIME_LIMIT_MS` 必须大于 0。
 - `JUDGE_MEMORY_LIMIT_MB` 必须大于 0。
 - `JUDGE_COMPILE_TIMEOUT_MS` 可选，默认 30000ms，用于 Docker 编译阶段。
+- `DEEPSEEK_API_KEY` 只在管理员开启 AI 助手并需要真实 DeepSeek 调用时配置；不要写入 Git。
+- `DEEPSEEK_BASE_URL` 如配置必须使用 `https://` 地址。
 - `DATABASE_URL` 不能为空；生产 SQLite 必须使用绝对路径，例如 `file:/www/oj/prisma/prod.db`，不要使用 `file:./prod.db`，避免 standalone 解析到错误目录。
 
 ### 安装依赖和构建
@@ -1291,6 +1306,8 @@ npm run build
 线上 2 核 2GB 服务器资源有限，后续常规发布优先在本地 Linux/Docker 环境生成 Next.js standalone 产物，再上传服务器切换目录。不要直接上传 Windows 本机生成的 `.next/standalone`，其中的原生依赖可能不能在 Ubuntu 服务器运行。
 
 打包 standalone 时必须把 `.next/static` 复制到 `.next/standalone/.next/static`，把 `public` 复制到 `.next/standalone/public`。如果漏掉这一步，服务端 HTML 和 `/api/health` 仍会正常，但浏览器里的 CSS/JS 会 404，页面会退化成无样式、无交互状态。
+
+低内存服务器常规发布也不要执行 `npm ci`。依赖未变化时复用当前线上 `node_modules`；依赖变化时应在本地 Linux/Docker 环境准备可用于 Ubuntu 的根 `node_modules` 后随包上传，或安排维护窗口停 PM2 后处理。
 
 如果必须在 `/www/oj` 当前线上目录构建，应先停止 PM2，并使用低内存构建命令：
 
@@ -1367,7 +1384,7 @@ sudo systemctl status oj
 GET /api/health
 ```
 
-它会检查数据库连接，并返回当前 Judge 模式。生产环境变量不合规或数据库不可用时会返回 500。
+它会检查生产环境变量和数据库连接。健康接口只暴露 `ok`、`database` 和 `timestamp`，不返回 Judge 模式或环境错误详情；生产环境必须通过 `.env`、`npm run check:env` 或 PM2 环境确认 `JUDGE_MODE=docker`。
 
 ### SQLite 备份策略
 
@@ -1393,6 +1410,8 @@ bash scripts/backup-sqlite.sh
 ```
 
 瓶颈主要在 Docker Judge 编译运行阶段，而不是页面浏览。扩大人数时优先升级到 4 核 8GB、PostgreSQL、Redis 队列和独立 Judge Worker。
+
+磁盘空间不足时，先按 `docs/deploy.md` 的 OJ 限定清理流程处理 `/www/oj-old-*`、`/www/oj-new` 和 OJ 发布压缩包。不要为了 OJ 清理去删除其它网站目录、股票系统目录，或执行未经确认的 Docker 全局 prune。
 
 ## 上线前检查清单
 
@@ -1430,7 +1449,7 @@ bash scripts/backup-sqlite.sh
 
 - local Judge 会直接在宿主机运行用户代码，不适合公网。
 - Docker Judge 仍不是完整竞赛级沙箱，建议继续增强隔离能力。
-- 当前账号体系是轻量 Cookie Session，没有完整的账号安全策略。
+- 当前账号体系仍是轻量 Cookie Session；已具备登录失败限流、会话有效期和同源变更请求校验，但还没有验证码、找回密码、操作审计和多因素认证等完整账号安全能力。
 - SQLite 适合 Demo，不适合高并发正式场景。
 - 提交详情会展示所有测试点输入输出，正式 OJ 通常需要隐藏非样例测试点。
 

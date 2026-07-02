@@ -9,8 +9,8 @@
     "lint": "eslint .",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:push": "prisma db execute --file prisma/init.sql --schema prisma/schema.prisma",
-    "db:init": "prisma generate && prisma db execute --file prisma/init.sql --schema prisma/schema.prisma",
+    "prisma:push": "tsx scripts/guard-destructive-db.ts && prisma db execute --file prisma/init.sql --schema prisma/schema.prisma",
+    "db:init": "tsx scripts/guard-destructive-db.ts && prisma generate && prisma db execute --file prisma/init.sql --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:status": "prisma migrate status",
@@ -18,7 +18,7 @@
     "backup:sqlite": "powershell -ExecutionPolicy Bypass -File scripts/backup-sqlite.ps1",
     "check:env": "tsx scripts/check-env.ts",
     "admin:password": "tsx scripts/change-admin-password.ts",
-    "seed": "tsx prisma/seed.ts",
+    "seed": "tsx scripts/guard-destructive-db.ts && tsx prisma/seed.ts",
     "test": "vitest run"
   },
   "dependencies": {
@@ -27,7 +27,7 @@
     "bcryptjs": "^3.0.3",
     "lucide-react": "^1.14.0",
     "monaco-editor": "^0.55.1",
-    "next": "^16.2.4",
+    "next": "16.2.9",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },
@@ -37,12 +37,16 @@
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.5.0",
     "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.4",
-    "postcss": "^8.5.13",
+    "eslint-config-next": "16.2.9",
+    "postcss": "8.5.13",
     "prisma": "^6.19.3",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
+  },
+  "overrides": {
+    "dompurify": "3.4.11",
+    "postcss": "8.5.13"
   }
 }

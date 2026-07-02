@@ -146,7 +146,11 @@ export function SubmissionDetailView({
                       : formatRuntime(caseResult.runtimeMs)}
                   </span>
                 </summary>
-                <div className="grid gap-4 border-t border-ink-950/10 p-4 xl:grid-cols-3">
+                <div
+                  className={`grid gap-4 border-t border-ink-950/10 p-4 ${
+                    objective ? "xl:grid-cols-2" : "xl:grid-cols-3"
+                  }`}
+                >
                   <CaseBlock
                     title={objective ? "题目" : "输入"}
                     value={caseResult.input}
@@ -155,10 +159,9 @@ export function SubmissionDetailView({
                     title={objective ? "你的答案" : "你的输出"}
                     value={caseResult.actualOutput ?? "（无输出）"}
                   />
-                  <CaseBlock
-                    title={objective ? "标准答案" : "标准输出"}
-                    value={caseResult.expectedOutput}
-                  />
+                  {objective ? null : (
+                    <CaseBlock title="标准输出" value={caseResult.expectedOutput} />
+                  )}
                   {caseResult.errorMessage ? (
                     <div className="xl:col-span-3">
                       <CaseBlock title="错误信息" value={caseResult.errorMessage} tone="error" />

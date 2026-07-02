@@ -10,6 +10,11 @@ import {
   getObjectiveTotalScore,
 } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import {
+  PayloadTooLargeError,
+  REQUEST_LIMITS,
+  readJsonWithLimit,
+} from "@/lib/requestLimits";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -58,7 +63,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "考试 ID 不合法" }, { status: 400 });
     }
 
-    const body = await request.json().catch(() => null);
+    const body = await readJsonWithLimit(
+      request,
+      REQUEST_LIMITS.markdownImportJsonBytes,
+    );
     const record =
       typeof body === "object" && body ? (body as Record<string, unknown>) : {};
     const defaults = readDefaults(record);
@@ -124,6 +132,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
     const message =
       error instanceof Error ? error.message : "Markdown 导入考试失败";
     return NextResponse.json({ error: message }, { status: 400 });

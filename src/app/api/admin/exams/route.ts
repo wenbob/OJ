@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
 import { isProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import {
+  PayloadTooLargeError,
+  REQUEST_LIMITS,
+  readJsonWithLimit,
+} from "@/lib/requestLimits";
 
 function readExamPayload(body: unknown) {
   const record =
@@ -18,8 +23,9 @@ function readExamPayload(body: unknown) {
   const status = typeof record.status === "string" ? record.status : "draft";
   const examType =
     typeof record.examType === "string" ? record.examType : "programming";
+  const aiEnabled = record.aiEnabled === true || record.aiEnabled === "true";
 
-  return { title, description, durationMin, status, examType };
+  return { title, description, durationMin, status, examType, aiEnabled };
 }
 
 function validateExamPayload(payload: ReturnType<typeof readExamPayload>) {
@@ -55,7 +61,16 @@ export async function POST(request: NextRequest) {
   const auth = await requireApiUser(request, "admin");
   if (auth.response) return auth.response;
 
-  const payload = readExamPayload(await request.json().catch(() => null));
+  let body: unknown;
+  try {
+    body = await readJsonWithLimit(request, REQUEST_LIMITS.smallJsonBytes);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
+    return NextResponse.json({ error: "请求格式不合法" }, { status: 400 });
+  }
+  const payload = readExamPayload(body);
   const error = validateExamPayload(payload);
   if (error) return NextResponse.json({ error }, { status: 400 });
   if (payload.status === "published") {
@@ -72,6 +87,7 @@ export async function POST(request: NextRequest) {
       durationMin: payload.durationMin,
       status: payload.status,
       examType: payload.examType,
+      aiEnabled: payload.aiEnabled,
     },
   });
 

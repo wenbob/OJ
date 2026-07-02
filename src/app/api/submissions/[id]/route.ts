@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { sanitizeSubmissionForStudent } from "@/lib/submissionVisibility";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -30,5 +31,5 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "提交记录不存在或无权查看" }, { status: 404 });
   }
 
-  return NextResponse.json({ submission });
+  return NextResponse.json({ submission: sanitizeSubmissionForStudent(submission) });
 }

@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
-import { hashPassword } from "@/lib/password";
+import { hashPassword, validateAccountPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import {
   normalizeCustomTitle,
   validateCustomTitle,
 } from "@/lib/ranking";
+import {
+  PayloadTooLargeError,
+  REQUEST_LIMITS,
+  readJsonWithLimit,
+} from "@/lib/requestLimits";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -26,11 +31,22 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "用户 ID 不合法" }, { status: 400 });
   }
 
-  const body = await request.json().catch(() => null);
-  const username = typeof body?.username === "string" ? body.username.trim() : "";
-  const password = typeof body?.password === "string" ? body.password : "";
-  const role = readRole(body?.role);
-  const customTitle = normalizeCustomTitle(body?.customTitle);
+  let body: unknown;
+  try {
+    body = await readJsonWithLimit(request, REQUEST_LIMITS.smallJsonBytes);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
+    return NextResponse.json({ error: "请求格式不合法" }, { status: 400 });
+  }
+  const record =
+    typeof body === "object" && body ? (body as Record<string, unknown>) : {};
+  const username =
+    typeof record.username === "string" ? record.username.trim() : "";
+  const password = typeof record.password === "string" ? record.password : "";
+  const role = readRole(record.role);
+  const customTitle = normalizeCustomTitle(record.customTitle);
   const customTitleError = validateCustomTitle(customTitle);
 
   if (!username) {
@@ -38,6 +54,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
   if (!role) {
     return NextResponse.json({ error: "用户角色不合法" }, { status: 400 });
+  }
+  if (password) {
+    const passwordError = validateAccountPassword(password);
+    if (passwordError) {
+      return NextResponse.json({ error: passwordError }, { status: 400 });
+    }
   }
   if (customTitleError) {
     return NextResponse.json({ error: customTitleError }, { status: 400 });

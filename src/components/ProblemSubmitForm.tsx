@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { SendHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ProblemAiAssist } from "@/components/ProblemAiAssist";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatRuntime } from "@/lib/format";
 import type { ProblemType } from "@/lib/objectiveProblem";
@@ -42,6 +43,7 @@ type SubmissionResult = {
 };
 
 export function ProblemSubmitForm({
+  aiEnabled = false,
   defaultCodeTemplate,
   detailHrefBase = "/student/submissions",
   disabled = false,
@@ -54,6 +56,7 @@ export function ProblemSubmitForm({
   problemId,
   refreshOnSuccess = false,
 }: {
+  aiEnabled?: boolean;
   defaultCodeTemplate?: string;
   detailHrefBase?: string;
   disabled?: boolean;
@@ -274,6 +277,9 @@ export function ProblemSubmitForm({
           {objective ? "格式：每行一个答案" : "语言：C++17"}
         </span>
       </div>
+      {aiEnabled && !objective ? (
+        <ProblemAiAssist examId={examId} problemId={problemId} />
+      ) : null}
       <div className="mt-4">
         <CodeEditor
           key={storageKey}

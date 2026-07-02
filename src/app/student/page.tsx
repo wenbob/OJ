@@ -3,7 +3,13 @@ import { ClipboardList, History, PenLine, Timer, Trophy } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requirePageUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { findRankingByUserId, getStudentRankings } from "@/lib/ranking";
+import {
+  findRankingByUserId,
+  getRankTierProgress,
+  getStudentRankings,
+  type RankTierProgress,
+  type StudentRankingEntry,
+} from "@/lib/ranking";
 import { getPublicSettings } from "@/lib/settings";
 
 const studentNav = [
@@ -38,6 +44,9 @@ export default async function StudentHomePage() {
     getStudentRankings(),
   ]);
   const currentRanking = findRankingByUserId(rankings, user.id);
+  const rankProgress = currentRanking
+    ? getRankTierProgress(currentRanking.points)
+    : null;
 
   return (
     <AppShell nav={studentNav} title="学生端" user={user}>
@@ -59,30 +68,11 @@ export default async function StudentHomePage() {
             <StatCard icon={<Timer size={22} />} label="考试提交" value={examSubmissionCount} />
             <StatCard icon={<Timer size={22} />} label="通过记录" value={acceptedCount} />
           </div>
-          {currentRanking ? (
-            <div className="mt-6 border border-clay/30 bg-clay/10 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
-                    My Rank
-                  </p>
-                  <h2 className="mt-1 text-2xl font-black text-ink-950">
-                    {currentRanking.displayTitle}
-                  </h2>
-                  <p className="mt-1 text-sm font-semibold text-ink-600">
-                    自动段位 {currentRanking.tierTitle} · 唯一 AC {currentRanking.acCount} 题
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-3xl font-black text-steel">
-                    #{currentRanking.rank}
-                  </p>
-                  <p className="text-sm font-bold text-ink-600">
-                    {currentRanking.points} 积分
-                  </p>
-                </div>
-              </div>
-            </div>
+          {currentRanking && rankProgress ? (
+            <RankProgressCard
+              currentRanking={currentRanking}
+              rankProgress={rankProgress}
+            />
           ) : null}
           <div className="mt-6 flex flex-wrap gap-3">
             <Link className="btn btn-primary" href="/student/problems">
@@ -134,6 +124,94 @@ export default async function StudentHomePage() {
         </div>
       </section>
     </AppShell>
+  );
+}
+
+function RankProgressCard({
+  currentRanking,
+  rankProgress,
+}: {
+  currentRanking: StudentRankingEntry;
+  rankProgress: RankTierProgress;
+}) {
+  return (
+    <div className="mt-6 border border-clay/30 bg-clay/10 p-4">
+      <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+            My Rank
+          </p>
+          <h2 className="mt-1 text-2xl font-black text-ink-950">
+            {currentRanking.displayTitle}
+          </h2>
+          <p className="mt-1 text-sm font-semibold text-ink-600">
+            自动段位 {currentRanking.tierTitle} · 唯一 AC {currentRanking.acCount} 题
+          </p>
+        </div>
+        <div className="md:text-right">
+          <p className="text-3xl font-black text-steel">#{currentRanking.rank}</p>
+          <p className="text-sm font-bold text-ink-600">
+            {currentRanking.points} 积分
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 border border-ink-950/10 bg-linen/70 p-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-ink-600">
+              Tier Progress
+            </p>
+            {rankProgress.isMaxTier ? (
+              <p className="mt-1 text-lg font-black text-ink-950">
+                已达到最高段位
+              </p>
+            ) : (
+              <p className="mt-1 text-lg font-black text-ink-950">
+                距离 {rankProgress.nextTierTitle} 还差{" "}
+                <span className="text-steel">
+                  {rankProgress.pointsToNextTier}
+                </span>{" "}
+                分
+              </p>
+            )}
+            <p className="mt-1 text-sm font-semibold text-ink-600">
+              {rankProgress.isMaxTier
+                ? "继续完成唯一 AC，可提升积分和天梯排名。"
+                : `再完成 ${rankProgress.acceptedProblemsToNextTier} 道唯一 AC 题可晋级。`}
+            </p>
+          </div>
+          <p className="text-2xl font-black text-steel">
+            {rankProgress.progressPercent}%
+          </p>
+        </div>
+
+        <div
+          aria-label="当前段位进度"
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={rankProgress.progressPercent}
+          className="mt-3 h-3 border border-ink-950/10 bg-white/80 p-[2px]"
+          role="progressbar"
+        >
+          <div
+            className="h-full bg-steel"
+            style={{ width: `${rankProgress.progressPercent}%` }}
+          />
+        </div>
+
+        <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs font-bold text-ink-600">
+          <span>
+            {rankProgress.currentTierTitle} · {rankProgress.currentTierMinPoints} 分
+          </span>
+          <span>
+            {rankProgress.nextTierTitle
+              ? `${rankProgress.nextTierTitle} · ${rankProgress.nextTierMinPoints} 分`
+              : "最高段位"}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 

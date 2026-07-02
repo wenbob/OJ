@@ -64,9 +64,14 @@ JUDGE_CONCURRENCY=1
 JUDGE_TIME_LIMIT_MS=2000
 JUDGE_MEMORY_LIMIT_MB=128
 JUDGE_COMPILE_TIMEOUT_MS=45000
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-pro
 ```
 
 不要把 `.env` 提交到 Git，也不要把真实密码或真实 secret 写进文档。
+
+`DEEPSEEK_API_KEY` 只在管理员开启 AI 助手并需要真实调用 DeepSeek 时配置。AI 开关关闭时，缺少该 key 不影响 OJ 启动。
 
 生产环境使用 SQLite 时，`DATABASE_URL` 必须使用绝对路径。不要写 `file:./prod.db`；standalone 运行时会把相对路径解析到 `.next/standalone/node_modules/.prisma/client/` 附近，可能连到空数据库，导致登录接口报 `main.User does not exist`。
 
@@ -122,6 +127,23 @@ pm2 startup
 ```bash
 pm2 save
 ```
+
+### DeepSeek AI 助手配置
+
+如果要在生产环境启用 AI 思路，需要在 `/www/oj/.env` 中配置：
+
+```env
+DEEPSEEK_API_KEY=...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-pro
+```
+
+注意：
+
+- API key 只能放在服务器 `.env`，不要提交到 Git 或写入前端代码。
+- 所有 AI 请求必须经过 `/api/ai/problem-assist`，浏览器不能直接调用 DeepSeek。
+- 管理员开关关闭时学生端不显示按钮，服务端也会拒绝请求。
+- 选择判断题不开放 AI 助手，避免泄露答案。
 
 ## 3. Docker Judge 镜像说明
 
@@ -224,10 +246,16 @@ curl http://39.105.91.81/api/health
 期望返回类似：
 
 ```json
-{"ok":true,"database":"ok","judgeMode":"docker","timestamp":"..."}
+{"ok":true,"database":"ok","timestamp":"..."}
 ```
 
-如果 `judgeMode` 不是 `docker`，不要上线给学生使用。
+健康接口只暴露服务和数据库状态，不再返回 Judge 模式或环境错误详情。生产 Judge 模式必须通过 `.env`、`npm run check:env` 或 PM2 环境确认，正式使用必须保持 `JUDGE_MODE=docker`。
+
+基础安全响应头检查：
+
+```bash
+curl -fsSI http://127.0.0.1:3000/login | grep -Ei 'content-security-policy|x-content-type-options|x-frame-options|referrer-policy|permissions-policy'
+```
 
 ## 6. SQLite 数据备份
 
@@ -325,6 +353,66 @@ NEXT_TELEMETRY_DISABLED=1 NEXT_PRIVATE_BUILD_WORKER_COUNT=1 NODE_OPTIONS='--max-
 
 使用 `/www/oj-new` 新目录构建时，也建议使用同样的低内存构建命令。确认构建成功后再切换目录并重启 PM2。常规发布不要在服务器构建，优先上传本地 Linux standalone 产物。
 
+### 清理 OJ 旧版本目录
+
+磁盘空间不足时，先确认当前服务健康，再只清理 OJ 明确路径。不要扫描或删除其它网站目录。
+
+只读检查：
+
+```bash
+df -h /
+free -h
+du -sh /www/oj /www/oj-old-* /www/oj-new /www/oj-release.tgz /www/oj.zip 2>/dev/null || true
+ls -lh /www/backups/prod-*.db 2>/dev/null || true
+docker system df
+curl http://127.0.0.1:3000/api/health
+pm2 list
+```
+
+可以清理的 OJ 残留：
+
+- 已确认不再需要回滚的 `/www/oj-old-*`。
+- 失败发布残留的 `/www/oj-new`。
+- OJ 发布压缩包 `/www/oj-release.tgz` 或历史 `/www/oj.zip`。
+
+执行删除前先打印目标：
+
+```bash
+find /www -maxdepth 1 -type d -name 'oj-old-*' -print | sort
+ls -lh /www/oj-release.tgz /www/oj.zip 2>/dev/null || true
+```
+
+确认目标只包含 OJ 旧版本后再删除：
+
+```bash
+find /www -maxdepth 1 -type d -name 'oj-old-*' -exec rm -rf -- {} +
+rm -f -- /www/oj-release.tgz /www/oj.zip
+```
+
+如果要删除 `/www/oj-new`，必须先确认它不是当前服务目录，且 `/www/oj` 健康：
+
+```bash
+test -d /www/oj
+curl http://127.0.0.1:3000/api/health
+rm -rf -- /www/oj-new
+```
+
+清理后复查：
+
+```bash
+df -h /
+curl http://127.0.0.1:3000/api/health
+curl http://39.105.91.81/api/health
+pm2 list
+```
+
+Docker 注意事项：
+
+- `docker system df` 是只读检查，可以执行。
+- `docker system prune`、`docker builder prune` 是全局清理，可能影响同机股票系统的构建缓存；除非用户明确确认，否则不要执行。
+- 做 OJ 清理时不要删除 `stock-fund-advisor*` 容器、镜像或相关目录。
+- SQLite 备份通常很小，默认保留；确实要删旧备份时，先确认要保留的最新备份路径真实存在。
+
 ## 8. 安全收尾清单
 
 上线后请逐项确认：
@@ -341,6 +429,7 @@ NEXT_TELEMETRY_DISABLED=1 NEXT_PRIVATE_BUILD_WORKER_COUNT=1 NODE_OPTIONS='--max-
 - [ ] 不开放任何数据库端口。
 - [ ] Docker Judge 使用 `JUDGE_MODE=docker`。
 - [ ] `/api/health` 返回正常。
+- [ ] 登录页响应包含基础安全头：`Content-Security-Policy`、`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy`。
 - [ ] 已完成一次 SQLite 备份。
 - [ ] 后续可以绑定域名。
 - [ ] 后续可以配置 HTTPS。
@@ -410,7 +499,7 @@ cp -a public .next/standalone/public
 
 缺少 `.next/standalone/.next/static` 时，登录页会返回 HTML，但 CSS/JS 请求 404，表现为页面无样式且登录无反应。
 
-上传到服务器 `/www` 后，只在服务器执行解包、环境复制、数据库迁移、预检和切换：
+上传到服务器 `/www` 后，只在服务器执行解包、环境复制、预检和切换；常规发布不要在 2GB 服务器执行 `npm ci` 或 Next 构建：
 
 ```bash
 cd /www
@@ -418,21 +507,23 @@ rm -rf /www/oj-new
 mkdir -p /www/oj-new
 tar -xzf /www/oj-release.tgz -C /www/oj-new
 cp /www/oj/.env /www/oj-new/.env
-cp /www/oj/prisma/prod.db /www/oj-new/prisma/prod.db
-cp -a /www/oj/node_modules /www/oj-new/node_modules
+cp -al /www/oj/node_modules /www/oj-new/node_modules
 cd /www/oj-new
 npm run check:env
-npm run db:deploy
-docker build -t oj-cpp-judge ./docker/judge-cpp
+docker image inspect oj-cpp-judge >/dev/null
 ```
 
-如果 `package-lock.json` 发生依赖变化，不要复用旧 `node_modules`，应在 `/www/oj-new` 执行一次 `npm ci --registry=https://registry.npmmirror.com --no-audit --no-fund` 后再检查环境和迁移数据库。
+如果 `package-lock.json` 发生依赖变化，不要在 2GB 服务器热运行 `npm ci`。优先在本地 Linux/Docker 环境生成可用于 Ubuntu 的根 `node_modules` 并随发布包上传；否则必须安排维护窗口，先停 PM2 并确认有回滚点后再处理依赖安装。
 
-确认无误后再切换目录。切换前必须备份数据库，并确认新目录存在 `.next`、`.env`、`node_modules` 和 `prisma/prod.db`：
+确认无误后再切换目录。因为生产 `.env` 使用绝对路径 `DATABASE_URL=file:/www/oj/prisma/prod.db`，不要在切换前的 `/www/oj-new` 执行 `npm run db:deploy`，否则会迁移旧目录数据库。正确顺序是停服务、备份并复制最新数据库、切换目录后在新的 `/www/oj` 执行迁移：
 
 ```bash
 mkdir -p /www/backups
-cp /www/oj/prisma/prod.db /www/backups/prod-$(date +%Y%m%d-%H%M%S).db
+stamp=$(date +%Y%m%d-%H%M%S)
+pm2 stop oj
+cp /www/oj/prisma/prod.db /www/backups/prod-${stamp}.db
+test -s /www/backups/prod-${stamp}.db
+cp /www/oj/prisma/prod.db /www/oj-new/prisma/prod.db
 
 test -d /www/oj-new/.next
 test -d /www/oj-new/.next/standalone/.next/static
@@ -441,9 +532,11 @@ test -f /www/oj-new/.env
 test -d /www/oj-new/node_modules
 test -f /www/oj-new/prisma/prod.db
 
-mv /www/oj /www/oj-old-$(date +%Y%m%d-%H%M%S)
+mv /www/oj /www/oj-old-${stamp}
 mv /www/oj-new /www/oj
 cd /www/oj
+npm run check:env
+npm run db:deploy
 pm2 restart oj --update-env
 curl http://127.0.0.1:3000/api/health
 ```
@@ -497,3 +590,5 @@ pm2 restart oj --update-env
 ```
 
 页面浏览不是主要瓶颈，真正瓶颈是 Docker Judge 的编译运行。扩大人数时优先考虑 4 核 8GB、PostgreSQL、Redis 队列和独立 Judge Worker。
+
+如果 40GB 根分区空间不足，优先清理已确认不再需要的 `/www/oj-old-*` 和 OJ 发布压缩包。Docker build cache 虽然可能占用较大，但属于全局缓存，同机还有股票系统 Docker 容器，不能在未确认的情况下执行全局 prune。

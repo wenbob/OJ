@@ -5,6 +5,11 @@ import {
   parseObjectiveItems,
 } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import {
+  PayloadTooLargeError,
+  REQUEST_LIMITS,
+  readJsonWithLimit,
+} from "@/lib/requestLimits";
 
 type RouteContext = {
   params: Promise<{ id: string; examProblemId: string }>;
@@ -25,7 +30,16 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const { id, examProblemId: examProblemIdValue } = await context.params;
   const examId = Number(id);
   const examProblemId = Number(examProblemIdValue);
-  const payload = readUpdatePayload(await request.json().catch(() => null));
+  let body: unknown;
+  try {
+    body = await readJsonWithLimit(request, REQUEST_LIMITS.smallJsonBytes);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
+    return NextResponse.json({ error: "请求格式不合法" }, { status: 400 });
+  }
+  const payload = readUpdatePayload(body);
 
   if (!Number.isInteger(examId) || !Number.isInteger(examProblemId)) {
     return NextResponse.json({ error: "考试题目 ID 不合法" }, { status: 400 });

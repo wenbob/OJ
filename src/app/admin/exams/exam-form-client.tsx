@@ -11,6 +11,7 @@ type ExamFormValue = {
   durationMin: string;
   status: string;
   examType: ProblemType;
+  aiEnabled: boolean;
 };
 
 export function ExamFormClient({
@@ -20,6 +21,7 @@ export function ExamFormClient({
     durationMin: "90",
     status: "draft",
     examType: "programming",
+    aiEnabled: false,
   },
   lockExamType = false,
   mode,
@@ -33,7 +35,7 @@ export function ExamFormClient({
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
 
-  function update(field: keyof ExamFormValue, value: string) {
+  function update(field: keyof ExamFormValue, value: string | boolean) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
@@ -61,6 +63,7 @@ export function ExamFormClient({
         durationMin: form.durationMin,
         status: form.status,
         examType: form.examType,
+        aiEnabled: form.aiEnabled,
       }),
     });
     const data = await response.json().catch(() => ({}));
@@ -143,6 +146,17 @@ export function ExamFormClient({
             </select>
           </label>
         </div>
+        <label className="inline-flex items-center gap-3 text-sm font-bold text-ink-800">
+          <input
+            checked={form.aiEnabled}
+            type="checkbox"
+            onChange={(event) => update("aiEnabled", event.target.checked)}
+          />
+          本场考试开启 AI 思路
+        </label>
+        <p className="-mt-2 text-xs font-semibold text-ink-600">
+          关闭后，学生考试答题页不会显示 AI 按钮；选择判断题默认不显示 AI。
+        </p>
         <button
           className="btn btn-primary justify-center"
           disabled={pending}
