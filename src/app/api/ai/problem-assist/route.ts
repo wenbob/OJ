@@ -65,6 +65,9 @@ function safeAiAssistErrorMessage(error: unknown) {
   if (message.includes("没有返回清楚的思路")) {
     return "AI 这次没有返回清楚的思路，请稍后再试。";
   }
+  if (message.includes("还没写出最终思路")) {
+    return "AI 还在思考这道题，这次没写出最终思路，请稍后再试。";
+  }
   if (message.includes("返回格式异常")) {
     return "AI 服务返回异常，请稍后再试。";
   }

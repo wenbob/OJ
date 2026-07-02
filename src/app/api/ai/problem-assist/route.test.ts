@@ -205,6 +205,23 @@ describe("POST /api/ai/problem-assist", () => {
     expect(requestDeepSeekAdvice).toHaveBeenCalledTimes(1);
   });
 
+  it("reports reasoning-only responses without leaking internal reasoning", async () => {
+    vi.mocked(requestDeepSeekAdvice).mockRejectedValueOnce(
+      new Error("AI 思考时间较长，这次还没写出最终思路，请稍后再试。"),
+    );
+
+    const response = await POST(
+      request({ problemId: 10, mode: "hint", code: "" }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body.error).toBe(
+      "AI 还在思考这道题，这次没写出最终思路，请稍后再试。",
+    );
+    expect(body.error).not.toContain("reasoning");
+  });
+
   it("does not leak internal configuration names to students", async () => {
     vi.mocked(requestDeepSeekAdvice).mockRejectedValueOnce(
       new Error("AI 服务未配置，请管理员设置 DEEPSEEK_API_KEY"),

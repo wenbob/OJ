@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  AI_ASSIST_MAX_TOKENS,
   AI_ASSIST_TIMEOUT_MS,
   buildAiAssistPrompt,
   isAiAssistTimeoutError,
+  requestDeepSeekAdvice,
   sanitizeAiAssistResponse,
   type AiAssistProblemContext,
 } from "./aiAssist";
@@ -47,6 +49,10 @@ describe("AI assist settings", () => {
 describe("AI assist prompts", () => {
   it("allows long-running V4 Pro reasoning before timing out", () => {
     expect(AI_ASSIST_TIMEOUT_MS).toBe(120_000);
+  });
+
+  it("gives V4 Pro enough output budget to finish hard-problem reasoning", () => {
+    expect(AI_ASSIST_MAX_TOKENS).toBe(1_800);
   });
 
   it("recognizes Node fetch timeout errors even when the error name is generic", () => {
@@ -122,5 +128,54 @@ describe("AI assist prompts", () => {
 
   it("returns empty text for empty AI responses so callers can treat them as errors", () => {
     expect(sanitizeAiAssistResponse("   \n\t  ")).toBe("");
+  });
+
+  it("does not expose reasoning-only responses as student advice", async () => {
+    const originalFetch = global.fetch;
+    const originalApiKey = process.env.DEEPSEEK_API_KEY;
+    const originalModel = process.env.DEEPSEEK_MODEL;
+    process.env.DEEPSEEK_API_KEY = "test-key";
+    process.env.DEEPSEEK_MODEL = "deepseek-v4-pro";
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: "length",
+              message: {
+                content: "",
+                reasoning_content: "内部推理内容不应该直接展示给学生",
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+    global.fetch = fetchMock as never;
+
+    try {
+      await expect(requestDeepSeekAdvice("题目")).rejects.toThrow("最终思路");
+      const calls = fetchMock.mock.calls as unknown as [
+        RequestInfo | URL,
+        RequestInit?,
+      ][];
+      const init = calls[0]?.[1];
+      if (!init) throw new Error("fetch init was not captured");
+      const body = JSON.parse(String(init.body));
+      expect(body.max_tokens).toBe(AI_ASSIST_MAX_TOKENS);
+    } finally {
+      global.fetch = originalFetch;
+      if (originalApiKey === undefined) {
+        delete process.env.DEEPSEEK_API_KEY;
+      } else {
+        process.env.DEEPSEEK_API_KEY = originalApiKey;
+      }
+      if (originalModel === undefined) {
+        delete process.env.DEEPSEEK_MODEL;
+      } else {
+        process.env.DEEPSEEK_MODEL = originalModel;
+      }
+    }
   });
 });

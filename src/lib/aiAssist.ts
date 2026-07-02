@@ -10,6 +10,7 @@ export type AiAssistProblemContext = {
 };
 
 export const AI_ASSIST_TIMEOUT_MS = 120_000;
+export const AI_ASSIST_MAX_TOKENS = 1_800;
 
 export function isAiAssistTimeoutError(error: unknown) {
   if (!(error instanceof Error)) return false;
@@ -160,7 +161,7 @@ export async function requestDeepSeekAdvice(prompt: string) {
           { role: "user", content: prompt },
         ],
         temperature: 0.2,
-        max_tokens: 680,
+        max_tokens: AI_ASSIST_MAX_TOKENS,
       }),
     });
   } catch (error) {
@@ -175,7 +176,10 @@ export async function requestDeepSeekAdvice(prompt: string) {
   }
 
   let data: {
-    choices?: { message?: { content?: unknown } }[];
+    choices?: {
+      finish_reason?: unknown;
+      message?: { content?: unknown; reasoning_content?: unknown };
+    }[];
   };
   try {
     data = await response.json();
@@ -185,9 +189,17 @@ export async function requestDeepSeekAdvice(prompt: string) {
     }
     throw new Error("AI 服务返回格式异常");
   }
-  const content = data?.choices?.[0]?.message?.content;
+  const choice = data?.choices?.[0];
+  const content = choice?.message?.content;
   if (typeof content !== "string") {
     throw new Error("AI 服务返回格式异常");
+  }
+  if (
+    !content.trim() &&
+    (choice?.finish_reason === "length" ||
+      typeof choice?.message?.reasoning_content === "string")
+  ) {
+    throw new Error("AI 思考时间较长，这次还没写出最终思路，请稍后再试。");
   }
 
   const sanitized = sanitizeAiAssistResponse(content);
