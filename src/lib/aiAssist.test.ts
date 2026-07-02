@@ -48,11 +48,11 @@ describe("AI assist settings", () => {
 
 describe("AI assist prompts", () => {
   it("allows long-running V4 Pro reasoning before timing out", () => {
-    expect(AI_ASSIST_TIMEOUT_MS).toBe(120_000);
+    expect(AI_ASSIST_TIMEOUT_MS).toBe(240_000);
   });
 
   it("gives V4 Pro enough output budget to finish hard-problem reasoning", () => {
-    expect(AI_ASSIST_MAX_TOKENS).toBe(1_800);
+    expect(AI_ASSIST_MAX_TOKENS).toBe(4_096);
   });
 
   it("recognizes Node fetch timeout errors even when the error name is generic", () => {

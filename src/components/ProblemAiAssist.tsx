@@ -105,7 +105,7 @@ export function ProblemAiAssist({
 
       {pending ? (
         <p className="mt-3 text-xs font-bold text-indigo-800">
-          AI 正在思考中，难题可能需要一两分钟，请不要重复点击。
+          AI 正在思考中，难题可能需要几分钟，请不要重复点击。
         </p>
       ) : null}
 

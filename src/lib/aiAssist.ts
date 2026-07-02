@@ -9,8 +9,8 @@ export type AiAssistProblemContext = {
   samples: { input: string; output: string }[];
 };
 
-export const AI_ASSIST_TIMEOUT_MS = 120_000;
-export const AI_ASSIST_MAX_TOKENS = 1_800;
+export const AI_ASSIST_TIMEOUT_MS = 240_000;
+export const AI_ASSIST_MAX_TOKENS = 4_096;
 
 export function isAiAssistTimeoutError(error: unknown) {
   if (!(error instanceof Error)) return false;
