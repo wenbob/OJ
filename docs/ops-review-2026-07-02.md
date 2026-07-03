@@ -19,7 +19,7 @@ AI 思路功能包括：
 本次仍遵守低内存服务器原则：没有在服务器执行 Next.js 构建。发布包在本地 Linux Docker 环境生成：
 
 ```text
-tmp/release/oj-release.tgz
+本地临时发布包，部署后清理
 ```
 
 构建流程：
@@ -70,6 +70,15 @@ tmp/release/oj-release.tgz
 ```
 
 如果需要回滚，先停止 `oj`，把当前 `/www/oj` 改名保留，再把上述旧目录恢复为 `/www/oj`，最后 `pm2 restart oj --update-env` 并检查 `/api/health`。
+
+难题超时二次修正回滚点：
+
+```text
+/www/backups/prod-20260702-174519-ai-timeout-240s.db
+/www/oj-old-20260702-174519-ai-timeout-240s
+```
+
+本次修正原因是八级难题触发 DeepSeek V4 Pro 长推理，线上日志出现 `[AI_ASSIST_ERROR] The operation was aborted due to timeout`。已把 AI 调用超时和输出预算提高到当前配置，并确认运行包包含 `AbortSignal.timeout(24e4)` 和 `max_tokens:4096`。
 
 ## 数据库迁移
 
