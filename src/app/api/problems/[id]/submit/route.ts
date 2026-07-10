@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
-import { finishExamRecord, isExamExpired } from "@/lib/examScoring";
+import {
+  finishExamRecord,
+  isExamSubmissionOnTime,
+  refreshFinishedExamScore,
+} from "@/lib/examScoring";
 import type { JudgeResult } from "@/lib/judge";
 import { judgeCppCode } from "@/lib/judge";
 import { enqueueJudgeTask } from "@/lib/judgeQueue";
@@ -43,6 +47,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const record =
     typeof body === "object" && body ? (body as Record<string, unknown>) : {};
   const code = typeof record.code === "string" ? record.code : "";
+  // The server records this immediately after receiving the complete request
+  // body. A long queue or Docker judge must not move an exam receipt past its
+  // deadline.
+  const receivedAt = new Date();
   const examId =
     record.examId === undefined || record.examId === null || record.examId === ""
       ? null
@@ -157,7 +165,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
     if (
-      isExamExpired({
+      !isExamSubmissionOnTime({
+        createdAt: receivedAt,
         durationMin: exam.durationMin,
         startedAt: examRecord.startedAt,
       })
@@ -232,6 +241,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const submission = await prisma.submission.create({
     data: {
+      createdAt: receivedAt,
       userId: auth.user.id,
       problemId,
       examId,
@@ -259,6 +269,23 @@ export async function POST(request: NextRequest, context: RouteContext) {
       caseResults: { orderBy: { caseIndex: "asc" } },
     },
   });
+
+  if (examId !== null) {
+    try {
+      // A judge can finish after the exam timer has closed the record. Refresh
+      // the frozen score so an on-time submission is counted exactly once.
+      await refreshFinishedExamScore({
+        examId,
+        userId: auth.user.id,
+      });
+    } catch (error) {
+      console.error("[EXAM_SCORE_REFRESH_ERROR]", {
+        examId,
+        message: error instanceof Error ? error.message : "unknown",
+        userId: auth.user.id,
+      });
+    }
+  }
 
   return NextResponse.json({
     submission: sanitizeSubmissionForStudent(submission),

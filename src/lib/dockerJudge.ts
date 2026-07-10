@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type {
@@ -169,7 +169,7 @@ function runProcess({
   });
 }
 
-function dockerRunArgs({
+export function buildDockerRunArgs({
   command,
   containerName,
   memoryLimitMb,
@@ -192,6 +192,8 @@ function dockerRunArgs({
     "none",
     "--memory",
     `${memoryLimitMb}m`,
+    "--memory-swap",
+    `${memoryLimitMb}m`,
     "--cpus",
     "1",
     "--pids-limit",
@@ -201,6 +203,8 @@ function dockerRunArgs({
     "ALL",
     "--security-opt",
     "no-new-privileges",
+    "--user",
+    "65534:65534",
     "--tmpfs",
     "/tmp:rw,noexec,nosuid,size=64m",
     "-v",
@@ -227,11 +231,14 @@ export async function dockerJudgeCppCode({
   const executableName = "main";
 
   try {
+    // The judged process runs as an unprivileged numeric user, so only this
+    // per-submission temporary directory is made writable to that user.
+    await chmod(workDir, 0o777);
     await writeFile(sourcePath, code, "utf8");
 
     const compileContainerName = createContainerName();
     const compile = await runProcess({
-      args: dockerRunArgs({
+      args: buildDockerRunArgs({
         command: ["g++", "main.cpp", "-std=c++17", "-O2", "-o", executableName],
         containerName: compileContainerName,
         memoryLimitMb,
@@ -285,7 +292,7 @@ export async function dockerJudgeCppCode({
     for (const [index, testCase] of testCases.entries()) {
       const runContainerName = createContainerName();
       const run = await runProcess({
-        args: dockerRunArgs({
+        args: buildDockerRunArgs({
           command: [`./${executableName}`],
           containerName: runContainerName,
           memoryLimitMb,

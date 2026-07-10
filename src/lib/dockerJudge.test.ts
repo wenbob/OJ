@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeDockerErrorMessage } from "./dockerJudge";
+import { buildDockerRunArgs, normalizeDockerErrorMessage } from "./dockerJudge";
 
 describe("normalizeDockerErrorMessage", () => {
   it("hides low-level Docker API connection errors from students", () => {
@@ -16,5 +16,21 @@ describe("normalizeDockerErrorMessage", () => {
     const message = "main.cpp:3:1: error: expected ';'";
 
     expect(normalizeDockerErrorMessage(message)).toBe(message);
+  });
+
+  it("runs untrusted programs without swap and as an unprivileged user", () => {
+    const args = buildDockerRunArgs({
+      command: ["./main"],
+      containerName: "oj-cpp-test",
+      memoryLimitMb: 128,
+      workDir: "/tmp/cpp-oj-test",
+    });
+
+    expect(args).toContain("--memory-swap");
+    expect(args).toContain("128m");
+    expect(args).toContain("--user");
+    expect(args).toContain("65534:65534");
+    expect(args).toContain("--network");
+    expect(args).toContain("none");
   });
 });

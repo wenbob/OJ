@@ -4,7 +4,12 @@ import { AppShell } from "@/components/AppShell";
 import { Pagination } from "@/components/Pagination";
 import { StatusBadge } from "@/components/StatusBadge";
 import { requirePageUser } from "@/lib/auth";
-import { finishExamRecord, isExamExpired } from "@/lib/examScoring";
+import {
+  calculateExamScore,
+  finishExamRecord,
+  getExamEndAt,
+  isExamExpired,
+} from "@/lib/examScoring";
 import { formatDate } from "@/lib/format";
 import {
   buildPaginationMeta,
@@ -111,6 +116,22 @@ export default async function AdminExamRecordsPage({
     pageSize,
     total: totalRecords,
   });
+  const scoreByRecordId = new Map(
+    await Promise.all(
+      pagedRecords
+        .filter((record) => record.status !== "in_progress")
+        .map(async (record) => [
+          record.id,
+          (
+            await calculateExamScore({
+              examId,
+              submittedBefore: getExamEndAt(record.startedAt, durationMin),
+              userId: record.userId,
+            })
+          ).totalScore,
+        ] as const),
+    ),
+  );
 
   return (
     <AppShell nav={adminNav} title="管理员端" user={user}>
@@ -181,7 +202,9 @@ export default async function AdminExamRecordsPage({
                     <StatusBadge status={record.status} />
                   </td>
                   <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {record.totalScore ?? "-"}
+                    {record.status === "in_progress"
+                      ? "-"
+                      : scoreByRecordId.get(record.id) ?? record.totalScore ?? "-"}
                   </td>
                   <td className="px-5 py-4 text-right">
                     <Link

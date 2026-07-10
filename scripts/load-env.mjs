@@ -24,3 +24,7 @@ if (fs.existsSync(envPath)) {
 }
 
 process.env.NODE_ENV ??= "production";
+
+// The standalone app is always served through the local Nginx reverse proxy in
+// production. Do not inherit a host-wide HOSTNAME that could expose port 3000.
+process.env.HOSTNAME = process.env.OJ_LISTEN_HOST?.trim() || "127.0.0.1";

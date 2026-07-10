@@ -86,6 +86,18 @@ export function validateProductionEnv(env: RuntimeEnv = process.env): EnvValidat
   }
 
   if (
+    env.AI_ASSIST_MAX_CONCURRENCY &&
+    readPositiveInt(env.AI_ASSIST_MAX_CONCURRENCY) === null
+  ) {
+    errors.push("AI_ASSIST_MAX_CONCURRENCY 必须是大于 0 的整数");
+  }
+
+  const listenHost = env.OJ_LISTEN_HOST?.trim();
+  if (listenHost && !["127.0.0.1", "::1", "localhost"].includes(listenHost)) {
+    errors.push("OJ_LISTEN_HOST 生产环境只能监听本机地址");
+  }
+
+  if (
     env.DEEPSEEK_BASE_URL &&
     !env.DEEPSEEK_BASE_URL.trim().startsWith("https://")
   ) {

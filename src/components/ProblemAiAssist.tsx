@@ -49,14 +49,24 @@ export function ProblemAiAssist({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ examId, mode: "hint", problemId }),
       });
-      const data = await response.json().catch(() => ({}));
+      const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        const retryAfterSeconds = Number(data.retryAfterSeconds);
+        const retryAfterSeconds = Number(data?.retryAfterSeconds);
         if (Number.isInteger(retryAfterSeconds) && retryAfterSeconds > 0) {
           startCooldown(retryAfterSeconds * 1000);
         }
-        setError(data.error ?? "AI 请求失败");
+        const fallbackMessage =
+          response.status === 504
+            ? "AI 思路等待时间过长，请稍后重试。"
+            : response.status === 502
+              ? "AI 服务暂时没有完成这次思路，请稍后重试。"
+              : "AI 请求失败，请稍后重试。";
+        setError(
+          typeof data?.error === "string" && data.error.trim()
+            ? data.error
+            : fallbackMessage,
+        );
         return;
       }
 
@@ -98,19 +108,22 @@ export function ProblemAiAssist({
       </div>
 
       {remainingSeconds > 0 ? (
-        <p className="mt-3 text-xs font-bold text-indigo-800">
+        <p aria-live="polite" className="mt-3 text-xs font-bold text-indigo-800">
           请 {remainingSeconds} 秒后再使用 AI。
         </p>
       ) : null}
 
       {pending ? (
-        <p className="mt-3 text-xs font-bold text-indigo-800">
+        <p aria-live="polite" className="mt-3 text-xs font-bold text-indigo-800">
           AI 正在思考中，难题可能需要几分钟，请不要重复点击。
         </p>
       ) : null}
 
       {error ? (
-        <p className="mt-3 border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700">
+        <p
+          className="mt-3 border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700"
+          role="alert"
+        >
           {error}
         </p>
       ) : null}

@@ -10,7 +10,10 @@ import {
   getCachedAiAssistAdvice,
   setCachedAiAssistAdvice,
 } from "@/lib/aiAssistCache";
-import { consumeAiAssistCooldown } from "@/lib/aiAssistRateLimit";
+import {
+  consumeAiAssistCooldown,
+  reserveAiAssistRequest,
+} from "@/lib/aiAssistRateLimit";
 import { requireApiUser } from "@/lib/auth";
 import { normalizeProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
@@ -191,6 +194,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ advice: cachedAdvice, cached: true });
   }
 
+  const reservation = reserveAiAssistRequest({ userId: auth.user.id });
+  if (!reservation.allowed) {
+    const error =
+      reservation.reason === "user_busy"
+        ? "AI 正在思考你刚才的问题，请等待本次结束后再试"
+        : "AI 正在帮助其他同学，请稍后再试";
+    return NextResponse.json(
+      {
+        error,
+        retryAfterSeconds: reservation.retryAfterSeconds,
+      },
+      {
+        headers: { "Retry-After": String(reservation.retryAfterSeconds) },
+        status: 429,
+      },
+    );
+  }
+
   const cooldown = consumeAiAssistCooldown({
     userId: auth.user.id,
     problemId,
@@ -198,12 +219,16 @@ export async function POST(request: NextRequest) {
     mode,
   });
   if (!cooldown.allowed) {
+    reservation.release();
     return NextResponse.json(
       {
         error: `AI 使用过于频繁，请 ${cooldown.retryAfterSeconds} 秒后再试`,
         retryAfterSeconds: cooldown.retryAfterSeconds,
       },
-      { status: 429 },
+      {
+        headers: { "Retry-After": String(cooldown.retryAfterSeconds) },
+        status: 429,
+      },
     );
   }
 
@@ -216,5 +241,7 @@ export async function POST(request: NextRequest) {
       { error: safeAiAssistErrorMessage(error) },
       { status: 502 },
     );
+  } finally {
+    reservation.release();
   }
 }

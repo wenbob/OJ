@@ -40,13 +40,28 @@ export function isExamExpired({
   return endAt ? now.getTime() >= endAt.getTime() : false;
 }
 
+export function isExamSubmissionOnTime({
+  createdAt,
+  durationMin,
+  startedAt,
+}: {
+  createdAt: Date;
+  durationMin: number | null;
+  startedAt: Date;
+}) {
+  const endAt = getExamEndAt(startedAt, durationMin);
+  return !endAt || createdAt.getTime() < endAt.getTime();
+}
+
 export async function calculateExamScore({
   db = prisma,
   examId,
+  submittedBefore,
   userId,
 }: {
   db?: DbClient;
   examId: number;
+  submittedBefore?: Date | null;
   userId: number;
 }): Promise<ExamScoreResult> {
   const examProblems = await db.examProblem.findMany({
@@ -72,6 +87,7 @@ export async function calculateExamScore({
           problemId: { in: problemIds },
           submissionType: "exam",
           userId,
+          ...(submittedBefore ? { createdAt: { lt: submittedBefore } } : {}),
         },
         orderBy: { createdAt: "desc" },
         select: {
@@ -164,11 +180,19 @@ export async function finishExamRecord({
       throw new Error("考试记录不存在");
     }
 
-    if (record.status !== "in_progress") {
-      return record;
-    }
+    if (record.status !== "in_progress") return record;
 
-    const score = await calculateExamScore({ db: tx, examId, userId });
+    const exam = await tx.exam.findUnique({
+      where: { id: examId },
+      select: { durationMin: true },
+    });
+
+    const score = await calculateExamScore({
+      db: tx,
+      examId,
+      submittedBefore: getExamEndAt(record.startedAt, exam?.durationMin ?? null),
+      userId,
+    });
     return tx.examRecord.update({
       where: { id: record.id },
       data: {
@@ -176,6 +200,43 @@ export async function finishExamRecord({
         submittedAt: new Date(),
         totalScore: score.totalScore,
       },
+    });
+  });
+}
+
+export async function refreshFinishedExamScore({
+  db = prisma,
+  examId,
+  userId,
+}: {
+  db?: typeof prisma;
+  examId: number;
+  userId: number;
+}) {
+  return db.$transaction(async (tx) => {
+    const record = await tx.examRecord.findUnique({
+      where: {
+        examId_userId: {
+          examId,
+          userId,
+        },
+      },
+      include: {
+        exam: { select: { durationMin: true } },
+      },
+    });
+
+    if (!record || record.status === "in_progress") return record;
+
+    const score = await calculateExamScore({
+      db: tx,
+      examId,
+      submittedBefore: getExamEndAt(record.startedAt, record.exam.durationMin),
+      userId,
+    });
+    return tx.examRecord.update({
+      where: { id: record.id },
+      data: { totalScore: score.totalScore },
     });
   });
 }

@@ -244,4 +244,36 @@ describe("POST /api/ai/problem-assist", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it("does not allow one student to start a second long AI request", async () => {
+    let resolveAdvice: ((value: string) => void) | undefined;
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+
+    vi.mocked(requestDeepSeekAdvice).mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveAdvice = resolve;
+          markStarted?.();
+        }),
+    );
+
+    const first = POST(
+      request({ problemId: 10, mode: "hint", code: "" }) as never,
+    );
+    await started;
+
+    const second = await POST(
+      request({ problemId: 11, mode: "hint", code: "" }) as never,
+    );
+    const secondBody = await second.json();
+
+    expect(second.status).toBe(429);
+    expect(secondBody.error).toContain("正在思考");
+
+    resolveAdvice?.("题目分析：先读清楚题目，再一步一步完成。");
+    expect((await first).status).toBe(200);
+  });
 });

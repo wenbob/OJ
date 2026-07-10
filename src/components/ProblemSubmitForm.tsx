@@ -312,7 +312,7 @@ export function ProblemSubmitForm({
         <div
           aria-label="确认提交答案并交卷"
           className="mt-4 border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
-          role="dialog"
+          role="group"
         >
           <h3 className="font-black">确认交卷？</h3>
           <p className="mt-2 font-semibold leading-6">
@@ -340,7 +340,10 @@ export function ProblemSubmitForm({
         </div>
       ) : null}
       {error ? (
-        <p className="mt-3 border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+        <p
+          className="mt-3 border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700"
+          role="alert"
+        >
           {error}
         </p>
       ) : null}
@@ -388,9 +391,11 @@ export function ProblemSubmitForm({
       {showAcceptedPopup ? (
         <div
           aria-label="通过此题提示"
+          aria-atomic="true"
+          aria-live="polite"
           className="ac-success-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4"
           onClick={() => setShowAcceptedPopup(false)}
-          role="dialog"
+          role="status"
         >
           <div
             className="ac-success-pop relative max-h-[86vh] max-w-[86vw]"

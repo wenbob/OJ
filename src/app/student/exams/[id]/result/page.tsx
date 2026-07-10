@@ -4,7 +4,11 @@ import { AppShell } from "@/components/AppShell";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { requirePageUser } from "@/lib/auth";
-import { calculateExamScore, expireExamRecordIfNeeded } from "@/lib/examScoring";
+import {
+  calculateExamScore,
+  expireExamRecordIfNeeded,
+  getExamEndAt,
+} from "@/lib/examScoring";
 import { formatDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
@@ -43,7 +47,11 @@ export default async function StudentExamResultPage({ params }: PageProps) {
 
   if (!exam || !record) notFound();
 
-  const score = await calculateExamScore({ examId, userId: user.id });
+  const score = await calculateExamScore({
+    examId,
+    submittedBefore: getExamEndAt(record.startedAt, exam.durationMin),
+    userId: user.id,
+  });
   const isFinished = record.status === "submitted" || record.status === "expired";
 
   return (
@@ -65,7 +73,7 @@ export default async function StudentExamResultPage({ params }: PageProps) {
           <div className="text-right">
             <StatusBadge status={record.status} />
             <p className="mt-3 text-4xl font-black text-steel">
-              {isFinished ? record.totalScore ?? score.totalScore : "-"} 分
+              {isFinished ? score.totalScore : "-"} 分
             </p>
           </div>
         </div>

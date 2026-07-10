@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   clearAiAssistCooldowns,
   consumeAiAssistCooldown,
+  reserveAiAssistRequest,
 } from "./aiAssistRateLimit";
 
 describe("AI assist rate limit", () => {
@@ -47,5 +48,30 @@ describe("AI assist rate limit", () => {
     });
 
     expect(otherProblem.allowed).toBe(true);
+  });
+
+  it("allows only one in-flight AI request per student", () => {
+    clearAiAssistCooldowns();
+
+    const first = reserveAiAssistRequest({ userId: 1, maxConcurrency: 2 });
+    const second = reserveAiAssistRequest({ userId: 1, maxConcurrency: 2 });
+
+    expect(first.allowed).toBe(true);
+    expect(second).toMatchObject({ allowed: false, reason: "user_busy" });
+
+    if (first.allowed) first.release();
+    expect(reserveAiAssistRequest({ userId: 1, maxConcurrency: 2 }).allowed).toBe(true);
+  });
+
+  it("caps total concurrent AI requests", () => {
+    clearAiAssistCooldowns();
+
+    const first = reserveAiAssistRequest({ userId: 1, maxConcurrency: 2 });
+    const second = reserveAiAssistRequest({ userId: 2, maxConcurrency: 2 });
+    const third = reserveAiAssistRequest({ userId: 3, maxConcurrency: 2 });
+
+    expect(first.allowed).toBe(true);
+    expect(second.allowed).toBe(true);
+    expect(third).toMatchObject({ allowed: false, reason: "server_busy" });
   });
 });

@@ -78,6 +78,18 @@ describe("production environment validation", () => {
     expect(result.errors).toContain("JUDGE_MEMORY_LIMIT_MB 必须是大于 0 的整数");
   });
 
+  it("rejects unsafe public listen hosts and invalid AI concurrency", () => {
+    const result = validateProductionEnv({
+      ...validProductionEnv,
+      AI_ASSIST_MAX_CONCURRENCY: "0",
+      OJ_LISTEN_HOST: "0.0.0.0",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("AI_ASSIST_MAX_CONCURRENCY 必须是大于 0 的整数");
+    expect(result.errors).toContain("OJ_LISTEN_HOST 生产环境只能监听本机地址");
+  });
+
   it("does not block local Judge outside production", () => {
     expect(() =>
       assertProductionJudgeMode({
