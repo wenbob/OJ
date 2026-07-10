@@ -207,13 +207,31 @@ pm2 restart oj --update-env
 server {
     listen 80;
     server_name 39.105.91.81;
+    client_max_body_size 3m;
+
+    # AI 难题允许较长推理；不要沿用 Nginx 默认 60 秒读取超时。
+    location = /api/ai/problem-assist {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
 
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # Nginx 是唯一受信任代理，不能把客户端伪造的 XFF 继续传给应用。
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -543,13 +561,15 @@ curl http://127.0.0.1:3000/api/health
 
 `npm run start` 会通过 `scripts/load-env.mjs` 预加载 `.env` 后启动 `.next/standalone/server.js`。不要绕过 `npm run start` 直接裸跑 standalone server，否则生产环境变量可能不会加载。
 
+默认情况下，`scripts/load-env.mjs` 还会把 standalone 服务绑定到 `127.0.0.1`。外部流量只能经 Nginx 的 80/443 端口进入；发布后应确认 `ss -ltnp | grep 3000` 显示为 `127.0.0.1:3000`，并在云安全组中移除公网 `3000` 端口。
+
 切换后除了 `/api/health`，还要抽查登录页的 `_next/static` 资源：
 
 ```bash
 curl -I http://127.0.0.1:3000/_next/static/某个实际 chunk.css
 ```
 
-如果健康检查失败，立即把最新 `/www/oj-old-*` 恢复为 `/www/oj`。健康检查应保留足够重试窗口，避免服务尚未完全启动时误判失败。
+如果健康检查失败，立即把最新 `/www/oj-old-*` 恢复为 `/www/oj`。健康检查应保留至少 60 秒的重试窗口，避免服务尚未完全启动时误判失败。
 
 ### 方案 B：同步到 Gitee
 
