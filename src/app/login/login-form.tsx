@@ -56,7 +56,7 @@ export function LoginForm() {
         />
       </label>
       {error ? (
-        <p className="border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+        <p className="form-error border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700" role="alert">
           {error}
         </p>
       ) : null}
