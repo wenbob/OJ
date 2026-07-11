@@ -23,7 +23,7 @@
 /www/backups/prod-20260710-155549-before-hardening.db
 ```
 
-保留的当前回滚目录：
+当次回滚目录（已在 2026-07-11 新版本验证后清理）：
 
 ```text
 /www/oj-old-20260710-155549-hardening
