@@ -139,8 +139,12 @@ function CurrentBattleCard({
 }) {
   const progress = getRankTierProgress(currentRanking.points);
   const previousRanking = currentRanking.rank > 1 ? rankings[currentRanking.rank - 2] : null;
+  const firstRanking = rankings[0] ?? null;
   const pointsGap = previousRanking
     ? Math.max(0, previousRanking.points - currentRanking.points)
+    : 0;
+  const pointsToFirst = firstRanking
+    ? Math.max(0, firstRanking.points - currentRanking.points)
     : 0;
   const progressScale = progress.progressPercent / 100;
 
@@ -157,13 +161,24 @@ function CurrentBattleCard({
             <p className="mt-1 text-sm font-bold text-ink-600">
               {currentRanking.displayTitle} · {currentRanking.points} 积分 · 唯一 AC {currentRanking.acCount} 题
             </p>
-            <p className="mt-2 text-sm font-black text-steel">
-              {currentRanking.rank === 1
-                ? "你正在守擂，继续完成新题巩固第一名。"
-                : pointsGap === 0
-                  ? "你与前一名积分相同，继续完成唯一 AC 可争取反超。"
-                  : `距离前一名还差 ${pointsGap} 分。`}
-            </p>
+            <div className="mt-2 grid gap-1 text-sm font-black text-steel">
+              {currentRanking.rank === 1 ? (
+                <p>你正在守擂，继续完成新题巩固第一名。</p>
+              ) : (
+                <>
+                  <p>
+                    {pointsGap === 0
+                      ? "你与前一名积分相同，继续完成唯一 AC 可争取反超。"
+                      : `距离前一名还差 ${pointsGap} 分。`}
+                  </p>
+                  <p>
+                    {pointsToFirst === 0
+                      ? "你与第一名积分相同，继续提升唯一 AC 可争取登顶。"
+                      : `距离第一名还差 ${pointsToFirst} 分。`}
+                  </p>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
