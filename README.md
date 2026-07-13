@@ -30,6 +30,9 @@
 - [学生使用说明](docs/student-guide.md)
 - [管理员使用和运维说明](docs/admin-guide.md)
 - [线上部署与维护手册](docs/deploy.md)
+
+以上三份是当前操作指南；下面的 `ops-review-*` 是按日期保留的历史发布与事故记录，其中的旧命令可能已被后续流程取代，实际部署以 [线上部署与维护手册](docs/deploy.md) 和 `AGENTS.md` 为准。
+
 - [2026-05-06 线上更新复盘与运维经验](docs/ops-review-2026-05-06.md)
 - [2026-05-12 单文件热更新记录](docs/ops-review-2026-05-12.md)
 - [2026-05-16 复制代码修复记录](docs/ops-review-2026-05-16.md)

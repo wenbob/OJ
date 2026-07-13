@@ -109,3 +109,6 @@ npm run build
 | `docs/ops-review-2026-06-29.md` | OJ 旧版本目录磁盘清理记录 |
 | `docs/ops-review-2026-07-01.md` | 头衔天梯与安全加固上线记录 |
 | `docs/ops-review-2026-07-02.md` | AI 思路上线与低内存发布事故修正记录 |
+| `docs/ops-review-2026-07-10.md` | 生产运行时、Nginx、Judge 和权限加固记录 |
+| `docs/ops-review-2026-07-11.md` | 竞技学院视觉与天梯升级记录 |
+| `docs/ops-review-2026-07-12.md` | 天梯前一名与第一名积分差上线记录 |
