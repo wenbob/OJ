@@ -29,6 +29,8 @@ async function main() {
     data: [
       { key: "siteName", value: "C++ OJ" },
       { key: "siteSubtitle", value: "在线练习平台" },
+      { key: "browserTitle", value: "" },
+      { key: "browserIcon", value: "" },
       { key: "studentNotice", value: "欢迎进入 C++ OJ 练习平台" },
       { key: "adminNotice", value: "欢迎进入后台管理" },
       { key: "defaultCppTemplate", value: defaultCppTemplate },

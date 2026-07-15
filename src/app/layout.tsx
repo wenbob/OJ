@@ -1,10 +1,24 @@
 import type { Metadata, Viewport } from "next";
+import { BrowserIdentity } from "@/components/BrowserIdentity";
+import { resolveBrowserTitle } from "@/lib/browserIdentity";
+import { getPublicSettings } from "@/lib/settings";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "C++ OJ Demo",
-  description: "C++ 在线 OJ 练习平台 Demo",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getPublicSettings();
+  return {
+    title: resolveBrowserTitle(settings),
+    description: `${settings.siteName} - ${settings.siteSubtitle}`,
+    icons: settings.browserIcon
+      ? {
+          icon: [{
+            url: settings.browserIcon,
+            type: settings.browserIcon.slice(5, settings.browserIcon.indexOf(";")),
+          }],
+        }
+      : undefined,
+  };
+}
 
 export const viewport: Viewport = {
   initialScale: 1,
@@ -19,7 +33,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body className="min-h-screen font-sans antialiased">{children}</body>
+      <body className="min-h-screen font-sans antialiased">
+        <BrowserIdentity />
+        {children}
+      </body>
     </html>
   );
 }

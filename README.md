@@ -698,6 +698,8 @@ ended      已结束，学生端不可继续答题和提交
 
 - 平台名称 `siteName`
 - 平台副标题 `siteSubtitle`
+- 浏览器标签名称 `browserTitle`
+- 浏览器标签图标 `browserIcon`
 - 学生端公告 `studentNotice`
 - 管理员端公告 `adminNotice`
 - 默认 C++ 代码模板 `defaultCppTemplate`
@@ -710,6 +712,8 @@ ended      已结束，学生端不可继续答题和提交
 
 - 当前暂未开放学生自助注册页，`allowStudentRegister` 是预留开关。
 - 登录页、学生端布局、管理员端布局和首页公告会读取系统设置。
+- 浏览器标签名称留空时使用平台名称；标签图标支持 PNG、ICO，最大 256KB，可恢复为浏览器默认图标。
+- 标签图标以受校验的图片数据保存在 `SystemSetting`，不会因代码发布或目录切换丢失；保存设置后当前标签页立即更新，其他页面刷新后生效。
 - 默认 C++ 模板已接入 Monaco Editor。
 - 默认评测时间和内存已接入提交接口。
 - 日常练习 AI 关闭时，学生日常刷题页不显示 AI 按钮，服务端接口也会拒绝请求。

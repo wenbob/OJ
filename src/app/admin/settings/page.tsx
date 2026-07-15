@@ -28,7 +28,7 @@ export default async function AdminSettingsPage() {
           </p>
           <h1 className="mt-2 text-2xl font-black">系统设置</h1>
           <p className="mt-2 text-sm font-semibold text-ink-600">
-            配置平台名称、公告、默认代码模板和评测默认限制。
+            配置平台名称、浏览器标签、公告、默认代码模板和评测默认限制。
           </p>
         </div>
         <Link className="btn btn-secondary" href="/admin">

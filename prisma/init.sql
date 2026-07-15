@@ -215,4 +215,10 @@ CREATE UNIQUE INDEX "SystemSetting_key_key" ON "SystemSetting"("key");
 INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
 VALUES ('aiPracticeEnabled', 'false', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('browserTitle', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('browserIcon', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
 PRAGMA foreign_keys=ON;

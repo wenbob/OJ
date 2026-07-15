@@ -11,6 +11,7 @@ export const REQUEST_LIMITS = {
   codeBytes: 128 * 1024,
   markdownImportJsonBytes: 2 * 1024 * 1024,
   problemPayloadJsonBytes: 2 * 1024 * 1024,
+  settingsJsonBytes: 512 * 1024,
   smallJsonBytes: 64 * 1024,
 } as const;
 

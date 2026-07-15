@@ -27,7 +27,7 @@ export async function PUT(request: NextRequest) {
 
   let body: unknown;
   try {
-    body = await readJsonWithLimit(request, REQUEST_LIMITS.smallJsonBytes);
+    body = await readJsonWithLimit(request, REQUEST_LIMITS.settingsJsonBytes);
   } catch (error) {
     if (error instanceof PayloadTooLargeError) {
       return NextResponse.json({ error: error.message }, { status: 413 });

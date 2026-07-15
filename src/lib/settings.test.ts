@@ -1,0 +1,66 @@
+import { describe, expect, it, vi } from "vitest";
+import { MAX_BROWSER_ICON_BYTES } from "@/lib/browserIdentity";
+import { prisma } from "@/lib/prisma";
+import {
+  defaultSystemSettings,
+  getPublicSettings,
+  normalizeSystemSettingsPayload,
+  validateBrowserIcon,
+  validateSystemSettings,
+} from "@/lib/settings";
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    systemSetting: {
+      findMany: vi.fn(),
+    },
+  },
+}));
+
+function pngDataUrl(size = 8) {
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const bytes = size <= signature.length
+    ? signature.subarray(0, size)
+    : Buffer.concat([signature, Buffer.alloc(size - signature.length)]);
+  return `data:image/png;base64,${bytes.toString("base64")}`;
+}
+
+describe("browser identity system settings", () => {
+  it("normalizes browser title and icon fields", () => {
+    const settings = normalizeSystemSettingsPayload({
+      ...defaultSystemSettings,
+      browserTitle: "好好练题",
+      browserIcon: pngDataUrl(),
+    });
+    expect(settings.browserTitle).toBe("好好练题");
+    expect(settings.browserIcon).toBe(pngDataUrl());
+  });
+
+  it("accepts a valid PNG data URL", () => {
+    expect(validateBrowserIcon(pngDataUrl())).toBe("");
+  });
+
+  it("rejects unsupported or disguised icon content", () => {
+    expect(validateBrowserIcon("data:image/svg+xml;base64,PHN2Zz4=")).toContain("PNG 或 ICO");
+    expect(validateBrowserIcon("data:image/png;base64,SGVsbG8=")).toContain("格式不匹配");
+  });
+
+  it("rejects icons larger than 256KB", () => {
+    expect(validateBrowserIcon(pngDataUrl(MAX_BROWSER_ICON_BYTES + 1))).toContain("256KB");
+  });
+
+  it("does not expose an invalid icon already stored in the database", async () => {
+    vi.mocked(prisma.systemSetting.findMany).mockResolvedValueOnce([
+      { key: "browserIcon", value: "data:image/png;base64,SGVsbG8=" },
+    ] as never);
+
+    await expect(getPublicSettings()).resolves.toMatchObject({ browserIcon: "" });
+  });
+
+  it("allows an empty browser title but limits custom titles to 60 characters", () => {
+    expect(validateSystemSettings({ ...defaultSystemSettings, browserTitle: "" })).toBe("");
+    expect(
+      validateSystemSettings({ ...defaultSystemSettings, browserTitle: "标".repeat(61) }),
+    ).toContain("60");
+  });
+});

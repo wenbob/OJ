@@ -58,6 +58,12 @@ Generating static pages using 1 worker
 
 - AC 透明动效弹窗集中在 `src/components/ProblemSubmitForm.tsx` 和 `public/ac-success.png`。图片必须保持真实 alpha 透明背景，不要替换成带棋盘格像素的伪透明图。
 
+## 浏览器标签设置
+
+- 浏览器标签名称和图标保存在 `SystemSetting.browserTitle`、`SystemSetting.browserIcon`；标题留空时回退到 `siteName`。
+- 标签图标只允许经过服务端校验的 PNG、ICO Data URL，原文件最大 256KB；不要改成发布目录内的可变上传文件，否则目录切换会丢失。
+- 全站标签同步集中在 `src/components/BrowserIdentity.tsx`，管理员保存后通过同一组件即时应用，不要在单个页面重复修改 `document.title` 或 favicon。
+
 ## 头衔与天梯规则
 
 - 学生段位积分实时从 `Submission` 计算，不要新增积分缓存表；规则为唯一 Accepted 题数 × 10。

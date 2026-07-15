@@ -1,8 +1,11 @@
 "use client";
 
-import { Save } from "lucide-react";
-import type { FormEvent } from "react";
+import Image from "next/image";
+import { ImagePlus, RotateCcw, Save } from "lucide-react";
+import type { ChangeEvent, FormEvent } from "react";
 import { useState } from "react";
+import { notifyBrowserIdentityUpdated } from "@/components/BrowserIdentity";
+import { MAX_BROWSER_ICON_BYTES, resolveBrowserTitle } from "@/lib/browserIdentity";
 import type { SystemSettings } from "@/lib/settings";
 
 export function SettingsForm({ initialSettings }: { initialSettings: SystemSettings }) {
@@ -13,6 +16,38 @@ export function SettingsForm({ initialSettings }: { initialSettings: SystemSetti
 
   function update(key: keyof SystemSettings, value: string) {
     setSettings((current) => ({ ...current, [key]: value }));
+  }
+
+  function uploadBrowserIcon(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setMessage("");
+    setError("");
+
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (extension !== "png" && extension !== "ico") {
+      setError("浏览器标签图标仅支持 PNG 或 ICO 文件");
+      return;
+    }
+    if (file.size > MAX_BROWSER_ICON_BYTES) {
+      setError("浏览器标签图标不能超过 256KB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => setError("图标读取失败，请重新选择");
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const commaIndex = result.indexOf(",");
+      if (commaIndex === -1) {
+        setError("图标读取失败，请重新选择");
+        return;
+      }
+      const mime = extension === "ico" ? "image/x-icon" : "image/png";
+      update("browserIcon", `data:${mime};base64,${result.slice(commaIndex + 1)}`);
+    };
+    reader.readAsDataURL(file);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -47,7 +82,9 @@ export function SettingsForm({ initialSettings }: { initialSettings: SystemSetti
       return;
     }
 
-    setSettings(data.settings ?? settings);
+    const savedSettings = (data.settings ?? settings) as SystemSettings;
+    setSettings(savedSettings);
+    notifyBrowserIdentityUpdated(savedSettings);
     setMessage("设置已保存");
   }
 
@@ -76,6 +113,62 @@ export function SettingsForm({ initialSettings }: { initialSettings: SystemSetti
             value={settings.adminNotice}
             onChange={(value) => update("adminNotice", value)}
           />
+        </div>
+      </section>
+
+      <section className="surface p-5">
+        <h2 className="text-xl font-black">浏览器标签设置</h2>
+        <p className="mt-2 text-sm font-semibold text-ink-600">
+          控制浏览器标签页显示的名称和小图标。名称留空时自动使用平台名称。
+        </p>
+        <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+          <TextInput
+            label="浏览器标签名称"
+            maxLength={60}
+            placeholder={`留空则显示：${settings.siteName}`}
+            value={settings.browserTitle}
+            onChange={(value) => update("browserTitle", value)}
+          />
+          <div className="border border-ink-950/10 bg-paper-50 p-4">
+            <p className="text-xs font-black uppercase tracking-[0.12em] text-ink-500">当前预览</p>
+            <div className="mt-2 flex items-center gap-3">
+              {settings.browserIcon ? (
+                <Image
+                  alt="浏览器标签图标预览"
+                  className="h-10 w-10 object-contain"
+                  height={40}
+                  src={settings.browserIcon}
+                  unoptimized
+                  width={40}
+                />
+              ) : (
+                <span className="grid h-10 w-10 place-items-center border border-dashed border-ink-950/20 text-xs font-black text-ink-400">默认</span>
+              )}
+              <span className="max-w-64 truncate font-black text-ink-950">
+                {resolveBrowserTitle(settings)}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <label className="btn btn-secondary cursor-pointer">
+            <ImagePlus size={16} />上传 PNG / ICO
+            <input
+              accept=".png,.ico,image/png,image/x-icon,image/vnd.microsoft.icon"
+              className="sr-only"
+              onChange={uploadBrowserIcon}
+              type="file"
+            />
+          </label>
+          <button
+            className="btn btn-secondary"
+            disabled={!settings.browserIcon}
+            onClick={() => update("browserIcon", "")}
+            type="button"
+          >
+            <RotateCcw size={16} />恢复默认图标
+          </button>
+          <p className="text-xs font-semibold text-ink-500">建议使用正方形 64×64 或 128×128 图片，最大 256KB。</p>
         </div>
       </section>
 
@@ -161,14 +254,18 @@ export function SettingsForm({ initialSettings }: { initialSettings: SystemSetti
 
 function TextInput({
   label,
+  maxLength,
   min,
   onChange,
+  placeholder,
   type = "text",
   value,
 }: {
   label: string;
+  maxLength?: number;
   min?: number;
   onChange: (value: string) => void;
+  placeholder?: string;
   type?: string;
   value: string;
 }) {
@@ -177,7 +274,9 @@ function TextInput({
       {label}
       <input
         className="field"
+        maxLength={maxLength}
         min={min}
+        placeholder={placeholder}
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
