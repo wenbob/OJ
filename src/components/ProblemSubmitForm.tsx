@@ -280,7 +280,16 @@ export function ProblemSubmitForm({
     outputCase?.actualOutput !== undefined && outputCase.actualOutput !== null;
 
   return (
-    <section className="surface p-5">
+    <>
+      {aiEnabled && !objective ? (
+        <ProblemAiAssist
+          code={code}
+          examId={examId}
+          problemId={problemId}
+          studentId={aiStudentId}
+        />
+      ) : null}
+      <section className="surface p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-black">
@@ -296,14 +305,6 @@ export function ProblemSubmitForm({
           {objective ? "格式：每行一个答案" : "语言：C++17"}
         </span>
       </div>
-      {aiEnabled && !objective ? (
-        <ProblemAiAssist
-          code={code}
-          examId={examId}
-          problemId={problemId}
-          studentId={aiStudentId}
-        />
-      ) : null}
       <div className="mt-4">
         <CodeEditor
           key={storageKey}
@@ -450,6 +451,7 @@ export function ProblemSubmitForm({
           </div>
         </div>
       ) : null}
-    </section>
+      </section>
+    </>
   );
 }

@@ -194,7 +194,7 @@ export function ProblemAiAssist({
   }
 
   return (
-    <section className="mt-4 border border-indigo-200 bg-indigo-50/80 p-4">
+    <section className="surface border-indigo-200 bg-indigo-50/80 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-indigo-600">
