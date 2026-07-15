@@ -271,7 +271,7 @@ export default async function StudentExamTakePage({
               )}
             </article>
 
-            <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:self-start">
+            <aside className="grid content-start gap-4 xl:self-start">
               {selectedLatest ? (
                 <section className="surface p-5">
                   <h2 className="text-lg font-black">本题最近一次考试提交</h2>

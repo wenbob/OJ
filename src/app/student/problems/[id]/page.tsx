@@ -118,7 +118,7 @@ export default async function StudentProblemDetailPage({
           )}
         </article>
 
-        <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-auto xl:self-start">
+        <aside className="grid content-start gap-4 xl:self-start">
           <SubmitForm
             aiEnabled={
               problemType === "programming" &&
