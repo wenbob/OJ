@@ -29,7 +29,7 @@ describe("AI assist rate limit", () => {
     expect(second.retryAfterSeconds).toBe(11);
   });
 
-  it("separates cooldowns by problem", () => {
+  it("does not let students bypass cooldown by switching problems", () => {
     clearAiAssistCooldowns();
     consumeAiAssistCooldown({
       userId: 1,
@@ -47,7 +47,49 @@ describe("AI assist rate limit", () => {
       now: 2_000,
     });
 
-    expect(otherProblem.allowed).toBe(true);
+    expect(otherProblem.allowed).toBe(false);
+  });
+
+  it("does not let students bypass cooldown by moving from practice to an exam", () => {
+    clearAiAssistCooldowns();
+    consumeAiAssistCooldown({
+      userId: 1,
+      problemId: 2,
+      examId: null,
+      mode: "overview",
+      now: 1_000,
+    });
+
+    const examRequest = consumeAiAssistCooldown({
+      userId: 1,
+      problemId: 5,
+      examId: 8,
+      mode: "question",
+      now: 2_000,
+    });
+
+    expect(examRequest.allowed).toBe(false);
+  });
+
+  it("does not let students bypass cooldown by switching help modes", () => {
+    clearAiAssistCooldowns();
+    consumeAiAssistCooldown({
+      userId: 1,
+      problemId: 2,
+      examId: null,
+      mode: "overview",
+      now: 1_000,
+    });
+
+    const switchedMode = consumeAiAssistCooldown({
+      userId: 1,
+      problemId: 2,
+      examId: null,
+      mode: "code_review",
+      now: 2_000,
+    });
+
+    expect(switchedMode.allowed).toBe(false);
   });
 
   it("allows only one in-flight AI request per student", () => {

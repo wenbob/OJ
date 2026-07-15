@@ -1,5 +1,3 @@
-import type { AiAssistMode } from "@/lib/aiAssist";
-
 export const AI_ASSIST_COOLDOWN_MS = 20_000;
 export const DEFAULT_AI_ASSIST_MAX_CONCURRENCY = 2;
 export const AI_ASSIST_BUSY_RETRY_SECONDS = 10;
@@ -8,15 +6,15 @@ type CooldownInput = {
   userId: number;
   problemId: number;
   examId: number | null;
-  mode: AiAssistMode;
+  mode?: string;
   now?: number;
 };
 
 const buckets = new Map<string, number>();
 const activeUserIds = new Set<number>();
 
-function keyOf({ userId, problemId, examId, mode }: CooldownInput) {
-  return `${userId}:${problemId}:${examId ?? "practice"}:${mode}`;
+function keyOf({ userId }: CooldownInput) {
+  return String(userId);
 }
 
 export function consumeAiAssistCooldown(input: CooldownInput) {

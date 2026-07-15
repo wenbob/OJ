@@ -56,7 +56,7 @@ export default async function StudentExamTakePage({
     : undefined;
   if (!Number.isInteger(examId)) notFound();
 
-  const [exam, checkedRecord] = await Promise.all([
+  const [exam, checkedRecord, studentProfile] = await Promise.all([
     prisma.exam.findUnique({
       where: { id: examId },
       include: {
@@ -76,6 +76,10 @@ export default async function StudentExamTakePage({
       },
     }),
     expireExamRecordIfNeeded({ examId, userId: user.id }),
+    prisma.studentProfile.findUnique({
+      where: { userId: user.id },
+      select: { aiAccessEnabled: true },
+    }),
   ]);
 
   if (!exam) notFound();
@@ -296,7 +300,12 @@ export default async function StudentExamTakePage({
                 </section>
               ) : null}
               <ProblemSubmitForm
-                aiEnabled={selectedProblemType === "programming" && exam.aiEnabled}
+                aiEnabled={
+                  selectedProblemType === "programming" &&
+                  exam.aiEnabled &&
+                  Boolean(studentProfile?.aiAccessEnabled)
+                }
+                aiStudentId={user.id}
                 key={`exam-${exam.id}-problem-${selectedProblem.id}-${
                   Number.isInteger(fromSubmissionId) ? fromSubmissionId : "draft"
                 }`}

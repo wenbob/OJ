@@ -44,6 +44,7 @@ type SubmissionResult = {
 
 export function ProblemSubmitForm({
   aiEnabled = false,
+  aiStudentId,
   defaultCodeTemplate,
   detailHrefBase = "/student/submissions",
   disabled = false,
@@ -57,6 +58,7 @@ export function ProblemSubmitForm({
   refreshOnSuccess = false,
 }: {
   aiEnabled?: boolean;
+  aiStudentId?: number;
   defaultCodeTemplate?: string;
   detailHrefBase?: string;
   disabled?: boolean;
@@ -295,7 +297,12 @@ export function ProblemSubmitForm({
         </span>
       </div>
       {aiEnabled && !objective ? (
-        <ProblemAiAssist examId={examId} problemId={problemId} />
+        <ProblemAiAssist
+          code={code}
+          examId={examId}
+          problemId={problemId}
+          studentId={aiStudentId}
+        />
       ) : null}
       <div className="mt-4">
         <CodeEditor

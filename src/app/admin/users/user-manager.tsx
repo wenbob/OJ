@@ -6,6 +6,7 @@ import { useState } from "react";
 import { formatDate } from "@/lib/format";
 
 type UserItem = {
+  aiAccessEnabled?: boolean;
   customTitle?: string | null;
   id: number;
   ranking?: {
@@ -19,12 +20,16 @@ type UserItem = {
   username: string;
   role: string;
   createdAt: string;
-  studentProfile?: { customTitle: string | null } | null;
+  studentProfile?: {
+    aiAccessEnabled: boolean;
+    customTitle: string | null;
+  } | null;
   submissions?: number;
   _count?: { submissions: number };
 };
 
 const blankForm = {
+  aiAccessEnabled: false,
   customTitle: "",
   username: "",
   password: "",
@@ -45,6 +50,8 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
       setUsers(
         data.users.map((item: UserItem) => ({
           ...item,
+          aiAccessEnabled:
+            item.aiAccessEnabled ?? item.studentProfile?.aiAccessEnabled ?? false,
           customTitle: item.customTitle ?? item.studentProfile?.customTitle ?? "",
           submissions: item.submissions ?? item._count?.submissions ?? 0,
         })),
@@ -55,6 +62,7 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
   function editUser(user: UserItem) {
     setEditingId(user.id);
     setForm({
+      aiAccessEnabled: user.aiAccessEnabled ?? false,
       customTitle: user.customTitle ?? "",
       username: user.username,
       password: "",
@@ -124,11 +132,12 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
           <h1 className="text-2xl font-black">用户管理</h1>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] border-collapse">
+          <table className="w-full min-w-[900px] border-collapse">
             <thead>
               <tr className="border-b border-ink-950/10 bg-white/55 text-left">
                 <th className="table-head px-5 py-3">用户名</th>
                 <th className="table-head px-5 py-3">角色</th>
+                <th className="table-head px-5 py-3">AI 权限</th>
                 <th className="table-head px-5 py-3">头衔</th>
                 <th className="table-head px-5 py-3">段位积分</th>
                 <th className="table-head px-5 py-3">提交</th>
@@ -142,6 +151,21 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
                   <td className="px-5 py-4 font-black">{user.username}</td>
                   <td className="px-5 py-4 text-sm font-semibold text-ink-700">
                     {user.role}
+                  </td>
+                  <td className="px-5 py-4 text-sm font-bold">
+                    {user.role === "student" ? (
+                      <span
+                        className={`inline-flex border px-2 py-1 text-xs font-black ${
+                          user.aiAccessEnabled
+                            ? "border-moss/30 bg-moss/10 text-moss"
+                            : "border-ink-950/10 bg-white/60 text-ink-500"
+                        }`}
+                      >
+                        {user.aiAccessEnabled ? "已开通" : "未开通"}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td className="px-5 py-4 text-sm font-semibold text-ink-700">
                     {user.ranking ? (
@@ -244,6 +268,26 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
             />
             <span className="text-xs font-semibold text-ink-600">
               留空使用自动段位名；自定义头衔只影响展示，不影响积分和排名。
+            </span>
+          </label>
+          <label className="flex items-start gap-3 border border-indigo-200 bg-indigo-50/70 p-4 text-sm font-bold text-indigo-950">
+            <input
+              checked={form.aiAccessEnabled}
+              className="mt-0.5 h-4 w-4 accent-indigo-700"
+              disabled={form.role !== "student"}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  aiAccessEnabled: event.target.checked,
+                }))
+              }
+              type="checkbox"
+            />
+            <span>
+              开通 AI 对话权限
+              <span className="mt-1 block text-xs font-semibold leading-5 text-indigo-800">
+                仍需同时开启日常练习 AI 总开关或当前考试 AI 开关。
+              </span>
             </span>
           </label>
         </div>

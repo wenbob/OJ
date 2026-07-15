@@ -60,7 +60,7 @@ Generating static pages using 1 worker
 
 - 学生段位积分实时从 `Submission` 计算，不要新增积分缓存表；规则为唯一 Accepted 题数 × 10。
 - 同一用户同一题多次 `Accepted` 只计入 1 道唯一 AC 题；日常刷题和考试提交都计入统计。
-- 管理员自定义头衔保存在 `StudentProfile.customTitle`，只覆盖展示文案，不影响积分、自动段位和排名。
+- 管理员自定义头衔和学生个人 AI 权限分别保存在 `StudentProfile.customTitle`、`StudentProfile.aiAccessEnabled`；头衔只覆盖展示文案，不影响积分、自动段位和排名。
 - 天梯排序固定为：积分降序 → 唯一 AC 题数降序 → AC 总次数降序 → 用户名升序 → 用户 ID 升序。
 
 ## AI 助手规则
@@ -70,7 +70,10 @@ Generating static pages using 1 worker
 - 学生 AI 使用频率必须由服务端强制限制，当前为每次使用后至少等待 20 秒。
 - AI 提示不得返回完整可提交代码；服务端要保留输出拦截。
 - AI 只对编程题开放；选择判断题默认不显示 AI，避免泄露答案。
-- 日常练习 AI 思路由 `SystemSetting.aiPracticeEnabled` 控制，考试 AI 思路由 `Exam.aiEnabled` 按单场考试控制，默认关闭。
+- AI 采用双重权限：`StudentProfile.aiAccessEnabled` 必须开启，并且日常练习的 `SystemSetting.aiPracticeEnabled` 或当前考试的 `Exam.aiEnabled` 也必须开启；个人权限默认关闭。
+- AI 对话只保存在浏览器 `localStorage`，键必须包含学生、题目及日常/考试范围；不得保存代码快照，最多保留 20 条，请求只带最近 12 条。
+- 同一学生在所有题目、考试和 AI 模式中共用服务端 20 秒冷却；只有不含个人代码和对话的 `overview` 可使用同题 5 分钟缓存，缓存命中也不能绕过冷却。
+- AI 输出不得包含完整代码、可复制代码语句、最终答案或隐藏测试点；代码检查最多指出三个问题及所在行。
 
 ## 题型与考试规则
 

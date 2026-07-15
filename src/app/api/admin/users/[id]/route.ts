@@ -21,6 +21,10 @@ function readRole(value: unknown) {
   return null;
 }
 
+function readAiAccessEnabled(value: unknown) {
+  return value === true || value === "true";
+}
+
 export async function PUT(request: NextRequest, context: RouteContext) {
   const auth = await requireApiUser(request, "admin");
   if (auth.response) return auth.response;
@@ -46,6 +50,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     typeof record.username === "string" ? record.username.trim() : "";
   const password = typeof record.password === "string" ? record.password : "";
   const role = readRole(record.role);
+  const aiAccessEnabled = readAiAccessEnabled(record.aiAccessEnabled);
   const customTitle = normalizeCustomTitle(record.customTitle);
   const customTitleError = validateCustomTitle(customTitle);
 
@@ -78,11 +83,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       });
 
       if (role === "student") {
-        if (customTitle) {
+        if (customTitle || aiAccessEnabled) {
           await tx.studentProfile.upsert({
             where: { userId },
-            create: { customTitle, userId },
-            update: { customTitle },
+            create: { aiAccessEnabled, customTitle, userId },
+            update: { aiAccessEnabled, customTitle },
           });
         } else {
           await tx.studentProfile.deleteMany({ where: { userId } });
@@ -98,7 +103,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           username: true,
           role: true,
           createdAt: true,
-          studentProfile: { select: { customTitle: true } },
+          studentProfile: {
+            select: { aiAccessEnabled: true, customTitle: true },
+          },
         },
       });
     });

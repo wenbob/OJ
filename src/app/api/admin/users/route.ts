@@ -18,6 +18,10 @@ function readRole(value: unknown) {
   return null;
 }
 
+function readAiAccessEnabled(value: unknown) {
+  return value === true || value === "true";
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireApiUser(request, "admin");
   if (auth.response) return auth.response;
@@ -29,7 +33,9 @@ export async function GET(request: NextRequest) {
         username: true,
         role: true,
         createdAt: true,
-        studentProfile: { select: { customTitle: true } },
+        studentProfile: {
+          select: { aiAccessEnabled: true, customTitle: true },
+        },
         _count: { select: { submissions: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -43,6 +49,7 @@ export async function GET(request: NextRequest) {
       const customTitle = user.studentProfile?.customTitle ?? "";
       return {
         ...user,
+        aiAccessEnabled: user.studentProfile?.aiAccessEnabled ?? false,
         customTitle,
         ranking: rankingByUserId.get(user.id) ?? null,
       };
@@ -69,6 +76,7 @@ export async function POST(request: NextRequest) {
     typeof record.username === "string" ? record.username.trim() : "";
   const password = typeof record.password === "string" ? record.password : "";
   const role = readRole(record.role);
+  const aiAccessEnabled = readAiAccessEnabled(record.aiAccessEnabled);
   const customTitle = normalizeCustomTitle(record.customTitle);
   const customTitleError = validateCustomTitle(customTitle);
 
@@ -92,8 +100,12 @@ export async function POST(request: NextRequest) {
         username,
         passwordHash: await hashPassword(password),
         role,
-        ...(role === "student" && customTitle
-          ? { studentProfile: { create: { customTitle } } }
+        ...(role === "student" && (customTitle || aiAccessEnabled)
+          ? {
+              studentProfile: {
+                create: { aiAccessEnabled, customTitle },
+              },
+            }
           : {}),
       },
       select: {
@@ -101,7 +113,9 @@ export async function POST(request: NextRequest) {
         username: true,
         role: true,
         createdAt: true,
-        studentProfile: { select: { customTitle: true } },
+        studentProfile: {
+          select: { aiAccessEnabled: true, customTitle: true },
+        },
       },
     });
     return NextResponse.json({ user }, { status: 201 });

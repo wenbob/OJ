@@ -44,19 +44,24 @@ export default async function StudentProblemDetailPage({
   const problemId = Number(id);
   if (!Number.isInteger(problemId)) notFound();
 
-  const [problem, defaultCodeTemplate, aiPracticeEnabled] = await Promise.all([
-    prisma.problem.findUnique({
-      where: { id: problemId },
-      include: {
-        testCases: {
-          where: { isSample: true },
-          orderBy: { id: "asc" },
+  const [problem, defaultCodeTemplate, aiPracticeEnabled, studentProfile] =
+    await Promise.all([
+      prisma.problem.findUnique({
+        where: { id: problemId },
+        include: {
+          testCases: {
+            where: { isSample: true },
+            orderBy: { id: "asc" },
+          },
         },
-      },
-    }),
-    getDefaultCppTemplate(),
-    getSetting("aiPracticeEnabled"),
-  ]);
+      }),
+      getDefaultCppTemplate(),
+      getSetting("aiPracticeEnabled"),
+      prisma.studentProfile.findUnique({
+        where: { userId: user.id },
+        select: { aiAccessEnabled: true },
+      }),
+    ]);
 
   if (!problem) notFound();
   const problemType = normalizeProblemType(problem.problemType);
@@ -116,8 +121,11 @@ export default async function StudentProblemDetailPage({
         <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-auto xl:self-start">
           <SubmitForm
             aiEnabled={
-              problemType === "programming" && boolSetting(aiPracticeEnabled)
+              problemType === "programming" &&
+              boolSetting(aiPracticeEnabled) &&
+              Boolean(studentProfile?.aiAccessEnabled)
             }
+            aiStudentId={user.id}
             defaultCodeTemplate={defaultCodeTemplate}
             fromSubmissionId={
               Number.isInteger(fromSubmissionId) ? fromSubmissionId : undefined

@@ -23,7 +23,9 @@ export default async function AdminUsersPage() {
         username: true,
         role: true,
         createdAt: true,
-        studentProfile: { select: { customTitle: true } },
+        studentProfile: {
+          select: { aiAccessEnabled: true, customTitle: true },
+        },
         _count: { select: { submissions: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -40,6 +42,7 @@ export default async function AdminUsersPage() {
           username: item.username,
           role: item.role,
           createdAt: item.createdAt.toISOString(),
+          aiAccessEnabled: item.studentProfile?.aiAccessEnabled ?? false,
           customTitle: item.studentProfile?.customTitle ?? "",
           ranking: rankingByUserId.get(item.id) ?? null,
           submissions: item._count.submissions,

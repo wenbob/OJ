@@ -75,7 +75,10 @@ function createTx() {
         createdAt: new Date("2026-06-28T00:00:00.000Z"),
         id: 2,
         role: "student",
-        studentProfile: { customTitle: "算法新星" },
+        studentProfile: {
+          aiAccessEnabled: false,
+          customTitle: "算法新星",
+        },
         username: "alice",
       }),
       update: vi.fn().mockResolvedValue({
@@ -116,7 +119,10 @@ describe("admin users API custom title handling", () => {
         createdAt: new Date("2026-06-28T00:00:00.000Z"),
         id: 2,
         role: "student",
-        studentProfile: { customTitle: "算法新星" },
+        studentProfile: {
+          aiAccessEnabled: true,
+          customTitle: "算法新星",
+        },
         username: "alice",
       },
     ]);
@@ -127,6 +133,7 @@ describe("admin users API custom title handling", () => {
 
     expect(response.status).toBe(200);
     expect(body.users[0]).toMatchObject({
+      aiAccessEnabled: true,
       customTitle: "算法新星",
       ranking,
       username: "alice",
@@ -138,7 +145,10 @@ describe("admin users API custom title handling", () => {
       createdAt: new Date("2026-06-28T00:00:00.000Z"),
       id: 2,
       role: "student",
-      studentProfile: { customTitle: "算法新星" },
+      studentProfile: {
+        aiAccessEnabled: false,
+        customTitle: "算法新星",
+      },
       username: "alice",
     });
 
@@ -156,8 +166,44 @@ describe("admin users API custom title handling", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           role: "student",
-          studentProfile: { create: { customTitle: "算法新星" } },
+          studentProfile: {
+            create: {
+              aiAccessEnabled: false,
+              customTitle: "算法新星",
+            },
+          },
           username: "alice",
+        }),
+      }),
+    );
+  });
+
+  it("creates a student profile for AI access without a custom title", async () => {
+    mocks.prisma.user.create.mockResolvedValue({
+      createdAt: new Date("2026-06-28T00:00:00.000Z"),
+      id: 2,
+      role: "student",
+      studentProfile: { aiAccessEnabled: true, customTitle: null },
+      username: "alice",
+    });
+
+    const response = await POST(
+      jsonRequest({
+        aiAccessEnabled: true,
+        customTitle: "",
+        password: "secret123",
+        role: "student",
+        username: "alice",
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          studentProfile: {
+            create: { aiAccessEnabled: true, customTitle: null },
+          },
         }),
       }),
     );
@@ -195,10 +241,38 @@ describe("admin users API custom title handling", () => {
 
     expect(response.status).toBe(200);
     expect(tx.studentProfile.upsert).toHaveBeenCalledWith({
-      create: { customTitle: "算法新星", userId: 2 },
-      update: { customTitle: "算法新星" },
+      create: {
+        aiAccessEnabled: false,
+        customTitle: "算法新星",
+        userId: 2,
+      },
+      update: { aiAccessEnabled: false, customTitle: "算法新星" },
       where: { userId: 2 },
     });
+  });
+
+  it("keeps a student profile when AI access is enabled without a custom title", async () => {
+    const tx = createTx();
+    mocks.prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+
+    const response = await PUT(
+      jsonRequest({
+        aiAccessEnabled: true,
+        customTitle: "",
+        password: "",
+        role: "student",
+        username: "alice",
+      }),
+      routeContext("2"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(tx.studentProfile.upsert).toHaveBeenCalledWith({
+      create: { aiAccessEnabled: true, customTitle: null, userId: 2 },
+      update: { aiAccessEnabled: true, customTitle: null },
+      where: { userId: 2 },
+    });
+    expect(tx.studentProfile.deleteMany).not.toHaveBeenCalled();
   });
 
   it("clears a student custom title when the submitted title is empty", async () => {
