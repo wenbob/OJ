@@ -5,7 +5,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { SendHorizontal } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ProblemAiAssist } from "@/components/ProblemAiAssist";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatRuntime } from "@/lib/format";
@@ -87,6 +87,7 @@ export function ProblemSubmitForm({
   const [loadMessage, setLoadMessage] = useState("");
   const [loadError, setLoadError] = useState("");
   const [result, setResult] = useState<SubmissionResult | null>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [showObjectiveExamConfirm, setShowObjectiveExamConfirm] =
@@ -189,6 +190,22 @@ export function ProblemSubmitForm({
 
     return () => window.clearTimeout(timer);
   }, [showAcceptedPopup]);
+
+  useEffect(() => {
+    if (!result) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      resultRef.current?.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [result]);
 
   async function submit() {
     if (shouldFinishExamAfterObjectiveSubmit && !showObjectiveExamConfirm) {
@@ -353,40 +370,47 @@ export function ProblemSubmitForm({
         </p>
       ) : null}
       {result ? (
-        objective ? (
-          <div className="mt-4 border border-ink-950/10 bg-white/70 p-4 text-base font-black text-ink-900">
-            答对 {result.passedCount}/{result.totalCount} 小题
-          </div>
-        ) : (
-          <div className="mt-4 grid gap-2 border border-ink-950/10 bg-white/70 p-4 text-sm font-semibold text-ink-700">
-            <StatusBadge status={result.status} />
-            <span>{result.passedCount}/{result.totalCount} 测试点</span>
-            <span>{formatRuntime(result.runtimeMs)}</span>
-            {hasActualOutput ? (
-              <div className="mt-2 grid gap-1">
-                <span className="text-xs font-black text-ink-600">
-                  {`程序输出（测试点 ${outputCase.caseIndex}）`}
-                </span>
-                <pre className="max-h-44 overflow-auto border border-ink-950/10 bg-stone-50 p-3 text-xs font-mono font-semibold whitespace-pre-wrap text-ink-800">
-                  {outputCase.actualOutput?.length
-                    ? outputCase.actualOutput
-                    : "（无输出）"}
+        <div
+          aria-live="polite"
+          className="scroll-mt-4"
+          data-testid="submission-result"
+          ref={resultRef}
+        >
+          {objective ? (
+            <div className="mt-4 border border-ink-950/10 bg-white/70 p-4 text-base font-black text-ink-900">
+              答对 {result.passedCount}/{result.totalCount} 小题
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-2 border border-ink-950/10 bg-white/70 p-4 text-sm font-semibold text-ink-700">
+              <StatusBadge status={result.status} />
+              <span>{result.passedCount}/{result.totalCount} 测试点</span>
+              <span>{formatRuntime(result.runtimeMs)}</span>
+              {hasActualOutput ? (
+                <div className="mt-2 grid gap-1">
+                  <span className="text-xs font-black text-ink-600">
+                    {`程序输出（测试点 ${outputCase.caseIndex}）`}
+                  </span>
+                  <pre className="max-h-44 overflow-auto border border-ink-950/10 bg-stone-50 p-3 text-xs font-mono font-semibold whitespace-pre-wrap text-ink-800">
+                    {outputCase.actualOutput?.length
+                      ? outputCase.actualOutput
+                      : "（无输出）"}
+                  </pre>
+                </div>
+              ) : null}
+              {result.errorMessage ? (
+                <pre className="mt-2 max-h-44 overflow-auto border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+                  {result.errorMessage}
                 </pre>
-              </div>
-            ) : null}
-            {result.errorMessage ? (
-              <pre className="mt-2 max-h-44 overflow-auto border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-                {result.errorMessage}
-              </pre>
-            ) : null}
-            <Link
-              className="btn btn-secondary mt-2 w-full"
-              href={`${detailHrefBase}/${result.id}`}
-            >
-              查看详情
-            </Link>
-          </div>
-        )
+              ) : null}
+              <Link
+                className="btn btn-secondary mt-2 w-full"
+                href={`${detailHrefBase}/${result.id}`}
+              >
+                查看详情
+              </Link>
+            </div>
+          )}
+        </div>
       ) : null}
       {showAcceptedPopup ? (
         <div

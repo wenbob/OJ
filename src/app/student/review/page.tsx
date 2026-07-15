@@ -5,7 +5,6 @@ import {
   BookOpenCheck,
   BrainCircuit,
   CheckCircle2,
-  History,
   RotateCcw,
   Target,
   TriangleAlert,
@@ -133,35 +132,39 @@ export default async function StudentReviewPage({ searchParams }: PageProps) {
         </div>
 
         {review.weakCategories.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {review.weakCategories.map((category, index) => (
               <Link
-                className="arena-link-card surface block p-5"
+                className={`arena-link-card surface block min-w-0 p-4 ${
+                  selectedCategory === category.category
+                    ? "border-steel bg-steel/5 ring-1 ring-steel/20"
+                    : ""
+                }`}
                 href={reviewHref({ category: category.category, status: selectedStatus })}
                 key={category.category}
                 scroll={false}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-clay">
-                      Weak Point {String(index + 1).padStart(2, "0")}
-                    </p>
-                    <h3 className="mt-2 text-xl font-black text-ink-950">{category.category}</h3>
-                  </div>
-                  <span className="data-number text-2xl font-black text-steel">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-clay">
+                    Weak Point {String(index + 1).padStart(2, "0")}
+                  </p>
+                  <span className="data-number text-xl font-black text-steel">
                     {category.masteryPercent}%
                   </span>
                 </div>
-                <div className="mt-5 h-3 overflow-hidden border border-ink-950/10 bg-ink-950/5 p-[2px]">
+                <h3 className="mt-1 truncate text-base font-black text-ink-950" title={category.category}>
+                  {category.category}
+                </h3>
+                <div className="mt-3 h-2 overflow-hidden border border-ink-950/10 bg-ink-950/5 p-px">
                   <div
                     className="progress-fill h-full bg-steel"
                     style={{ "--progress": category.masteryPercent / 100 } as ProgressStyle}
                   />
                 </div>
-                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs font-bold text-ink-600">
-                  <span>已通过 {category.acceptedProblemCount}/{category.attemptedProblemCount} 题</span>
+                <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-bold text-ink-600">
+                  <span>通过 {category.acceptedProblemCount}/{category.attemptedProblemCount}</span>
                   <span>待攻克 {category.pendingProblemCount} 题</span>
-                  <span>失败尝试 {category.failedAttemptCount} 次</span>
+                  <span className="col-span-2">失败尝试 {category.failedAttemptCount} 次</span>
                 </div>
               </Link>
             ))}
@@ -231,50 +234,51 @@ export default async function StudentReviewPage({ searchParams }: PageProps) {
         </div>
 
         {visibleEntries.length > 0 ? (
-          <div className="grid gap-4 p-5 md:p-6 lg:grid-cols-2">
+          <div className="grid gap-3 p-4 md:p-5 lg:grid-cols-2">
             {visibleEntries.map((entry) => {
               const continueHref = entry.resumeSubmissionId
                 ? `/student/problems/${entry.problemId}?fromSubmission=${entry.resumeSubmissionId}`
                 : `/student/problems/${entry.problemId}`;
               return (
-                <article className="border border-ink-950/10 bg-white/65 p-5" key={entry.problemId}>
+                <article className="flex flex-col border border-ink-950/10 bg-white/65 p-4" key={entry.problemId}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <ReviewStatus status={entry.status} />
                         <ProblemTypeBadge type={entry.problemType} />
                       </div>
-                      <h3 className="mt-3 text-xl font-black text-ink-950">{entry.title}</h3>
-                      <p className="mt-1 text-sm font-bold text-ink-600">
+                      <h3 className="mt-2 text-lg font-black text-ink-950">{entry.title}</h3>
+                      <p className="mt-0.5 text-xs font-bold text-ink-600">
                         {entry.category} · {entry.difficulty}
                       </p>
                     </div>
                     {entry.status === "pending" ? (
-                      <TriangleAlert className="text-clay" size={24} />
+                      <TriangleAlert className="text-clay" size={21} />
                     ) : (
-                      <CheckCircle2 className="text-moss" size={24} />
+                      <CheckCircle2 className="text-moss" size={21} />
                     )}
                   </div>
 
-                  <div className="mt-5 grid grid-cols-2 gap-3 border-y border-ink-950/10 py-4 text-sm">
-                    <ReviewMeta icon={<History size={15} />} label="总尝试" value={`${entry.attemptCount} 次`} />
-                    <ReviewMeta icon={<RotateCcw size={15} />} label="失败尝试" value={`${entry.failedAttemptCount} 次`} />
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs font-bold text-ink-600">
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-ink-950/10 py-3 text-xs font-bold text-ink-600">
+                    <span>
+                      总尝试 <strong className="data-number ml-1 text-sm text-ink-950">{entry.attemptCount}</strong> 次
+                    </span>
+                    <span>
+                      失败 <strong className="data-number ml-1 text-sm text-clay">{entry.failedAttemptCount}</strong> 次
+                    </span>
                     <span className="flex items-center gap-2">
                       最近结果 <StatusBadge status={entry.latestStatus} />
                     </span>
-                    <span>{formatDate(entry.latestSubmittedAt)}</span>
+                    <span className="lg:ml-auto">{formatDate(entry.latestSubmittedAt)}</span>
                   </div>
 
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <Link className="btn btn-primary" href={continueHref}>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link className="btn btn-primary min-h-0 px-3 py-2 text-xs" href={continueHref}>
                       <RotateCcw size={16} />
                       {entry.resumeSubmissionId ? "加载最近代码继续" : "重新挑战"}
                     </Link>
                     <Link
-                      className="btn btn-secondary"
+                      className="btn btn-secondary min-h-0 px-3 py-2 text-xs"
                       href={`/student/submissions/${entry.latestSubmissionId}`}
                     >
                       查看最近提交
@@ -333,26 +337,6 @@ function ReviewStatus({ status }: { status: LearningReviewStatus }) {
       }`}
     >
       {status === "pending" ? "待攻克" : "已攻克"}
-    </span>
-  );
-}
-
-function ReviewMeta({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <span>
-      <span className="flex items-center gap-2 text-xs font-bold text-ink-500">
-        {icon}
-        {label}
-      </span>
-      <span className="data-number mt-1 block text-lg font-black text-ink-950">{value}</span>
     </span>
   );
 }
