@@ -506,6 +506,13 @@ curl http://127.0.0.1:3000
 
 本地确认代码已提交并通过检查后，在 Linux/Docker 环境构建生产产物，再打包上传。不要用 Windows 本机生成的 `.next/standalone` 作为 Ubuntu 服务器产物。
 
+构建容器必须安装与生产机兼容的 OpenSSL 后再执行 `npm ci`、`prisma generate` 和 `next build`。当前 Ubuntu 生产机使用 OpenSSL 3；若使用 `node:22-bookworm-slim`，需先安装 `openssl`，否则 Prisma 可能退回生成 `debian-openssl-1.1.x` 引擎，上传后存在无法加载的风险。打包后应检查 standalone 中的实际引擎：
+
+```bash
+tar -tzf oj-release.tgz | grep 'libquery_engine'
+# 当前生产环境应看到 libquery_engine-debian-openssl-3.0.x.so.node
+```
+
 发布包应包含源码、`public`、`prisma`、`scripts`、package 文件、`.next/standalone` 和 `.next/static`；必须排除 `.env`、`*.db`、SQLite 派生文件、`.next/cache`、仓库压缩包和本地 `node_modules` 根目录。standalone 目录内的最小运行依赖是 Next.js 产物的一部分，可以保留。
 
 打包前必须把静态资源复制进 standalone 运行目录：

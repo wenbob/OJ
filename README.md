@@ -48,6 +48,7 @@
 - [2026-07-10 生产运行时加固与发布记录](docs/ops-review-2026-07-10.md)
 - [2026-07-11 竞技学院视觉与天梯升级记录](docs/ops-review-2026-07-11.md)
 - [2026-07-12 天梯积分差展示上线记录](docs/ops-review-2026-07-12.md)
+- [2026-07-15 AI 分层辅导、教师学情看板与专项练习上线记录](docs/ops-review-2026-07-15.md)
 
 ## 技术栈
 
@@ -480,7 +481,7 @@ oj-code-exam-${examId}-problem-${problemId}
 - 支持近 7 天、近 30 天和全部历史三个分析周期，只分析编程题，日常与考试提交都会纳入。
 - 规则诊断识别近期未训练、持续卡题、编译基础、逻辑判断、运行稳定性和效率问题；累计历史用于掌握率与待攻克判断。
 - 推荐从最薄弱的两个分类轮流选择待攻克题和从未尝试题，排除历史 AC、客观题及其他未完成任务中的重复题。
-- 教师可以搜索、增删和排序 1–10 道编程题后下发；下发后题目集合锁定，标题、说明和截止日期仍可修改，任务可以归档。
+- 教师可以搜索、增删和排序 1–10 道编程题后下发；下发后题目集合锁定，标题、说明和截止日期仍可修改。进行中任务需先归档，归档后可永久删除。
 - AI 教师摘要只接收聚合统计，按学生和周期保存缓存；DeepSeek 失败不影响规则诊断、推荐和任务下发。
 
 ### 题目管理
@@ -1030,6 +1031,7 @@ submissionType = exam        模拟考试提交
 - 删除提交会级联删除测试点结果。
 - 删除考试会级联删除考试题目关联和考试记录。
 - `Submission.examId` 对 `Exam` 是 `ON DELETE SET NULL`。
+- 删除专项练习会级联删除任务题目和完成进度；关联提交的 `learningAssignmentId` 会置空，提交记录本身保留。
 
 ## 数据库迁移与备份
 
@@ -1046,10 +1048,15 @@ npm run seed
 
 ### Prisma Migrate
 
-当前已经引入 Prisma Migrate：
+当前迁移目录按顺序包含：
 
 ```text
-prisma/migrations/0001_initial/migration.sql
+0001_initial
+0002_objective_problem_type
+0003_student_profile
+0004_ai_assist
+0005_ai_student_access
+0006_learning_dashboard_assignments
 ```
 
 本地开发创建新迁移：
@@ -1123,6 +1130,9 @@ Windows 可以使用“任务计划程序”定时运行 `scripts/backup-sqlite.
 /student/submissions
 /student/submissions/[id]
 /student/exam-submissions
+/student/review
+/student/assignments
+/student/assignments/[id]
 /student/leaderboard
 /student/exams
 /student/exams/[id]
@@ -1140,6 +1150,8 @@ Windows 可以使用“任务计划程序”定时运行 `scripts/backup-sqlite.
 /admin/practice/problems/[id]
 /admin/users
 /admin/leaderboard
+/admin/learning
+/admin/learning/[studentId]
 /admin/submissions
 /admin/submissions/[id]
 /admin/exam-submissions
@@ -1191,6 +1203,7 @@ GET  /api/problems/[id]
 POST /api/problems/[id]/submit
 GET  /api/submissions/my
 GET  /api/submissions/[id]
+POST /api/ai/problem-assist
 
 GET  /api/exams
 GET  /api/exams/[id]
@@ -1222,6 +1235,11 @@ GET    /api/admin/submissions
 GET    /api/admin/submissions/[id]
 GET    /api/admin/exam-submissions
 
+POST   /api/admin/learning/insight
+POST   /api/admin/learning/assignments
+PATCH  /api/admin/learning/assignments/[id]
+DELETE /api/admin/learning/assignments/[id]
+
 GET    /api/admin/exams
 POST   /api/admin/exams
 GET    /api/admin/exams/[id]
@@ -1239,6 +1257,8 @@ PUT    /api/admin/settings
 ```
 
 管理员用户接口支持 `customTitle` 和 `aiAccessEnabled` 字段：创建或编辑学生时可设置最多 20 字的自定义头衔，并可单独开通 AI 对话权限；个人 AI 权限默认关闭。
+
+专项练习删除接口只接受已归档任务；进行中的任务返回冲突错误，必须先归档。永久删除会清除任务题目与进度，但不会删除学生原有提交。
 
 ## 分页与筛选
 
