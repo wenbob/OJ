@@ -13,6 +13,7 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { RankEmblem } from "@/components/RankEmblem";
 import { requirePageUser } from "@/lib/auth";
+import { getStudentLearningReview } from "@/lib/learningReview";
 import { prisma } from "@/lib/prisma";
 import {
   findRankingByUserId,
@@ -43,6 +44,7 @@ export default async function StudentHomePage() {
     acceptedCount,
     settings,
     rankings,
+    learningReview,
   ] = await Promise.all([
     prisma.problem.count(),
     prisma.exam.count({ where: { status: "published" } }),
@@ -55,6 +57,7 @@ export default async function StudentHomePage() {
     prisma.submission.count({ where: { userId: user.id, status: "Accepted" } }),
     getPublicSettings(),
     getStudentRankings(),
+    getStudentLearningReview(user.id),
   ]);
   const currentRanking = findRankingByUserId(rankings, user.id);
   const rankProgress = currentRanking
@@ -162,6 +165,15 @@ export default async function StudentHomePage() {
             <h2 className="mt-1 text-2xl font-black text-ink-950">复盘与排名</h2>
           </div>
           <div className="grid gap-3">
+            <CompactLink
+              href="/student/review"
+              label="错题本与薄弱知识点"
+              meta={
+                learningReview.summary.pendingProblemCount > 0
+                  ? `${learningReview.summary.pendingProblemCount} 道待攻克`
+                  : "当前没有待攻克错题"
+              }
+            />
             <CompactLink href="/student/submissions" label="日常提交记录" meta={`${dailySubmissionCount} 次提交`} />
             <CompactLink href="/student/exam-submissions" label="考试提交记录" meta={`${examSubmissionCount} 次提交`} />
             <CompactLink href="/student/leaderboard" label="天梯竞技场" meta={currentRanking ? `当前第 ${currentRanking.rank} 名` : "等待首次上榜"} />

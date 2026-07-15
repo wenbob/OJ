@@ -27,13 +27,17 @@ export async function AppShell({
   const currentRanking = user.role === "student"
     ? await getStudentRankingSummaryForUser(user.id)
     : null;
-  const leaderboardItem =
-    user.role === "admin"
-      ? { href: "/admin/leaderboard", label: "天梯榜" }
-      : { href: "/student/leaderboard", label: "天梯榜" };
-  const shellNav = nav.some((item) => item.href === leaderboardItem.href)
-    ? nav
-    : [...nav, leaderboardItem];
+  const supplementalItems = user.role === "admin"
+    ? [{ href: "/admin/leaderboard", label: "天梯榜" }]
+    : [
+        { href: "/student/review", label: "错题本" },
+        { href: "/student/leaderboard", label: "天梯榜" },
+      ];
+  const shellNav = supplementalItems.reduce(
+    (items, item) =>
+      items.some((navItem) => navItem.href === item.href) ? items : [...items, item],
+    nav,
+  );
 
   return (
     <div className="min-h-screen">
