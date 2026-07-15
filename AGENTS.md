@@ -17,9 +17,11 @@
 
 线上服务器为 2 核 CPU、2GB 内存、4GB swap。即使只修改一个页面，Next.js 仍会全量构建。常规发布优先在本地 Linux/Docker 环境生成 Next.js standalone 产物并上传，不要把 Windows 本机 `.next/standalone` 当作 Ubuntu 服务器产物。
 
-发布包必须排除 `.env`、数据库文件、备份文件、`.next/cache` 和压缩包；服务器继续使用 `/www/oj/.env` 和 `/www/oj/prisma/prod.db`。Next standalone 包必须把 `.next/static` 复制到 `.next/standalone/.next/static`，把 `public` 复制到 `.next/standalone/public`，否则页面会无样式且无前端交互。`npm run start` 通过 `scripts/load-env.mjs` 预加载 `.env` 后启动 `.next/standalone/server.js`，不要改成裸跑 `node .next/standalone/server.js`。
+发布包必须排除任何层级的 `.env`（包括可能被 Next 追踪进 `.next/standalone/.env` 的副本）、数据库文件、备份文件、`.next/cache` 和压缩包；服务器继续使用 `/www/oj/.env` 和 `/www/oj/prisma/prod.db`。Next standalone 包必须把 `.next/static` 复制到 `.next/standalone/.next/static`，把 `public` 复制到 `.next/standalone/public`，否则页面会无样式且无前端交互。`npm run start` 通过 `scripts/load-env.mjs` 预加载 `.env` 后启动 `.next/standalone/server.js`，不要改成裸跑 `node .next/standalone/server.js`。
 
 本地 Linux 构建容器要先安装与生产机一致的 OpenSSL；当前生产机使用 OpenSSL 3，发布前必须确认 standalone 内 Prisma 引擎为 `libquery_engine-debian-openssl-3.0.x.so.node`，不能使用构建警告后回退生成的 OpenSSL 1.1 引擎。
+
+构建容器若加载了 `NODE_ENV=production`，安装构建依赖必须使用 `npm ci --include=dev`，否则 Tailwind、TypeScript 等构建期依赖会被省略；发布包上传前必须按归档条目再次检查所有层级的 `.env` 和数据库文件，不能只检查仓库根目录。
 
 2GB 服务器上常规发布也不要执行 `npm ci`。依赖未变时复用当前 `/www/oj/node_modules`；依赖变更时应在本地 Linux/Docker 环境生成可用于 Ubuntu 的根 `node_modules` 并随包上传，或安排维护窗口停 PM2 后再处理。切换前不要在 `/www/oj-new` 直接执行 `npm run db:deploy`，因为生产 `.env` 使用绝对 `DATABASE_URL=file:/www/oj/prisma/prod.db`，会迁移旧目录数据库；应停 PM2、备份并复制最新 DB、切换目录后在新的 `/www/oj` 执行迁移。
 
@@ -131,4 +133,4 @@ npm run build
 | `docs/ops-review-2026-07-10.md` | 生产运行时、Nginx、Judge 和权限加固记录 |
 | `docs/ops-review-2026-07-11.md` | 竞技学院视觉与天梯升级记录 |
 | `docs/ops-review-2026-07-12.md` | 天梯前一名与第一名积分差上线记录 |
-| `docs/ops-review-2026-07-15.md` | AI 分层辅导、学情看板和专项练习上线记录 |
+| `docs/ops-review-2026-07-15.md` | AI 分层辅导、学情看板、专项练习及浏览器标签配置上线记录 |

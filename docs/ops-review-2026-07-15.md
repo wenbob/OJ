@@ -1,4 +1,4 @@
-# 2026-07-15 AI 分层辅导、教师学情看板与专项练习上线记录
+# 2026-07-15 AI 分层辅导、教师学情看板、专项练习与浏览器标签配置上线记录
 
 ## 上线范围
 
@@ -66,3 +66,34 @@ f249d1d Add teacher learning dashboard and assignments
 - 只删除本次 OJ 发布压缩包、本地发布临时目录和专用本地 Docker volume。
 - 保留最新数据库备份和旧版本回滚目录。
 - 未清理其它网站、股票系统、Docker 全局缓存、镜像或无关 volume。
+
+## 同日增量：浏览器标签名称与图标
+
+管理员系统设置新增浏览器标签配置：
+
+- `browserTitle` 单独控制标签名称；留空时使用 `siteName`。
+- `browserIcon` 保存经过服务端校验的 PNG 或 ICO Data URL，原文件最大 256KB，可恢复浏览器默认图标。
+- 设置保存在既有 `SystemSetting` 键值表，不需要新增 Prisma 迁移；发布目录切换不会丢失。
+- 页面首次响应使用动态 metadata，管理员保存后由 `BrowserIdentity` 立即刷新当前标签页。
+
+功能提交：
+
+```text
+7ffb765 Add configurable browser title and icon
+```
+
+本地检查为 32 个测试文件、183 项测试通过，`npx tsc --noEmit`、`npm run lint` 和 `npm run build` 通过。
+
+本地 Linux standalone 构建和审计补充发现两个可复现陷阱：
+
+- 构建容器加载生产环境后，普通 `npm ci` 会省略 Tailwind 等 devDependencies；改用 `npm ci --include=dev` 后构建通过。
+- Next 文件追踪会把本地 `.env` 复制到 `.next/standalone/.env`；首个包在上传前被审计拦截，移除所有环境文件并重新打包、复核 SHA-256 后才上传。
+
+本次服务器未执行 `npm ci`、Next 构建、`seed` 或数据库初始化，依赖未变化并复用原 `/www/oj/node_modules`。增量发布回滚点：
+
+```text
+数据库备份：/www/backups/prod-20260715-165021-before-browser-identity.db
+旧版本目录：/www/oj-old-20260715-165021
+```
+
+线上确认 PM2、直连 Next 与 Nginx 健康接口正常，公网登录页标题为管理员配置的 `OJ C++平台`，静态资源返回 200，服务只监听 `127.0.0.1:3000`，Docker Judge 冒烟输出为 `42`。服务器发布压缩包、本地临时发布目录和本次专用 Docker volume 已删除；数据库备份和旧版本回滚目录继续保留。

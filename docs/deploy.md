@@ -506,7 +506,7 @@ curl http://127.0.0.1:3000
 
 本地确认代码已提交并通过检查后，在 Linux/Docker 环境构建生产产物，再打包上传。不要用 Windows 本机生成的 `.next/standalone` 作为 Ubuntu 服务器产物。
 
-构建容器必须安装与生产机兼容的 OpenSSL 后再执行 `npm ci`、`prisma generate` 和 `next build`。当前 Ubuntu 生产机使用 OpenSSL 3；若使用 `node:22-bookworm-slim`，需先安装 `openssl`，否则 Prisma 可能退回生成 `debian-openssl-1.1.x` 引擎，上传后存在无法加载的风险。打包后应检查 standalone 中的实际引擎：
+构建容器必须安装与生产机兼容的 OpenSSL 后再执行 `npm ci --include=dev`、`prisma generate` 和 `next build`。显式包含 devDependencies 是为了避免构建容器加载 `NODE_ENV=production` 后省略 Tailwind、TypeScript 等构建期依赖。当前 Ubuntu 生产机使用 OpenSSL 3；若使用 `node:22-bookworm-slim`，需先安装 `openssl`，否则 Prisma 可能退回生成 `debian-openssl-1.1.x` 引擎，上传后存在无法加载的风险。打包后应检查 standalone 中的实际引擎：
 
 ```bash
 tar -tzf oj-release.tgz | grep 'libquery_engine'
@@ -514,6 +514,15 @@ tar -tzf oj-release.tgz | grep 'libquery_engine'
 ```
 
 发布包应包含源码、`public`、`prisma`、`scripts`、package 文件、`.next/standalone` 和 `.next/static`；必须排除 `.env`、`*.db`、SQLite 派生文件、`.next/cache`、仓库压缩包和本地 `node_modules` 根目录。standalone 目录内的最小运行依赖是 Next.js 产物的一部分，可以保留。
+
+不能只排除仓库根目录的 `.env`。Next 构建追踪可能把它复制为 `.next/standalone/.env`；发布前必须检查压缩包内的全部归档条目，发现任意层级的环境文件或数据库文件就停止上传：
+
+```bash
+if tar -tzf oj-release.tgz | grep -Eq '(^|/)\.env($|\.)|\.(db|db-wal|db-shm)$|^\./node_modules/|^\./\.next/cache/'; then
+  echo "发布包包含禁止项"
+  exit 1
+fi
+```
 
 打包前必须把静态资源复制进 standalone 运行目录：
 
