@@ -83,3 +83,29 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     );
   }
 }
+
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const auth = await requireApiUser(request, "admin");
+  if (auth.response) return auth.response;
+  const assignmentId = Number((await context.params).id);
+  if (!Number.isInteger(assignmentId)) {
+    return NextResponse.json({ error: "专项练习 ID 不合法" }, { status: 400 });
+  }
+
+  const existing = await prisma.learningAssignment.findUnique({
+    where: { id: assignmentId },
+    select: { id: true, status: true },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: "专项练习不存在" }, { status: 404 });
+  }
+  if (existing.status !== "archived") {
+    return NextResponse.json(
+      { error: "进行中的专项练习不能直接删除，请先归档任务" },
+      { status: 409 },
+    );
+  }
+
+  await prisma.learningAssignment.delete({ where: { id: assignmentId } });
+  return NextResponse.json({ ok: true });
+}

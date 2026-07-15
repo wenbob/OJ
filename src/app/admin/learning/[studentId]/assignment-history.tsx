@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, CheckCircle2, Pencil, Save, X } from "lucide-react";
+import { Archive, Pencil, Save, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -52,12 +52,34 @@ export function AssignmentHistory({ assignments }: { assignments: AssignmentItem
     }
   }
 
+  async function remove(item: AssignmentItem) {
+    const confirmed = window.confirm(
+      `确定永久删除专项练习《${item.title}》吗？任务题目、完成进度和历史展示会一起删除，此操作无法恢复。`,
+    );
+    if (!confirmed) return;
+
+    setPendingId(item.id);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/learning/assignments/${item.id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "专项练习删除失败");
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "专项练习删除失败");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   return (
     <section className="surface overflow-hidden">
       <div className="border-b border-ink-950/10 p-5">
         <p className="arena-kicker">Assignment History</p>
         <h2 className="mt-1 text-xl font-black">专项练习记录</h2>
-        <p className="mt-1 text-xs font-bold text-ink-600">下发后题目集合锁定；可修改标题、说明和截止日期，或归档任务。</p>
+        <p className="mt-1 text-xs font-bold text-ink-600">下发后题目集合锁定；进行中任务可编辑或归档，归档后可永久删除。</p>
       </div>
       {error ? <p className="m-4 border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">{error}</p> : null}
       {assignments.length === 0 ? (
@@ -94,7 +116,15 @@ export function AssignmentHistory({ assignments }: { assignments: AssignmentItem
                       <button className="btn btn-secondary" disabled={pendingId === item.id} onClick={() => patch(item.id, { archive: true })} type="button"><Archive size={15} />归档</button>
                     </div>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-ink-500"><CheckCircle2 size={14} />保留历史记录</span>
+                    <button
+                      aria-label={`永久删除专项练习 ${item.title}`}
+                      className="btn btn-danger"
+                      disabled={pendingId === item.id}
+                      onClick={() => remove(item)}
+                      type="button"
+                    >
+                      <Trash2 size={15} />{pendingId === item.id ? "删除中" : "删除"}
+                    </button>
                   )}
                 </div>
               )}
