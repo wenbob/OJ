@@ -55,12 +55,27 @@ export async function POST(request: NextRequest, context: RouteContext) {
     record.examId === undefined || record.examId === null || record.examId === ""
       ? null
       : Number(record.examId);
+  const learningAssignmentId =
+    record.learningAssignmentId === undefined ||
+    record.learningAssignmentId === null ||
+    record.learningAssignmentId === ""
+      ? null
+      : Number(record.learningAssignmentId);
 
   if (!Number.isInteger(problemId)) {
     return NextResponse.json({ error: "题目 ID 不合法" }, { status: 400 });
   }
   if (examId !== null && !Number.isInteger(examId)) {
     return NextResponse.json({ error: "考试 ID 不合法" }, { status: 400 });
+  }
+  if (learningAssignmentId !== null && !Number.isInteger(learningAssignmentId)) {
+    return NextResponse.json({ error: "专项练习 ID 不合法" }, { status: 400 });
+  }
+  if (examId !== null && learningAssignmentId !== null) {
+    return NextResponse.json(
+      { error: "考试提交不能同时计入专项练习" },
+      { status: 400 },
+    );
   }
 
   const problem = await prisma.problem.findUnique({
@@ -110,6 +125,44 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   const submissionType = examId === null ? "practice" : "exam";
+
+  let assignmentProblemId: number | null = null;
+  if (learningAssignmentId !== null) {
+    if (auth.user.role !== "student") {
+      return NextResponse.json({ error: "只有学生可以完成专项练习" }, { status: 403 });
+    }
+    if (problem.problemType !== "programming") {
+      return NextResponse.json({ error: "专项练习只支持编程题" }, { status: 400 });
+    }
+    const assignment = await prisma.learningAssignment.findUnique({
+      where: { id: learningAssignmentId },
+      select: {
+        status: true,
+        studentId: true,
+        problems: {
+          where: { problemId },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    });
+    if (!assignment || assignment.studentId !== auth.user.id) {
+      return NextResponse.json({ error: "无权使用该专项练习" }, { status: 403 });
+    }
+    if (assignment.status !== "active") {
+      return NextResponse.json(
+        { error: "该专项练习已归档，提交将不能计入进度" },
+        { status: 403 },
+      );
+    }
+    assignmentProblemId = assignment.problems[0]?.id ?? null;
+    if (!assignmentProblemId) {
+      return NextResponse.json(
+        { error: "当前题目不属于该专项练习" },
+        { status: 400 },
+      );
+    }
+  }
 
   if (examId !== null) {
     const exam = await prisma.exam.findUnique({
@@ -239,36 +292,53 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
-  const submission = await prisma.submission.create({
-    data: {
-      createdAt: receivedAt,
-      userId: auth.user.id,
-      problemId,
-      examId,
-      submissionType,
-      code,
-      language: problem.problemType === "objective" ? "Objective" : "C++17",
-      status: result.status,
-      passedCount: result.passedCount,
-      totalCount: result.totalCount,
-      runtimeMs: result.runtimeMs,
-      errorMessage: result.errorMessage,
-      caseResults: {
-        create: result.caseResults.map((caseResult) => ({
-          caseIndex: caseResult.caseIndex,
-          status: caseResult.status,
-          input: caseResult.input,
-          expectedOutput: caseResult.expectedOutput,
-          actualOutput: caseResult.actualOutput,
-          runtimeMs: caseResult.runtimeMs,
-          errorMessage: caseResult.errorMessage,
-        })),
-      },
+  const { countedForLearningAssignment, submission } = await prisma.$transaction(
+    async (tx) => {
+      const createdSubmission = await tx.submission.create({
+        data: {
+          createdAt: receivedAt,
+          userId: auth.user.id,
+          problemId,
+          examId,
+          learningAssignmentId,
+          submissionType,
+          code,
+          language: problem.problemType === "objective" ? "Objective" : "C++17",
+          status: result.status,
+          passedCount: result.passedCount,
+          totalCount: result.totalCount,
+          runtimeMs: result.runtimeMs,
+          errorMessage: result.errorMessage,
+          caseResults: {
+            create: result.caseResults.map((caseResult) => ({
+              caseIndex: caseResult.caseIndex,
+              status: caseResult.status,
+              input: caseResult.input,
+              expectedOutput: caseResult.expectedOutput,
+              actualOutput: caseResult.actualOutput,
+              runtimeMs: caseResult.runtimeMs,
+              errorMessage: caseResult.errorMessage,
+            })),
+          },
+        },
+        include: {
+          caseResults: { orderBy: { caseIndex: "asc" } },
+        },
+      });
+      let counted = false;
+      if (result.status === "Accepted" && assignmentProblemId !== null) {
+        const updated = await tx.learningAssignmentProblem.updateMany({
+          where: { id: assignmentProblemId, completedAt: null },
+          data: { completedAt: receivedAt },
+        });
+        counted = updated.count === 1;
+      }
+      return {
+        countedForLearningAssignment: counted,
+        submission: createdSubmission,
+      };
     },
-    include: {
-      caseResults: { orderBy: { caseIndex: "asc" } },
-    },
-  });
+  );
 
   if (examId !== null) {
     try {
@@ -288,6 +358,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   return NextResponse.json({
+    countedForLearningAssignment,
     submission: sanitizeSubmissionForStudent(submission),
     submissionId: submission.id,
   });

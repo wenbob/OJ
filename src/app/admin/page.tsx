@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  Activity,
   ArrowRight,
   FileText,
   GraduationCap,
@@ -112,7 +113,7 @@ export default async function AdminHomePage() {
             text="创建、组卷、发布并进入管理员练习模式"
           />
           <AdminEntry
-            className="lg:col-span-7"
+            className="lg:col-span-4"
             count={userCount}
             href="/admin/users"
             icon={<Users size={23} />}
@@ -120,7 +121,15 @@ export default async function AdminHomePage() {
             text="维护学生和管理员账号，设置学生自定义头衔"
           />
           <AdminEntry
-            className="lg:col-span-5"
+            className="lg:col-span-4"
+            count="学情"
+            href="/admin/learning"
+            icon={<Activity size={23} />}
+            label="教师学情看板"
+            text="识别学生困难，确认并下发数据库中的专项练习"
+          />
+          <AdminEntry
+            className="lg:col-span-4"
             count={rankings.length}
             href="/admin/leaderboard"
             icon={<Trophy size={23} />}

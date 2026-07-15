@@ -8,14 +8,17 @@ datasource db {
 }
 
 model User {
-  id           Int          @id @default(autoincrement())
-  username     String       @unique
-  passwordHash String
-  role         String
-  createdAt    DateTime     @default(now())
-  submissions  Submission[]
-  examRecords  ExamRecord[]
-  studentProfile StudentProfile?
+  id                         Int                       @id @default(autoincrement())
+  username                   String                    @unique
+  passwordHash               String
+  role                       String
+  createdAt                  DateTime                  @default(now())
+  submissions                Submission[]
+  examRecords                ExamRecord[]
+  studentProfile             StudentProfile?
+  learningAssignments        LearningAssignment[]      @relation("LearningAssignmentStudent")
+  createdLearningAssignments LearningAssignment[]      @relation("LearningAssignmentCreator")
+  learningInsightSnapshots   LearningInsightSnapshot[]
 }
 
 model StudentProfile {
@@ -29,23 +32,24 @@ model StudentProfile {
 }
 
 model Problem {
-  id                Int           @id @default(autoincrement())
-  title             String
-  description       String
-  inputDescription  String
-  outputDescription String
-  sampleInput       String
-  sampleOutput      String
-  dataRange         String?
-  difficulty        String
-  category          String
-  problemType       String        @default("programming")
-  objectiveItems    String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  testCases         TestCase[]
-  submissions       Submission[]
-  examProblems      ExamProblem[]
+  id                         Int                         @id @default(autoincrement())
+  title                      String
+  description                String
+  inputDescription           String
+  outputDescription          String
+  sampleInput                String
+  sampleOutput               String
+  dataRange                  String?
+  difficulty                 String
+  category                   String
+  problemType                String                      @default("programming")
+  objectiveItems             String?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  testCases                  TestCase[]
+  submissions                Submission[]
+  examProblems               ExamProblem[]
+  learningAssignmentProblems LearningAssignmentProblem[]
 
   @@index([problemType, category])
 }
@@ -61,29 +65,84 @@ model TestCase {
 }
 
 model Submission {
-  id             Int                    @id @default(autoincrement())
-  userId         Int
-  problemId      Int
-  examId         Int?
-  submissionType String                 @default("practice")
-  code           String
-  language       String
-  status         String
-  passedCount    Int                    @default(0)
-  totalCount     Int                    @default(0)
-  runtimeMs      Int                    @default(0)
-  errorMessage   String?
-  createdAt      DateTime               @default(now())
-  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  problem        Problem                @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  exam           Exam?                  @relation(fields: [examId], references: [id], onDelete: SetNull)
-  caseResults    SubmissionCaseResult[]
+  id                   Int                    @id @default(autoincrement())
+  userId               Int
+  problemId            Int
+  examId               Int?
+  learningAssignmentId Int?
+  submissionType       String                 @default("practice")
+  code                 String
+  language             String
+  status               String
+  passedCount          Int                    @default(0)
+  totalCount           Int                    @default(0)
+  runtimeMs            Int                    @default(0)
+  errorMessage         String?
+  createdAt            DateTime               @default(now())
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem              Problem                @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  exam                 Exam?                  @relation(fields: [examId], references: [id], onDelete: SetNull)
+  learningAssignment   LearningAssignment?    @relation(fields: [learningAssignmentId], references: [id], onDelete: SetNull)
+  caseResults          SubmissionCaseResult[]
 
   @@index([userId, createdAt])
   @@index([problemId, createdAt])
   @@index([submissionType, userId, createdAt])
   @@index([submissionType, createdAt])
   @@index([examId, userId, problemId])
+  @@index([learningAssignmentId, userId, problemId])
+}
+
+model LearningAssignment {
+  id          Int                         @id @default(autoincrement())
+  studentId   Int
+  createdById Int?
+  title       String
+  note        String?
+  dueAt       DateTime?
+  status      String                      @default("active")
+  archivedAt  DateTime?
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  student     User                        @relation("LearningAssignmentStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  createdBy   User?                       @relation("LearningAssignmentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  problems    LearningAssignmentProblem[]
+  submissions Submission[]
+
+  @@index([studentId, status, createdAt])
+  @@index([createdById, createdAt])
+}
+
+model LearningAssignmentProblem {
+  id                Int                @id @default(autoincrement())
+  assignmentId      Int
+  problemId         Int?
+  order             Int                @default(0)
+  problemTitle      String
+  problemCategory   String
+  problemDifficulty String
+  completedAt       DateTime?
+  createdAt         DateTime           @default(now())
+  assignment        LearningAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  problem           Problem?           @relation(fields: [problemId], references: [id], onDelete: SetNull)
+
+  @@unique([assignmentId, problemId])
+  @@index([assignmentId, order])
+  @@index([problemId])
+}
+
+model LearningInsightSnapshot {
+  id          Int      @id @default(autoincrement())
+  studentId   Int
+  window      String
+  inputHash   String
+  summary     String
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  student     User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, window])
+  @@index([studentId, generatedAt])
 }
 
 model SubmissionCaseResult {

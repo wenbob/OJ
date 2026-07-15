@@ -2,6 +2,9 @@ PRAGMA foreign_keys=OFF;
 
 DROP TABLE IF EXISTS "SubmissionCaseResult";
 DROP TABLE IF EXISTS "Submission";
+DROP TABLE IF EXISTS "LearningAssignmentProblem";
+DROP TABLE IF EXISTS "LearningAssignment";
+DROP TABLE IF EXISTS "LearningInsightSnapshot";
 DROP TABLE IF EXISTS "ExamRecord";
 DROP TABLE IF EXISTS "ExamProblem";
 DROP TABLE IF EXISTS "Exam";
@@ -89,11 +92,62 @@ CREATE TABLE "ExamProblem" (
 CREATE UNIQUE INDEX "ExamProblem_examId_problemId_key" ON "ExamProblem"("examId", "problemId");
 CREATE INDEX "ExamProblem_examId_order_idx" ON "ExamProblem"("examId", "order");
 
+CREATE TABLE "LearningAssignment" (
+  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "studentId" INTEGER NOT NULL,
+  "createdById" INTEGER,
+  "title" TEXT NOT NULL,
+  "note" TEXT,
+  "dueAt" DATETIME,
+  "status" TEXT NOT NULL DEFAULT 'active',
+  "archivedAt" DATETIME,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "LearningAssignment_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "LearningAssignment_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE INDEX "LearningAssignment_studentId_status_createdAt_idx" ON "LearningAssignment"("studentId", "status", "createdAt");
+CREATE INDEX "LearningAssignment_createdById_createdAt_idx" ON "LearningAssignment"("createdById", "createdAt");
+
+CREATE TABLE "LearningAssignmentProblem" (
+  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "assignmentId" INTEGER NOT NULL,
+  "problemId" INTEGER,
+  "order" INTEGER NOT NULL DEFAULT 0,
+  "problemTitle" TEXT NOT NULL,
+  "problemCategory" TEXT NOT NULL,
+  "problemDifficulty" TEXT NOT NULL,
+  "completedAt" DATETIME,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "LearningAssignmentProblem_assignmentId_fkey" FOREIGN KEY ("assignmentId") REFERENCES "LearningAssignment"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "LearningAssignmentProblem_problemId_fkey" FOREIGN KEY ("problemId") REFERENCES "Problem"("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE UNIQUE INDEX "LearningAssignmentProblem_assignmentId_problemId_key" ON "LearningAssignmentProblem"("assignmentId", "problemId");
+CREATE INDEX "LearningAssignmentProblem_assignmentId_order_idx" ON "LearningAssignmentProblem"("assignmentId", "order");
+CREATE INDEX "LearningAssignmentProblem_problemId_idx" ON "LearningAssignmentProblem"("problemId");
+
+CREATE TABLE "LearningInsightSnapshot" (
+  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "studentId" INTEGER NOT NULL,
+  "window" TEXT NOT NULL,
+  "inputHash" TEXT NOT NULL,
+  "summary" TEXT NOT NULL,
+  "generatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "LearningInsightSnapshot_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE UNIQUE INDEX "LearningInsightSnapshot_studentId_window_key" ON "LearningInsightSnapshot"("studentId", "window");
+CREATE INDEX "LearningInsightSnapshot_studentId_generatedAt_idx" ON "LearningInsightSnapshot"("studentId", "generatedAt");
+
 CREATE TABLE "Submission" (
   "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
   "userId" INTEGER NOT NULL,
   "problemId" INTEGER NOT NULL,
   "examId" INTEGER,
+  "learningAssignmentId" INTEGER,
   "submissionType" TEXT NOT NULL DEFAULT 'practice',
   "code" TEXT NOT NULL,
   "language" TEXT NOT NULL,
@@ -105,7 +159,8 @@ CREATE TABLE "Submission" (
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "Submission_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "Submission_problemId_fkey" FOREIGN KEY ("problemId") REFERENCES "Problem"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT "Submission_examId_fkey" FOREIGN KEY ("examId") REFERENCES "Exam"("id") ON DELETE SET NULL ON UPDATE CASCADE
+  CONSTRAINT "Submission_examId_fkey" FOREIGN KEY ("examId") REFERENCES "Exam"("id") ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT "Submission_learningAssignmentId_fkey" FOREIGN KEY ("learningAssignmentId") REFERENCES "LearningAssignment"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE INDEX "Submission_userId_createdAt_idx" ON "Submission"("userId", "createdAt");
@@ -113,6 +168,7 @@ CREATE INDEX "Submission_problemId_createdAt_idx" ON "Submission"("problemId", "
 CREATE INDEX "Submission_submissionType_userId_createdAt_idx" ON "Submission"("submissionType", "userId", "createdAt");
 CREATE INDEX "Submission_submissionType_createdAt_idx" ON "Submission"("submissionType", "createdAt");
 CREATE INDEX "Submission_examId_userId_problemId_idx" ON "Submission"("examId", "userId", "problemId");
+CREATE INDEX "Submission_learningAssignmentId_userId_problemId_idx" ON "Submission"("learningAssignmentId", "userId", "problemId");
 
 CREATE TABLE "SubmissionCaseResult" (
   "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,

@@ -53,6 +53,7 @@ export function ProblemSubmitForm({
   examId,
   examEndsAt,
   fromSubmissionId,
+  learningAssignmentId,
   problemType = "programming",
   problemId,
   refreshOnSuccess = false,
@@ -67,6 +68,7 @@ export function ProblemSubmitForm({
   examId?: number;
   examEndsAt?: string | null;
   fromSubmissionId?: number;
+  learningAssignmentId?: number;
   problemType?: ProblemType;
   problemId: number;
   refreshOnSuccess?: boolean;
@@ -95,6 +97,8 @@ export function ProblemSubmitForm({
   const [showObjectiveExamConfirm, setShowObjectiveExamConfirm] =
     useState(false);
   const [showAcceptedPopup, setShowAcceptedPopup] = useState(false);
+  const [countedForLearningAssignment, setCountedForLearningAssignment] =
+    useState(false);
   const [timeExpired, setTimeExpired] = useState(false);
   const shouldFinishExamAfterObjectiveSubmit =
     objective && examId !== undefined;
@@ -112,6 +116,7 @@ export function ProblemSubmitForm({
       setError("");
       setShowObjectiveExamConfirm(false);
       setShowAcceptedPopup(false);
+      setCountedForLearningAssignment(false);
       setCode(initialCode);
 
       if (fromSubmissionId) {
@@ -231,11 +236,12 @@ export function ProblemSubmitForm({
     setResult(null);
     setShowObjectiveExamConfirm(false);
     setShowAcceptedPopup(false);
+    setCountedForLearningAssignment(false);
 
     const response = await fetch(`/api/problems/${problemId}/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, examId }),
+      body: JSON.stringify({ code, examId, learningAssignmentId }),
     });
     const data = await response.json();
 
@@ -265,10 +271,11 @@ export function ProblemSubmitForm({
 
     setPending(false);
     setResult(data.submission);
+    setCountedForLearningAssignment(Boolean(data.countedForLearningAssignment));
     if (data.submission?.status === "Accepted") {
       setShowAcceptedPopup(true);
     }
-    if (refreshOnSuccess) {
+    if (refreshOnSuccess || data.countedForLearningAssignment) {
       router.refresh();
     }
   }
@@ -418,6 +425,11 @@ export function ProblemSubmitForm({
               </Link>
             </div>
           )}
+          {countedForLearningAssignment ? (
+            <p className="mt-3 border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-800">
+              已计入专项练习，任务进度已更新。
+            </p>
+          ) : null}
         </div>
       ) : null}
       {showAcceptedPopup ? (

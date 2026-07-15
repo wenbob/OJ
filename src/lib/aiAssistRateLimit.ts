@@ -11,7 +11,7 @@ type CooldownInput = {
 };
 
 const buckets = new Map<string, number>();
-const activeUserIds = new Set<number>();
+const activeRequestKeys = new Set<string>();
 
 function keyOf({ userId }: CooldownInput) {
   return String(userId);
@@ -50,7 +50,20 @@ export function reserveAiAssistRequest({
   userId: number;
   maxConcurrency?: number;
 }) {
-  if (activeUserIds.has(userId)) {
+  return reserveAiProviderRequest({
+    maxConcurrency,
+    requestKey: `student:${userId}`,
+  });
+}
+
+export function reserveAiProviderRequest({
+  maxConcurrency,
+  requestKey,
+}: {
+  maxConcurrency?: number;
+  requestKey: string;
+}) {
+  if (activeRequestKeys.has(requestKey)) {
     return {
       allowed: false as const,
       reason: "user_busy" as const,
@@ -59,7 +72,7 @@ export function reserveAiAssistRequest({
   }
 
   const limit = readMaxConcurrency(maxConcurrency === undefined ? undefined : String(maxConcurrency));
-  if (activeUserIds.size >= limit) {
+  if (activeRequestKeys.size >= limit) {
     return {
       allowed: false as const,
       reason: "server_busy" as const,
@@ -67,7 +80,7 @@ export function reserveAiAssistRequest({
     };
   }
 
-  activeUserIds.add(userId);
+  activeRequestKeys.add(requestKey);
   let released = false;
 
   return {
@@ -75,12 +88,12 @@ export function reserveAiAssistRequest({
     release() {
       if (released) return;
       released = true;
-      activeUserIds.delete(userId);
+      activeRequestKeys.delete(requestKey);
     },
   };
 }
 
 export function clearAiAssistCooldowns() {
   buckets.clear();
-  activeUserIds.clear();
+  activeRequestKeys.clear();
 }

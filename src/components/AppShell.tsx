@@ -28,8 +28,12 @@ export async function AppShell({
     ? await getStudentRankingSummaryForUser(user.id)
     : null;
   const supplementalItems = user.role === "admin"
-    ? [{ href: "/admin/leaderboard", label: "天梯榜" }]
+    ? [
+        { href: "/admin/learning", label: "学情看板" },
+        { href: "/admin/leaderboard", label: "天梯榜" },
+      ]
     : [
+        { href: "/student/assignments", label: "专项练习" },
         { href: "/student/review", label: "错题本" },
         { href: "/student/leaderboard", label: "天梯榜" },
       ];

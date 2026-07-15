@@ -110,6 +110,20 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "题目 ID 不合法" }, { status: 400 });
   }
 
+  const activeAssignmentCount = await prisma.learningAssignmentProblem.count({
+    where: {
+      completedAt: null,
+      problemId,
+      assignment: { status: "active" },
+    },
+  });
+  if (activeAssignmentCount > 0) {
+    return NextResponse.json(
+      { error: "该题正在学生未完成的专项练习中，请先归档相关任务" },
+      { status: 409 },
+    );
+  }
+
   await prisma.problem.delete({ where: { id: problemId } });
   return NextResponse.json({ ok: true });
 }

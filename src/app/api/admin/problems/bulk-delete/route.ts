@@ -52,6 +52,20 @@ export async function POST(request: NextRequest) {
       const existingIds = existingProblems.map((problem) => problem.id);
       if (existingIds.length === 0) return 0;
 
+      const assignmentConflict = await tx.learningAssignmentProblem.findFirst({
+        where: {
+          completedAt: null,
+          problemId: { in: existingIds },
+          assignment: { status: "active" },
+        },
+        select: { problemTitle: true },
+      });
+      if (assignmentConflict) {
+        throw new Error(
+          `题目《${assignmentConflict.problemTitle}》正在学生未完成的专项练习中，请先归档相关任务`,
+        );
+      }
+
       const result = await tx.problem.deleteMany({
         where: { id: { in: existingIds } },
       });
@@ -63,6 +77,14 @@ export async function POST(request: NextRequest) {
     if (error instanceof PayloadTooLargeError) {
       return NextResponse.json({ error: error.message }, { status: 413 });
     }
-    return NextResponse.json({ error: "批量删除题目失败" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error && error.message.includes("专项练习")
+            ? error.message
+            : "批量删除题目失败",
+      },
+      { status: error instanceof Error && error.message.includes("专项练习") ? 409 : 500 },
+    );
   }
 }

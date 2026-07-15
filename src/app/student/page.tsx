@@ -45,6 +45,7 @@ export default async function StudentHomePage() {
     settings,
     rankings,
     learningReview,
+    activeAssignments,
   ] = await Promise.all([
     prisma.problem.count(),
     prisma.exam.count({ where: { status: "published" } }),
@@ -58,11 +59,25 @@ export default async function StudentHomePage() {
     getPublicSettings(),
     getStudentRankings(),
     getStudentLearningReview(user.id),
+    prisma.learningAssignment.findMany({
+      where: { studentId: user.id, status: "active" },
+      include: { problems: { select: { completedAt: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
   const currentRanking = findRankingByUserId(rankings, user.id);
   const rankProgress = currentRanking
     ? getRankTierProgress(currentRanking.points)
     : null;
+  const pendingAssignments = activeAssignments.filter(
+    (assignment) =>
+      assignment.problems.length > 0 &&
+      assignment.problems.some((problem) => !problem.completedAt),
+  );
+  const recentAssignment = pendingAssignments[0] ?? activeAssignments[0] ?? null;
+  const recentAssignmentCompleted = recentAssignment
+    ? recentAssignment.problems.filter((problem) => problem.completedAt).length
+    : 0;
 
   return (
     <AppShell nav={studentNav} title="学生端" user={user}>
@@ -134,6 +149,27 @@ export default async function StudentHomePage() {
         </div>
       </section>
 
+      <section className="surface mt-7 overflow-hidden">
+        <div className="grid md:grid-cols-[1fr_auto]">
+          <div className="p-5 md:p-6">
+            <p className="arena-kicker">Teacher Training</p>
+            <h2 className="mt-1 text-2xl font-black text-ink-950">老师布置的专项练习</h2>
+            <p className="mt-2 text-sm font-semibold leading-6 text-ink-600">
+              {recentAssignment
+                ? `${recentAssignment.title} · 已完成 ${recentAssignmentCompleted}/${recentAssignment.problems.length} 题`
+                : "目前没有专项任务，继续保持日常训练。"}
+            </p>
+          </div>
+          <Link className="arena-link-card flex min-w-64 items-center justify-between gap-4 border-t border-ink-950/10 px-5 py-4 md:border-l md:border-t-0" href="/student/assignments">
+            <span>
+              <span className="data-number block text-3xl font-black text-steel">{pendingAssignments.length}</span>
+              <span className="mt-1 block text-xs font-bold text-ink-600">份任务待完成</span>
+            </span>
+            <ArrowRight className="text-clay" size={20} />
+          </Link>
+        </div>
+      </section>
+
       <section className="mt-7 grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
         <div>
           <div className="mb-4 flex items-end justify-between gap-4">
@@ -165,6 +201,11 @@ export default async function StudentHomePage() {
             <h2 className="mt-1 text-2xl font-black text-ink-950">复盘与排名</h2>
           </div>
           <div className="grid gap-3">
+            <CompactLink
+              href="/student/assignments"
+              label="专项练习"
+              meta={`${pendingAssignments.length} 份待完成`}
+            />
             <CompactLink
               href="/student/review"
               label="错题本与薄弱知识点"

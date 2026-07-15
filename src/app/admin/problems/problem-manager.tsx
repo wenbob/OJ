@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FileUp, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import {
   parseObjectiveItems,
@@ -88,12 +88,14 @@ export function ProblemManager({
   initialPagination,
   initialProblemType,
   initialProblems,
+  openCreateForm,
 }: {
   categories: string[];
   initialCategory: string;
   initialPagination: PaginationMeta;
   initialProblemType: ProblemType;
   initialProblems: ProblemItem[];
+  openCreateForm: boolean;
 }) {
   const [categoryOptions, setCategoryOptions] = useState(categories);
   const [problems, setProblems] = useState(initialProblems);
@@ -101,7 +103,13 @@ export function ProblemManager({
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [selectedProblemType, setSelectedProblemType] =
     useState<ProblemType>(initialProblemType);
-  const [form, setForm] = useState<ProblemForm>(blankForm);
+  const [form, setForm] = useState<ProblemForm>(() => ({
+    ...blankForm,
+    category: openCreateForm && initialCategory ? initialCategory : blankForm.category,
+    problemType: openCreateForm ? initialProblemType : blankForm.problemType,
+    objectiveItems: [createBlankObjectiveItem()],
+    testCases: blankForm.testCases.map((testCase) => ({ ...testCase })),
+  }));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -109,6 +117,16 @@ export function ProblemManager({
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const allCurrentPageSelected =
     problems.length > 0 && problems.every((problem) => selectedIds.includes(problem.id));
+
+  useEffect(() => {
+    if (!openCreateForm) return;
+    document.getElementById("problem-create-form")?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+      block: "start",
+    });
+  }, [openCreateForm]);
 
   async function reload(
     category = selectedCategory,
@@ -597,7 +615,7 @@ export function ProblemManager({
         </div>
       </section>
 
-      <form className="surface p-5" onSubmit={save}>
+      <form className="surface scroll-mt-4 p-5" id="problem-create-form" onSubmit={save}>
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl font-black">{editingId ? "编辑题目" : "新增题目"}</h2>
           {editingId ? (

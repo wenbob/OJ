@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   clearAiAssistCooldowns,
   consumeAiAssistCooldown,
+  reserveAiProviderRequest,
   reserveAiAssistRequest,
 } from "./aiAssistRateLimit";
 
@@ -115,5 +116,19 @@ describe("AI assist rate limit", () => {
     expect(first.allowed).toBe(true);
     expect(second.allowed).toBe(true);
     expect(third).toMatchObject({ allowed: false, reason: "server_busy" });
+  });
+
+  it("shares the provider concurrency cap with teacher insight requests", () => {
+    clearAiAssistCooldowns();
+    const student = reserveAiAssistRequest({ userId: 1, maxConcurrency: 2 });
+    const teacher = reserveAiProviderRequest({
+      requestKey: "teacher:9:1",
+      maxConcurrency: 2,
+    });
+    const blocked = reserveAiAssistRequest({ userId: 2, maxConcurrency: 2 });
+
+    expect(student.allowed).toBe(true);
+    expect(teacher.allowed).toBe(true);
+    expect(blocked).toMatchObject({ allowed: false, reason: "server_busy" });
   });
 });

@@ -36,6 +36,7 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
   const problemType = isProblemType(selectedProblemType)
     ? selectedProblemType
     : "programming";
+  const createValue = Array.isArray(query.create) ? query.create[0] : query.create;
   const { page, pageSize, skip } = readPaginationFromObject(query);
   const where = {
     problemType,
@@ -100,6 +101,7 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
         initialPagination={buildPaginationMeta({ page, pageSize, total })}
         initialProblemType={problemType}
         initialProblems={initialProblems}
+        openCreateForm={createValue === "1"}
       />
     </AppShell>
   );
