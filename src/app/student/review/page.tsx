@@ -139,6 +139,7 @@ export default async function StudentReviewPage({ searchParams }: PageProps) {
                 className="arena-link-card surface block p-5"
                 href={reviewHref({ category: category.category, status: selectedStatus })}
                 key={category.category}
+                scroll={false}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -373,6 +374,7 @@ function FilterLink({
           : "border-ink-950/10 bg-white/65 text-ink-800 hover:border-steel hover:text-steel"
       }`}
       href={href}
+      scroll={false}
     >
       {children}
     </Link>
