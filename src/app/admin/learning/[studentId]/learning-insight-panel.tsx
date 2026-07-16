@@ -17,8 +17,8 @@ export function LearningInsightPanel({
   studentId: number;
   window: LearningWindow;
 }) {
-  const [summary, setSummary] = useState(initialSummary ?? "");
-  const [generatedAt, setGeneratedAt] = useState(initialGeneratedAt);
+  const [summary, setSummary] = useState(initialStale ? "" : initialSummary ?? "");
+  const [generatedAt, setGeneratedAt] = useState(initialStale ? null : initialGeneratedAt);
   const [stale, setStale] = useState(initialStale);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -67,7 +67,7 @@ export function LearningInsightPanel({
       <div className="p-5">
         {stale ? (
           <p className="mb-3 border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
-            学情数据已经变化，当前摘要已过期，可重新生成。
+            学情数据已经变化，旧摘要已隐藏，请生成最新摘要。
           </p>
         ) : null}
         {error ? (

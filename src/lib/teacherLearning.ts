@@ -64,31 +64,16 @@ export async function getTeacherLearningDashboard(window: LearningWindow) {
     assignmentsByStudent.set(assignment.studentId, list);
   }
 
-  const shortageKeys = new Set<string>();
-  const activeProblems = problems.filter((problem) => problem.archivedAt === null);
   const rows = students.map((student) => {
     const studentAssignments = assignmentsByStudent.get(student.id) ?? [];
     const activeIncompleteAssignments = studentAssignments.filter(
       (assignment) => !getAssignmentProgress(assignment.problems).completed,
-    );
-    const activeProblemIds = activeIncompleteAssignments.flatMap((assignment) =>
-      assignment.problems.flatMap((problem) =>
-        problem.completedAt || problem.problemId === null ? [] : [problem.problemId],
-      ),
     );
     const analytics = buildLearningAnalytics({
       problems,
       submissions: submissionsByStudent.get(student.id) ?? [],
       window,
     });
-    const recommendations = buildLearningRecommendations({
-      activeProblemIds,
-      analytics,
-      problems: activeProblems,
-    });
-    for (const category of recommendations.shortageCategories) {
-      shortageKeys.add(`${student.id}:${category}`);
-    }
     const assignmentProblemCount = activeIncompleteAssignments.reduce(
       (sum, assignment) => sum + assignment.problems.length,
       0,
@@ -107,7 +92,6 @@ export async function getTeacherLearningDashboard(window: LearningWindow) {
         !analytics.hasLearningData ||
         analytics.issueLabels.length > 0 ||
         analytics.summary.pendingProblemCount > 0,
-      shortageCount: recommendations.shortageCategories.length,
       student,
     };
   });
@@ -121,7 +105,6 @@ export async function getTeacherLearningDashboard(window: LearningWindow) {
         0,
       ),
       needsAttentionCount: rows.filter((row) => row.needsAttention).length,
-      shortageCount: shortageKeys.size,
       studentCount: students.length,
     },
   };

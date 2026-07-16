@@ -9,7 +9,6 @@ const input: TeacherInsightInput = {
   username: "student1",
   window: "30d",
   issueLabels: ["逻辑判断需加强"],
-  shortageCategories: ["数组"],
   statusCounts: { "Wrong Answer": 4 },
   stuckProblems: [{ title: "最大值", category: "循环", failedCount: 3 }],
   categories: [
@@ -48,7 +47,7 @@ describe("teacher learning insight", () => {
       hashTeacherInsightInput({ ...input, issueLabels: [...input.issueLabels] }),
     );
     expect(hashTeacherInsightInput(input)).not.toBe(
-      hashTeacherInsightInput({ ...input, shortageCategories: [] }),
+      hashTeacherInsightInput({ ...input, statusCounts: {} }),
     );
   });
 });

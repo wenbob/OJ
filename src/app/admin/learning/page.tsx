@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpenCheck, Clock3, LibraryBig, Users } from "lucide-react";
+import { ArrowRight, BookOpenCheck, Clock3, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requirePageUser } from "@/lib/auth";
 import { isLearningWindow, type LearningWindow } from "@/lib/learningAnalytics";
@@ -41,11 +41,10 @@ export default async function AdminLearningPage({ searchParams }: PageProps) {
           </div>
           <WindowTabs current={window} />
         </div>
-        <div className="grid bg-white/45 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid bg-white/45 sm:grid-cols-3">
           <OverviewStat icon={<Users size={18} />} label="周期活跃学生" value={`${dashboard.summary.activeStudentCount}/${dashboard.summary.studentCount}`} />
           <OverviewStat icon={<Clock3 size={18} />} label="需要关注" value={dashboard.summary.needsAttentionCount} />
           <OverviewStat icon={<BookOpenCheck size={18} />} label="未完成专项练习" value={dashboard.summary.incompleteAssignmentCount} />
-          <OverviewStat icon={<LibraryBig size={18} />} label="题库缺口" value={dashboard.summary.shortageCount} />
         </div>
       </section>
 
@@ -135,7 +134,7 @@ function WindowTabs({ current }: { current: LearningWindow }) {
 
 function OverviewStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
-    <div className="border-b border-ink-950/10 p-5 sm:border-r xl:border-b-0">
+    <div className="border-b border-ink-950/10 p-5 sm:border-b-0 sm:border-r last:border-r-0">
       <div className="flex items-center gap-2 text-steel">{icon}<span className="text-xs font-black text-ink-600">{label}</span></div>
       <p className="data-number mt-2 text-3xl font-black text-ink-950">{value}</p>
     </div>

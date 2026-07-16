@@ -185,7 +185,7 @@ describe("learning recommendations", () => {
       problems,
     });
     expect(result.problems).toEqual([]);
-    expect(result.shortageCategories).toEqual(["循环"]);
+    expect(result.targetCategories).toEqual(["循环"]);
   });
 
   it("never recommends objective problems", () => {

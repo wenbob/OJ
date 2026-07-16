@@ -65,7 +65,7 @@ const analytics = {
 
 const detail = {
   analytics,
-  recommendations: { shortageCategories: ["循环"] },
+  recommendations: { problems: [], targetCategories: ["循环"] },
   student: { id: 7, username: "student" },
 };
 
@@ -103,7 +103,6 @@ describe("POST /api/admin/learning/insight", () => {
   it("returns a matching database snapshot without calling DeepSeek", async () => {
     const input = createTeacherInsightInput({
       analytics,
-      shortageCategories: ["循环"],
       username: "student",
     });
     vi.mocked(prisma.learningInsightSnapshot.findUnique).mockResolvedValueOnce({

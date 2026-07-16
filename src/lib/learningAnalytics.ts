@@ -72,7 +72,6 @@ export type RecommendationProblem = LearningProblemInput & {
 
 export type LearningRecommendations = {
   problems: RecommendationProblem[];
-  shortageCategories: string[];
   targetCategories: string[];
 };
 
@@ -300,7 +299,7 @@ export function buildLearningRecommendations({
   problems: LearningProblemInput[];
 }): LearningRecommendations {
   if (!analytics.hasLearningData) {
-    return { problems: [], shortageCategories: [], targetCategories: [] };
+    return { problems: [], targetCategories: [] };
   }
   const normalizedLimit = Math.min(10, Math.max(1, Math.trunc(limit)));
   const targetCategories = analytics.categories
@@ -365,10 +364,6 @@ export function buildLearningRecommendations({
 
   return {
     problems: selected,
-    shortageCategories: targetCategories.filter(
-      (category) =>
-        selected.every((problem) => problem.category !== category),
-    ),
     targetCategories,
   };
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ArrowLeft, BookOpenCheck, Clock3, Code2, Target } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Clock3, Target } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { requirePageUser } from "@/lib/auth";
@@ -41,7 +41,6 @@ export default async function AdminStudentLearningPage({ params, searchParams }:
   if (!detail) notFound();
   const insightInput = createTeacherInsightInput({
     analytics: detail.analytics,
-    shortageCategories: detail.recommendations.shortageCategories,
     username: detail.student.username,
   });
   const currentHash = hashTeacherInsightInput(insightInput);
@@ -100,69 +99,38 @@ export default async function AdminStudentLearningPage({ params, searchParams }:
           <p className="mt-2 text-sm font-semibold text-ink-600">该学生还没有编程题提交。系统不会伪造薄弱分类或推荐结论。</p>
         </section>
       ) : (
-        <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="mt-6 grid gap-6 xl:grid-cols-2">
           <section className="surface overflow-hidden">
-            <SectionTitle kicker="Knowledge Mastery" title="分类掌握率" />
-            <div className="divide-y divide-ink-950/10">
-              {detail.analytics.categories.map((category) => (
-                <div className="p-4" key={category.category}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div><b className="text-sm text-ink-950">{category.category}</b><span className="ml-2 text-xs font-bold text-ink-600">通过 {category.acceptedProblemCount}/{category.attemptedProblemCount} · 待攻克 {category.pendingProblemCount}</span></div>
-                    <span className="data-number font-black text-steel">{category.masteryPercent}%</span>
-                  </div>
-                  <div className="mt-2 h-2 overflow-hidden bg-ink-950/10"><div className="h-full bg-steel" style={{ width: `${category.masteryPercent}%` }} /></div>
-                  <p className="mt-2 text-[11px] font-bold text-ink-500">本周期失败 {category.windowFailedCount} 次</p>
-                </div>
-              ))}
-            </div>
+            <SectionTitle kicker="Stuck Problems" title="持续卡题" />
+            {detail.analytics.stuckProblems.length ? (
+              <div className="divide-y divide-ink-950/10">
+                {detail.analytics.stuckProblems.map((problem) => (
+                  <Link className="arena-link-card flex items-center justify-between gap-4 p-4" href={`/admin/submissions/${problem.latestSubmissionId}`} key={problem.problemId}>
+                    <span><b className="block text-sm text-ink-950">{problem.title}</b><span className="mt-1 block text-xs font-bold text-ink-600">{problem.category} · 最近一次通过后失败 {problem.failedAfterLastAccepted} 次</span></span>
+                    <AlertTriangle className="text-amber-700" size={18} />
+                  </Link>
+                ))}
+              </div>
+            ) : <p className="p-5 text-sm font-semibold text-ink-600">当前没有连续失败至少 3 次的卡题。</p>}
           </section>
 
           <section className="surface overflow-hidden">
-            <SectionTitle kicker="Error Distribution" title="错误状态分布" />
-            <div className="grid grid-cols-2 gap-3 p-5">
-              {Object.entries(detail.analytics.statusCounts).map(([status, count]) => (
-                <div className="border border-ink-950/10 bg-white/65 p-3" key={status}>
-                  <StatusBadge status={status} />
-                  <p className="data-number mt-3 text-2xl font-black text-ink-950">{count}</p>
-                </div>
-              ))}
-              {Object.keys(detail.analytics.statusCounts).length === 0 ? <p className="col-span-2 text-sm font-semibold text-ink-600">本周期暂无提交。</p> : null}
-            </div>
+            <SectionTitle kicker="Recent Failures" title="最近失败题" />
+            {detail.analytics.latestFailures.length ? (
+              <div className="divide-y divide-ink-950/10">
+                {detail.analytics.latestFailures.slice(0, 6).map((problem) => (
+                  <Link className="arena-link-card flex items-center justify-between gap-4 p-4" href={`/admin/submissions/${problem.latestSubmissionId}`} key={problem.problemId}>
+                    <span><b className="block text-sm text-ink-950">{problem.title}</b><span className="mt-1 block text-xs font-bold text-ink-600">{problem.category} · {formatDate(problem.latestSubmissionAt)}</span></span>
+                    <StatusBadge status={problem.latestStatus} />
+                  </Link>
+                ))}
+              </div>
+            ) : <p className="p-5 text-sm font-semibold text-ink-600">暂无未解决的最近失败题。</p>}
           </section>
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <section className="surface overflow-hidden">
-          <SectionTitle kicker="Stuck Problems" title="持续卡题" />
-          {detail.analytics.stuckProblems.length ? (
-            <div className="divide-y divide-ink-950/10">
-              {detail.analytics.stuckProblems.map((problem) => (
-                <Link className="arena-link-card flex items-center justify-between gap-4 p-4" href={`/admin/submissions/${problem.latestSubmissionId}`} key={problem.problemId}>
-                  <span><b className="block text-sm text-ink-950">{problem.title}</b><span className="mt-1 block text-xs font-bold text-ink-600">{problem.category} · 最近一次通过后失败 {problem.failedAfterLastAccepted} 次</span></span>
-                  <AlertTriangle className="text-amber-700" size={18} />
-                </Link>
-              ))}
-            </div>
-          ) : <p className="p-5 text-sm font-semibold text-ink-600">没有符合“最近一次通过后连续失败至少 3 次”的题目。</p>}
-        </section>
-
-        <section className="surface overflow-hidden">
-          <SectionTitle kicker="Recent Failures" title="最近失败题" />
-          {detail.analytics.latestFailures.length ? (
-            <div className="divide-y divide-ink-950/10">
-              {detail.analytics.latestFailures.slice(0, 6).map((problem) => (
-                <Link className="arena-link-card flex items-center justify-between gap-4 p-4" href={`/admin/submissions/${problem.latestSubmissionId}`} key={problem.problemId}>
-                  <span><b className="block text-sm text-ink-950">{problem.title}</b><span className="mt-1 block text-xs font-bold text-ink-600">{problem.category} · {formatDate(problem.latestSubmissionAt)}</span></span>
-                  <StatusBadge status={problem.latestStatus} />
-                </Link>
-              ))}
-            </div>
-          ) : <p className="p-5 text-sm font-semibold text-ink-600">暂无未解决的最近失败题。</p>}
-        </section>
-      </div>
-
-      <div className="mt-6">
+      <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
         <LearningInsightPanel
           initialGeneratedAt={snapshot?.generatedAt.toISOString() ?? null}
           initialStale={initialStale}
@@ -170,35 +138,38 @@ export default async function AdminStudentLearningPage({ params, searchParams }:
           studentId={studentId}
           window={window}
         />
-      </div>
 
-      <section className="surface mt-6 overflow-hidden">
-        <SectionTitle kicker="Recommendation" title="系统推荐与题库缺口" />
-        <div className="grid gap-4 p-5 lg:grid-cols-2">
-          <div>
-            <h3 className="flex items-center gap-2 font-black"><Target className="text-steel" size={18} />推荐题目</h3>
-            <div className="mt-3 grid gap-2">
-              {detail.recommendations.problems.length ? detail.recommendations.problems.map((problem, index) => (
-                <div className="flex items-center gap-3 border border-ink-950/10 bg-white/65 p-3" key={problem.id}>
-                  <span className="data-number font-black text-steel">{index + 1}</span>
-                  <span className="min-w-0 flex-1"><b className="block truncate text-sm">{problem.title}</b><span className="text-[11px] font-bold text-ink-600">{problem.category} · {problem.reason === "pending" ? "待攻克错题" : "从未尝试"}</span></span>
-                </div>
-              )) : <p className="text-sm font-semibold text-ink-600">当前没有自动推荐。教师仍可在下方手动搜索编程题。</p>}
+        <section className="surface overflow-hidden">
+          <div className="flex items-start gap-3 border-b border-ink-950/10 p-5">
+            <span className="mt-0.5 grid h-9 w-9 flex-none place-items-center bg-steel text-white">
+              <Target size={18} />
+            </span>
+            <div>
+              <p className="arena-kicker">Practice Picks</p>
+              <h2 className="mt-1 text-xl font-black">推荐练习题</h2>
+              <p className="mt-1 text-xs font-bold text-ink-600">优先选择待攻克题，再补充同类未尝试题。</p>
             </div>
           </div>
-          <div>
-            <h3 className="flex items-center gap-2 font-black"><BookOpenCheck className="text-clay" size={18} />题库缺口</h3>
-            <div className="mt-3 grid gap-2">
-              {detail.recommendations.shortageCategories.length ? detail.recommendations.shortageCategories.map((category) => (
-                <div className="border border-amber-200 bg-amber-50 p-3" key={category}>
-                  <p className="text-sm font-black text-amber-900">{category} 暂无可分配编程题</p>
-                  <Link className="mt-2 inline-flex items-center gap-1 text-xs font-black text-clay" href={`/admin/problems?problemType=programming&category=${encodeURIComponent(category)}&create=1`}><Code2 size={14} />新增该分类题目</Link>
-                </div>
-              )) : <p className="border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-800">当前重点分类都有可用题目。</p>}
+          {detail.recommendations.problems.length ? (
+            <ol className="divide-y divide-ink-950/10">
+              {detail.recommendations.problems.map((problem, index) => (
+                <li className="flex items-center gap-3 p-4" key={problem.id}>
+                  <span className="data-number grid h-8 w-8 flex-none place-items-center bg-ink-950 text-sm font-black text-linen">{index + 1}</span>
+                  <span className="min-w-0 flex-1">
+                    <b className="block truncate text-sm text-ink-950">{problem.title}</b>
+                    <span className="mt-1 block text-[11px] font-bold text-ink-600">{problem.category} · {problem.reason === "pending" ? "待攻克错题" : "从未尝试"}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div className="p-6">
+              <p className="text-sm font-black text-ink-800">当前没有自动推荐题目</p>
+              <p className="mt-2 text-xs font-semibold leading-5 text-ink-600">可以直接在下方搜索现有编程题，手动组成专项练习。</p>
             </div>
-          </div>
-        </div>
-      </section>
+          )}
+        </section>
+      </div>
 
       <div className="mt-6">
         <AssignmentBuilder

@@ -41,7 +41,6 @@ export async function POST(request: NextRequest) {
   if (!detail) return NextResponse.json({ error: "学生不存在" }, { status: 404 });
   const input = createTeacherInsightInput({
     analytics: detail.analytics,
-    shortageCategories: detail.recommendations.shortageCategories,
     username: detail.student.username,
   });
   const inputHash = hashTeacherInsightInput(input);

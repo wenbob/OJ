@@ -16,7 +16,6 @@ export type TeacherInsightInput = {
     windowFailedCount: number;
   }>;
   issueLabels: string[];
-  shortageCategories: string[];
   statusCounts: Record<string, number>;
   stuckProblems: Array<{
     category: string;
@@ -30,17 +29,14 @@ export type TeacherInsightInput = {
 
 export function createTeacherInsightInput({
   analytics,
-  shortageCategories,
   username,
 }: {
   analytics: LearningAnalytics;
-  shortageCategories: string[];
   username: string;
 }): TeacherInsightInput {
   return {
     categories: analytics.categories.map((category) => ({ ...category })),
     issueLabels: [...analytics.issueLabels],
-    shortageCategories: [...shortageCategories],
     statusCounts: { ...analytics.statusCounts },
     stuckProblems: analytics.stuckProblems.map((problem) => ({
       category: problem.category,
@@ -95,9 +91,7 @@ export function buildTeacherInsightPrompt(input: TeacherInsightInput) {
 ${categoryText}
 
 持续卡题：
-${stuckText}
-
-题库缺口：${input.shortageCategories.join("、") || "无"}`;
+${stuckText}`;
 }
 
 function sanitizeTeacherInsight(content: string) {
