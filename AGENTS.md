@@ -60,6 +60,15 @@ Generating static pages using 1 worker
 
 - AC 透明动效弹窗集中在 `src/components/ProblemSubmitForm.tsx` 和 `public/ac-success.png`。图片必须保持真实 alpha 透明背景，不要替换成带棋盘格像素的伪透明图。
 
+## 试运行规则
+
+- `POST /api/problems/[id]/run` 只用于编程题的公开样例和自定义输入，不得创建 `Submission`，也不得影响积分、错题本、考试成绩或专项练习进度。
+- 样例模式只能由服务端读取 `TestCase.isSample = true` 或旧版公开样例字段；禁止接收客户端提供的样例标准答案，禁止读取或返回隐藏测试点。
+- 自定义输入只展示实际输出和运行错误，不产生 Accepted、Wrong Answer 或标准答案判断。
+- 试运行和正式提交必须共用 Judge 队列；正式提交优先于尚未开始的试运行，但不要中断正在执行的任务。
+- 服务端必须保持每账号一个试运行任务和结束后 5 秒冷却，不能只靠前端禁用按钮。
+- 学生考试试运行必须验证考试已发布、题目归属、学生已开始且未交卷/超时；管理员校题不创建 `ExamRecord`。
+
 ## 浏览器标签设置
 
 - 浏览器标签名称和图标保存在 `SystemSetting.browserTitle`、`SystemSetting.browserIcon`；标题留空时回退到 `siteName`。
@@ -134,3 +143,4 @@ npm run build
 | `docs/ops-review-2026-07-11.md` | 竞技学院视觉与天梯升级记录 |
 | `docs/ops-review-2026-07-12.md` | 天梯前一名与第一名积分差上线记录 |
 | `docs/ops-review-2026-07-15.md` | AI 分层辅导、学情看板、专项练习及浏览器标签配置上线记录 |
+| `docs/ops-review-2026-07-16.md` | 运行样例、自定义输入与共享 Judge 队列上线记录 |

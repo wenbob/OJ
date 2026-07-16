@@ -1,8 +1,8 @@
 # C++ 在线 OJ 练习平台 Demo
 
-这是一个基于 Next.js 的 C++ 在线 OJ 练习平台 Demo。当前版本已经覆盖编程题与选择判断题两种独立题型、日常刷题、模拟考试、代码提交、自动评测、AI 思路提示、提交详情、错题本与薄弱知识点、教师学情看板与专项练习、学生头衔和天梯榜、管理员题目管理、用户管理、系统设置、Markdown 批量导入、Docker Judge 和基础提交队列等核心流程。
+这是一个基于 Next.js 的 C++ 在线 OJ 练习平台 Demo。当前版本已经覆盖编程题与选择判断题两种独立题型、日常刷题、模拟考试、运行样例与自定义输入、代码提交、自动评测、AI 思路提示、提交详情、错题本与薄弱知识点、教师学情看板与专项练习、学生头衔和天梯榜、管理员题目管理、用户管理、系统设置、Markdown 批量导入、Docker Judge 和基础提交队列等核心流程。
 
-当前项目适合作为本地教学演示、功能验证和 3 名学生左右的小规模正式使用基础。线上使用时必须启用 Docker Judge、强随机 `SESSION_SECRET`、定期 SQLite 备份和管理员密码安全管理；它仍不适合作为大规模公网 OJ 或高并发竞赛平台。
+当前项目适合作为本地教学演示、功能验证和固定小班、低并发的正式教学使用基础。线上使用时必须启用 Docker Judge、强随机 `SESSION_SECRET`、定期 SQLite 备份和管理员密码安全管理；它仍不适合作为大规模公网 OJ 或高并发竞赛平台。
 
 核心流程：
 
@@ -325,6 +325,18 @@ oj-code-exam-${examId}-problem-${problemId}
 ```
 
 考试答题页按考试和题目隔离草稿，切换题目时会加载该题自己的草稿，不复用其他考试题目的代码。
+
+### 运行样例与自定义输入
+
+所有编程题编辑器都提供“运行样例 / 自定义输入”双标签，包括学生日常练习、专项练习、编程考试、管理员题目练习和管理员考试练习；选择判断题不显示。
+
+- “运行样例”由服务端读取全部公开样例，一次编译后逐组运行并比较输出；浏览器不能提交或覆盖样例标准答案，也不会读取隐藏测试点。
+- “自定义输入”允许空输入，只展示程序实际输出、运行时间或编译/运行错误，不判定 Accepted 或 Wrong Answer。
+- 试运行结果和正式提交结果相互独立，完成后分别自动滚动到对应结果区。
+- 试运行不会创建 `Submission`，不会影响天梯积分、错题本、考试成绩或专项练习进度，也不会触发 AC 动画。
+- 每个账号同时只能进行一个试运行，完成后等待 5 秒才能再次运行；正式提交仍可在试运行期间发起，并优先于尚未开始的试运行排队。
+
+样例通过只代表公开样例匹配，不代表隐藏测试点全部通过，仍需点击“提交代码”完成正式评测。
 
 ### 代码提交与评测
 
@@ -924,6 +936,8 @@ judgeCppCode({
 })
 ```
 
+试运行使用独立的 `runCppCode` 接口：样例模式比较公开样例，自定义模式只执行程序；两者复用同一套编译执行层和安全限制，正式 `judgeCppCode` 的返回结构保持不变。
+
 内部通过 `JUDGE_MODE` 切换实现。
 
 ### local Judge
@@ -995,7 +1009,9 @@ JUDGE_CONCURRENCY=1
 说明：
 
 - 默认同时只运行 1 个 Judge 任务。
-- 日常提交和考试提交都走同一个队列。
+- 日常提交、考试提交、样例运行和自定义运行都走同一个队列。
+- 正式提交是高优先级，能够排在尚未开始的试运行之前，但不会强行中断正在执行的任务。
+- 每个账号同时只能占用一个试运行请求，试运行结束后服务端强制冷却 5 秒。
 - 一个任务失败不会卡住后续任务。
 - 当前是 Demo 级内存队列，服务重启后等待中的任务会丢失。
 - 正式多实例部署建议替换为 Redis、消息队列或独立评测服务。
@@ -1091,7 +1107,7 @@ npm run db:baseline
 
 ### SQLite 备份
 
-本阶段 3 名学生小规模正式使用可以继续使用 SQLite，但必须定期备份。
+当前固定小班、低并发教学可以继续使用 SQLite，但必须定期备份。
 
 Windows PowerShell：
 
@@ -1204,6 +1220,7 @@ GET /api/health
 ```text
 GET  /api/problems
 GET  /api/problems/[id]
+POST /api/problems/[id]/run
 POST /api/problems/[id]/submit
 GET  /api/submissions/my
 GET  /api/submissions/[id]
@@ -1261,6 +1278,8 @@ PUT    /api/admin/settings
 ```
 
 管理员用户接口支持 `customTitle` 和 `aiAccessEnabled` 字段：创建或编辑学生时可设置最多 20 字的自定义头衔，并可单独开通 AI 对话权限；个人 AI 权限默认关闭。
+
+`POST /api/problems/[id]/run` 接收 `code`、`mode = samples|custom`、可选 `customInput` 和学生考试使用的可选 `examId`。代码上限 128KB，自定义输入上限 32KB；接口只支持编程题，不接受 `learningAssignmentId`，样例输入和标准输出只能由服务端读取。参数错误、未登录、考试不可用、内容过大、频率过高和 Judge 不可用分别使用 400、401、403、413、429、503。
 
 专项练习删除接口只接受已归档任务；进行中的任务返回冲突错误，必须先归档。永久删除会清除任务题目与进度，但不会删除学生原有提交。
 
@@ -1331,6 +1350,7 @@ GET /api/admin/problems?page=1&pageSize=20&category=基础语法
 [ ] npm run db:deploy 已执行
 [ ] 数据库已备份
 [ ] /api/health 返回 ok
+[ ] 运行样例和自定义输入冒烟测试通过，且未新增 Submission
 [ ] Accepted 冒烟测试通过
 [ ] Wrong Answer 冒烟测试通过
 [ ] Compile Error 冒烟测试通过
@@ -1355,10 +1375,9 @@ GET /api/admin/problems?page=1&pageSize=20&category=基础语法
 
 工程限制：
 
-- 当前数据库结构主要靠 `prisma/init.sql` 初始化，还没有完整采用 Prisma Migrate 工作流。
-- `prisma/init.sql` 和 `prisma/schema.prisma` 需要手动保持同步。
+- 当前同时维护 Prisma Migrate、`prisma/schema.prisma` 和首次安装使用的 `prisma/init.sql`；结构变更必须让三者保持同步。
 - 内存提交队列不适合多实例部署。
-- 自动化测试覆盖主要集中在 Markdown 解析、样例展示和队列逻辑，端到端权限和考试流程测试仍需补强。
+- 自动化测试已覆盖核心计算、主要 API、权限边界、AI、学情和试运行队列，但完整浏览器端到端权限与考试流程仍需补强。
 
 业务限制：
 
@@ -1391,7 +1410,7 @@ GET /api/admin/problems?page=1&pageSize=20&category=基础语法
 
 第 4 阶段：工程化
 
-- 引入 Prisma Migrate。
+- 为 Prisma migration、schema 和 `init.sql` 增加自动一致性检查。
 - 补充端到端测试。
 - 补充接口权限测试。
 - 增加操作审计日志。
@@ -1405,7 +1424,7 @@ GET /api/admin/problems?page=1&pageSize=20&category=基础语法
 
 ## 当前版本结论
 
-当前版本已经适合作为本地 Demo、课堂演示、内部功能验证，以及约 3 名学生的小规模正式使用。
+当前版本已经适合作为本地 Demo、课堂演示、内部功能验证，以及固定小班、低并发的正式教学使用。
 
 当前版本不建议直接扩展为大规模公网 OJ 或高并发竞赛平台。真实使用时必须保持 `JUDGE_MODE=docker`、定期备份 SQLite、关闭公网 3000 端口，并避免重复执行 `npm run seed` / `npm run db:init`。
 
