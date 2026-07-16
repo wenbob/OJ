@@ -74,3 +74,16 @@
 - 备份库与上线库均通过 SQLite `quick_check`，用户 23、题目 555、提交 1419、测试点 1043、专项练习 0，359 道题处于上架状态，切换前后计数一致。
 - PM2、内外网健康检查、静态资源、`127.0.0.1:3000` 监听和 Docker Judge 输出 `42` 均验证通过；发布包已从服务器删除。
 - 功能提交 `6759a03` 已推送到 `origin/main` 和 `oj2026/main`。
+
+## 考试防退出、学生单设备会话与 AC 标记
+
+- 学生进行中的考试使用锁定布局；同场切题不交卷，离开考试路由、刷新、关闭页面或退出账号时调用幂等交卷接口。页面关闭场景使用 `sendBeacon` 或 `fetch keepalive`，服务端继续负责最终状态校验。
+- `User.sessionVersion` 由 migration `0008_student_single_session` 引入。学生每次成功登录都会递增版本，只保留最后一次登录会话；旧学生 Cookie 和不含版本的旧 Cookie 均失效。管理员仍兼容版本 0 并允许多设备登录。
+- 学生新设备登录前会先结算该账号仍为 `in_progress` 的考试，防止换设备继续作答。密码或角色变化同样递增会话版本。
+- 日常题库根据全部历史 `Accepted` 实时返回 `isAccepted`；日常与考试 AC 均计入，已通过题显示淡绿色和“已通过”，后续失败不会取消标记。
+- 发布前发现 3 条 `in_progress` 历史记录，但均已超过对应考试结束时间，不存在仍在有效窗口内的考试，因此没有人工修改记录并按计划发布。
+- Linux standalone 包大小约 45.07MB，SHA-256 为 `a0db68a94f49276523b834268dc9407ff037a83f4332119a8b193dac863e502c`；包内仅包含 OpenSSL 3 Prisma 引擎，未包含 `.env`、数据库、根 `node_modules` 或 `.next/cache`。
+- 切换前备份为 `/www/backups/prod-20260716-223340-before-session-version.db`，SQLite 完整性检查为 `ok`；旧版本目录为 `/www/oj-old-20260716-223340`。服务器复用现有根 `node_modules`，未运行 `npm ci`、Next 构建、`db:init` 或 `seed`。
+- 线上验证通过：PM2 在线、健康检查正常、静态资源 200、监听 `127.0.0.1:3000`；当前学生会话返回 200，被替换学生会话与旧版学生会话返回 401，旧版管理员版本 0 会话仍返回 200。
+- 生产题目列表已验证真实历史 AC 的 `isAccepted = true`，Docker Judge 在生产约束下运行 `19 + 23` 输出 `42`。
+- 功能提交 `2e1afea` 已推送到 `origin/main` 和 `oj2026/main`。

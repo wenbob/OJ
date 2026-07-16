@@ -552,6 +552,8 @@ docker image inspect oj-cpp-judge >/dev/null
 
 如果 `package-lock.json` 发生依赖变化，不要在 2GB 服务器热运行 `npm ci`。优先在本地 Linux/Docker 环境生成可用于 Ubuntu 的根 `node_modules` 并随发布包上传；否则必须安排维护窗口，先停 PM2 并确认有回滚点后再处理依赖安装。
 
+涉及考试会话或鉴权迁移时，切换前还要只读检查生产库中的 `in_progress` 考试。必须结合考试开始时间、时长和当前时间判断是否仍在有效考试窗口；只要存在仍有效记录就延期发布，不在部署过程中强制交卷。已经超过截止时间的陈旧记录可以记录在发布日志中，交由应用的超时结算或学生下次登录流程处理。
+
 确认无误后再切换目录。因为生产 `.env` 使用绝对路径 `DATABASE_URL=file:/www/oj/prisma/prod.db`，不要在切换前的 `/www/oj-new` 执行 `npm run db:deploy`，否则会迁移旧目录数据库。正确顺序是停服务、备份并复制最新数据库、切换目录后在新的 `/www/oj` 执行迁移：
 
 ```bash

@@ -1024,7 +1024,7 @@ JUDGE_CONCURRENCY=1
 
 核心表：
 
-- `User`：用户账号，包含 `student` 和 `admin` 两种角色。
+- `User`：用户账号，包含 `student` 和 `admin` 两种角色；`sessionVersion` 用于废除学生旧会话，学生只保留最后一次登录，管理员保持多设备登录。
 - `StudentProfile`：学生扩展档案，保存管理员自定义头衔和个人 AI 权限；积分和段位实时从提交记录计算，不写入该表。
 - `Problem`：题目主体信息，包含标题、描述、难度、分类和第一组样例。
 - `Problem.problemType`：`programming` 或 `objective`；客观题小题 JSON 保存于 `objectiveItems`。
@@ -1082,6 +1082,8 @@ npm run seed
 0004_ai_assist
 0005_ai_student_access
 0006_learning_dashboard_assignments
+0007_problem_archiving
+0008_student_single_session
 ```
 
 本地开发创建新迁移：
@@ -1197,6 +1199,8 @@ POST /api/auth/login
 POST /api/auth/logout
 GET  /api/auth/me
 ```
+
+学生登录会原子递增 `sessionVersion`，新登录设备会使旧学生会话失效；管理员登录不递增版本。学生登录前若仍有 `in_progress` 考试，服务端会先按幂等交卷流程结算。`GET /api/auth/me` 对被替换或旧版学生会话返回 401，并通过 `reason` 区分 `session_replaced`、`session_invalid` 等原因。
 
 公共设置：
 
@@ -1321,6 +1325,8 @@ PUT    /api/admin/settings
 GET /api/problems?page=1&pageSize=20&category=基础语法
 GET /api/admin/problems?page=1&pageSize=20&category=基础语法
 ```
+
+学生 `GET /api/problems` 的每个题目项包含 `isAccepted`，按该学生全部历史 `Accepted` 实时计算；日常和考试 AC 均计入，后续失败不会清除“已通过”标记。
 
 管理员提交记录支持用户名、角色、题目、状态、日期范围等筛选。管理员考试提交记录额外支持考试筛选。
 
