@@ -38,7 +38,7 @@ export default async function AdminHomePage() {
     rankings,
     settings,
   ] = await Promise.all([
-    prisma.problem.count(),
+    prisma.problem.count({ where: { archivedAt: null } }),
     prisma.exam.count(),
     prisma.user.count(),
     prisma.submission.count({ where: { submissionType: "practice" } }),

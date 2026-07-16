@@ -378,7 +378,7 @@ export function ProblemManager({
   async function deleteProblem(problem: ProblemItem) {
     if (
       !confirm(
-        `确定要删除题目《${problem.title}》吗？该操作会删除相关测试点和提交记录，无法恢复。`,
+        `确定要下架题目《${problem.title}》吗？下架后学生不能继续作答，但历史提交和天梯积分会完整保留。`,
       )
     ) {
       return;
@@ -386,9 +386,12 @@ export function ProblemManager({
     setMessage("");
     setError("");
     const response = await fetch(`/api/admin/problems/${problem.id}`, { method: "DELETE" });
+    const data = await response.json().catch(() => ({}));
     if (response.ok) {
-      setMessage("已删除 1 道题");
+      setMessage("已下架 1 道题，历史提交和积分已保留");
       await reload();
+    } else {
+      setError(data.error ?? "下架题目失败");
     }
   }
 
@@ -398,8 +401,8 @@ export function ProblemManager({
     const selectedProblems = problems.filter((problem) => selectedIds.includes(problem.id));
     const confirmText =
       selectedIds.length === 1 && selectedProblems[0]
-        ? `确定要删除题目《${selectedProblems[0].title}》吗？该操作无法恢复。`
-        : `确定要删除选中的 ${selectedIds.length} 道题吗？该操作会删除这些题目的测试点、提交记录以及相关考试题目关联，无法恢复。`;
+        ? `确定要下架题目《${selectedProblems[0].title}》吗？历史提交和天梯积分会保留。`
+        : `确定要下架选中的 ${selectedIds.length} 道题吗？题目会从题库隐藏，但历史提交和天梯积分会完整保留。`;
 
     if (!confirm(confirmText)) return;
 
@@ -416,11 +419,11 @@ export function ProblemManager({
     setPending(false);
 
     if (!response.ok) {
-      setError(data.error ?? "批量删除失败");
+      setError(data.error ?? "批量下架失败");
       return;
     }
 
-    setMessage(`已删除 ${data.deletedCount ?? 0} 道题`);
+    setMessage(`已下架 ${data.archivedCount ?? data.deletedCount ?? 0} 道题，历史提交和积分已保留`);
     setSelectedIds([]);
     await reload(selectedCategory, pagination.page);
   }
@@ -497,7 +500,7 @@ export function ProblemManager({
               type="button"
             >
               <Trash2 size={15} />
-              批量删除
+              批量下架
             </button>
           </div>
         </div>
@@ -571,7 +574,7 @@ export function ProblemManager({
                         type="button"
                       >
                         <Trash2 size={15} />
-                        删除
+                        下架
                       </button>
                     </div>
                   </td>

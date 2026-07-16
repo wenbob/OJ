@@ -87,7 +87,7 @@ export default async function StudentProblemDetailPage({
         : Promise.resolve(null),
     ]);
 
-  if (!problem) notFound();
+  if (!problem || problem.archivedAt) notFound();
   const problemType = normalizeProblemType(problem.problemType);
   const objectiveItems =
     problemType === "objective"

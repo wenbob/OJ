@@ -120,6 +120,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const problem = await prisma.problem.findUnique({
     where: { id: problemId },
     select: {
+      archivedAt: true,
       problemType: true,
       sampleInput: true,
       sampleOutput: true,
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     },
   });
 
-  if (!problem) {
+  if (!problem || problem.archivedAt) {
     return NextResponse.json({ error: "题目不存在" }, { status: 404 });
   }
   if (normalizeProblemType(problem.problemType) !== "programming") {

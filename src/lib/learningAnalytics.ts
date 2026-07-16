@@ -316,12 +316,15 @@ export function buildLearningRecommendations({
   const attemptedIds = new Set(analytics.problems.map((problem) => problem.problemId));
 
   const excludedIds = new Set(activeProblemIds);
+  const availableProblemIds = new Set(problems.map((problem) => problem.id));
   const candidatesByCategory = new Map<string, RecommendationProblem[]>();
   for (const category of targetCategories) {
     const pending = analytics.pendingProblems
       .filter(
         (problem) =>
-          problem.category === category && !excludedIds.has(problem.problemId),
+          problem.category === category &&
+          availableProblemIds.has(problem.problemId) &&
+          !excludedIds.has(problem.problemId),
       )
       .map((problem) => ({
         category: problem.category,

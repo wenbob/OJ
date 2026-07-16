@@ -96,7 +96,7 @@ export async function createLearningAssignment({
       select: { id: true, role: true, username: true },
     }),
     db.problem.findMany({
-      where: { id: { in: draft.problemIds } },
+      where: { archivedAt: null, id: { in: draft.problemIds } },
       select: {
         category: true,
         difficulty: true,

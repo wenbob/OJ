@@ -36,6 +36,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       await readJsonWithLimit(request, REQUEST_LIMITS.problemPayloadJsonBytes),
     );
     const problem = await prisma.$transaction(async (tx) => {
+      const currentProblem = await tx.problem.findUnique({
+        where: { id: problemId },
+        select: { archivedAt: true },
+      });
+      if (!currentProblem || currentProblem.archivedAt) {
+        throw new Error("题目不存在或已经下架");
+      }
       const examLinks = await tx.examProblem.findMany({
         where: { problemId },
         include: {
@@ -124,6 +131,24 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     );
   }
 
-  await prisma.problem.delete({ where: { id: problemId } });
-  return NextResponse.json({ ok: true });
+  const publishedExam = await prisma.examProblem.findFirst({
+    where: { problemId, exam: { status: "published" } },
+    select: { exam: { select: { title: true } } },
+  });
+  if (publishedExam) {
+    return NextResponse.json(
+      { error: `该题正在已发布考试《${publishedExam.exam.title}》中，请先取消发布` },
+      { status: 409 },
+    );
+  }
+
+  const archivedAt = new Date();
+  const result = await prisma.problem.updateMany({
+    where: { archivedAt: null, id: problemId },
+    data: { archivedAt },
+  });
+  if (result.count === 0) {
+    return NextResponse.json({ error: "题目不存在或已经下架" }, { status: 404 });
+  }
+  return NextResponse.json({ archivedAt, archivedCount: 1, ok: true });
 }

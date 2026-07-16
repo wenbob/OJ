@@ -48,7 +48,7 @@ export default async function AdminEditExamPage({ params }: PageProps) {
 
   if (!exam) notFound();
   const categoryRows = await prisma.problem.findMany({
-    where: { problemType: exam.examType },
+    where: { archivedAt: null, problemType: exam.examType },
     distinct: ["category"],
     orderBy: { category: "asc" },
     select: { category: true },

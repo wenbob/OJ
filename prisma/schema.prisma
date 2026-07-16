@@ -44,6 +44,7 @@ model Problem {
   category                   String
   problemType                String                      @default("programming")
   objectiveItems             String?
+  archivedAt                DateTime?
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
   testCases                  TestCase[]
@@ -52,6 +53,7 @@ model Problem {
   learningAssignmentProblems LearningAssignmentProblem[]
 
   @@index([problemType, category])
+  @@index([archivedAt, problemType, category])
 }
 
 model TestCase {

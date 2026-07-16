@@ -23,6 +23,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const problem = await prisma.problem.findUnique({
     where: { id: problemId },
     select: {
+      archivedAt: true,
       id: true,
       title: true,
       description: true,
@@ -48,13 +49,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
     },
   });
 
-  if (!problem) {
+  if (!problem || problem.archivedAt) {
     return NextResponse.json({ error: "题目不存在" }, { status: 404 });
   }
 
   return NextResponse.json({
     problem: {
       ...problem,
+      archivedAt: undefined,
       objectiveItems:
         problem.problemType === "objective"
           ? getPublicObjectiveItems(parseObjectiveItems(problem.objectiveItems))

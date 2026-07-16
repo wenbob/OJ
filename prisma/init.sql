@@ -49,11 +49,13 @@ CREATE TABLE "Problem" (
   "category" TEXT NOT NULL,
   "problemType" TEXT NOT NULL DEFAULT 'programming',
   "objectiveItems" TEXT,
+  "archivedAt" DATETIME,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX "Problem_problemType_category_idx" ON "Problem"("problemType", "category");
+CREATE INDEX "Problem_archivedAt_problemType_category_idx" ON "Problem"("archivedAt", "problemType", "category");
 
 CREATE TABLE "Exam" (
   "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,

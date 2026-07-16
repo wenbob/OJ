@@ -39,6 +39,7 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
   const createValue = Array.isArray(query.create) ? query.create[0] : query.create;
   const { page, pageSize, skip } = readPaginationFromObject(query);
   const where = {
+    archivedAt: null,
     problemType,
     ...(normalizedCategory ? { category: normalizedCategory } : {}),
   };
@@ -54,7 +55,7 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
     }),
     prisma.problem.count({ where }),
     prisma.problem.findMany({
-      where: { problemType },
+      where: { archivedAt: null, problemType },
       select: { category: true },
       orderBy: { category: "asc" },
     }),

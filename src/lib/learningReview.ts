@@ -208,7 +208,7 @@ export async function getStudentLearningReview(
   db: DbClient = prisma,
 ) {
   const submissions = await db.submission.findMany({
-    where: { userId },
+    where: { userId, problem: { archivedAt: null } },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: {
       createdAt: true,

@@ -9,6 +9,7 @@ import {
 import { getAssignmentProgress } from "./learningAssignments";
 
 const programmingProblemSelect = {
+  archivedAt: true,
   category: true,
   difficulty: true,
   id: true,
@@ -64,6 +65,7 @@ export async function getTeacherLearningDashboard(window: LearningWindow) {
   }
 
   const shortageKeys = new Set<string>();
+  const activeProblems = problems.filter((problem) => problem.archivedAt === null);
   const rows = students.map((student) => {
     const studentAssignments = assignmentsByStudent.get(student.id) ?? [];
     const activeIncompleteAssignments = studentAssignments.filter(
@@ -82,7 +84,7 @@ export async function getTeacherLearningDashboard(window: LearningWindow) {
     const recommendations = buildLearningRecommendations({
       activeProblemIds,
       analytics,
-      problems,
+      problems: activeProblems,
     });
     for (const category of recommendations.shortageCategories) {
       shortageKeys.add(`${student.id}:${category}`);
@@ -169,13 +171,14 @@ export async function getTeacherLearningStudentDetail(
   ]);
   if (!student) return null;
   const analytics = buildLearningAnalytics({ problems, submissions, window });
+  const activeProblems = problems.filter((problem) => problem.archivedAt === null);
   const activeProblemIds = activeRows.flatMap(({ problemId }) =>
     problemId === null ? [] : [problemId],
   );
   const recommendations = buildLearningRecommendations({
     activeProblemIds,
     analytics,
-    problems,
+    problems: activeProblems,
   });
   return {
     activeProblemIds,
@@ -184,7 +187,7 @@ export async function getTeacherLearningStudentDetail(
       ...assignment,
       progress: getAssignmentProgress(assignment.problems),
     })),
-    problems: problems as LearningProblemInput[],
+    problems: activeProblems as LearningProblemInput[],
     recommendations,
     student,
   };

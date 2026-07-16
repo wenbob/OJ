@@ -28,6 +28,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         include: {
           problem: {
             select: {
+              archivedAt: true,
               title: true,
               problemType: true,
               objectiveItems: true,
@@ -62,6 +63,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
       {
         error: `题目《${mismatchedProblem.problem.title}》与考试类型不一致`,
       },
+      { status: 400 },
+    );
+  }
+  const archivedProblem = existingExam.problems.find(
+    (item) => item.problem.archivedAt !== null,
+  );
+  if (archivedProblem) {
+    return NextResponse.json(
+      { error: `题目《${archivedProblem.problem.title}》已经下架，请先从考试中移除` },
       { status: 400 },
     );
   }

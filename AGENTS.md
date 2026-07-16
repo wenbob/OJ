@@ -81,6 +81,7 @@ Generating static pages using 1 worker
 - 同一用户同一题多次 `Accepted` 只计入 1 道唯一 AC 题；日常刷题和考试提交都计入统计。
 - 管理员自定义头衔和学生个人 AI 权限分别保存在 `StudentProfile.customTitle`、`StudentProfile.aiAccessEnabled`；头衔只覆盖展示文案，不影响积分、自动段位和排名。
 - 天梯排序固定为：积分降序 → 唯一 AC 题数降序 → AC 总次数降序 → 用户名升序 → 用户 ID 升序。
+- 管理员移除题目必须写入 `Problem.archivedAt` 做下架，禁止物理删除 `Problem`；下架题目不再出现在题库、组卷、专项推荐、提交、试运行或 AI 入口，但历史 `Submission` 必须保留用于积分和排名。
 
 ## AI 助手规则
 

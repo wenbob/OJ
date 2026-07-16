@@ -54,7 +54,7 @@ export default async function AdminPracticeProblemPage({ params }: PageProps) {
     getDefaultCppTemplate(),
   ]);
 
-  if (!problem) notFound();
+  if (!problem || problem.archivedAt) notFound();
   const problemType = normalizeProblemType(problem.problemType);
   const objectiveItems =
     problemType === "objective"

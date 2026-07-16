@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
     }),
   ]);
 
-  if (!problem) {
+  if (!problem || problem.archivedAt) {
     return NextResponse.json({ error: "题目不存在" }, { status: 404 });
   }
   if (normalizeProblemType(problem.problemType) !== "programming") {

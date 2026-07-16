@@ -113,6 +113,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     include: {
       problem: {
         select: {
+          archivedAt: true,
           title: true,
           problemType: true,
           objectiveItems: true,
@@ -137,6 +138,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (examProblems.length === 0) {
       return NextResponse.json(
         { error: "考试至少需要添加 1 道题后才能发布" },
+        { status: 400 },
+      );
+    }
+    const archivedProblem = examProblems.find(
+      (item) => item.problem.archivedAt !== null,
+    );
+    if (archivedProblem) {
+      return NextResponse.json(
+        { error: `题目《${archivedProblem.problem.title}》已经下架，请先从考试中移除` },
         { status: 400 },
       );
     }

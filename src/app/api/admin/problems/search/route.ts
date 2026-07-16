@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   if (problemType && !isProblemType(problemType)) {
     return NextResponse.json({ error: "题型不合法" }, { status: 400 });
   }
-  const where: Prisma.ProblemWhereInput = {};
+  const where: Prisma.ProblemWhereInput = { archivedAt: null };
   if (keyword) {
     where.title = {
       contains: keyword,
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     where.problemType = problemType;
   }
   const problems = await prisma.problem.findMany({
-    where: Object.keys(where).length ? where : undefined,
+    where,
     select: {
       id: true,
       title: true,
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
   });
 
   const categoryRows = await prisma.problem.findMany({
-    where: problemType ? { problemType } : undefined,
+    where: { archivedAt: null, ...(problemType ? { problemType } : {}) },
     distinct: ["category"],
     orderBy: { category: "asc" },
     select: { category: true },

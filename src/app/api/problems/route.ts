@@ -19,12 +19,13 @@ export async function GET(request: NextRequest) {
   }
   const { page, pageSize, skip } = readPaginationFromUrl(request.nextUrl.searchParams);
   const where = {
+    archivedAt: null,
     ...(category ? { category } : {}),
     ...(problemTypeValue ? { problemType: problemTypeValue } : {}),
   };
   const [problems, total] = await Promise.all([
     prisma.problem.findMany({
-      where: Object.keys(where).length ? where : undefined,
+      where,
       orderBy: { createdAt: "desc" },
       skip,
       take: pageSize,
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
         createdAt: true,
       },
     }),
-    prisma.problem.count({ where: Object.keys(where).length ? where : undefined }),
+    prisma.problem.count({ where }),
   ]);
   const submissionCounts = await getPracticeSubmissionCountsByProblem({
     problemIds: problems.map((problem) => problem.id),

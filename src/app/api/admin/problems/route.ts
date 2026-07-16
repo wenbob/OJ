@@ -25,12 +25,13 @@ export async function GET(request: NextRequest) {
   }
   const { page, pageSize, skip } = readPaginationFromUrl(request.nextUrl.searchParams);
   const where = {
+    archivedAt: null,
     ...(category ? { category } : {}),
     ...(problemType ? { problemType } : {}),
   };
   const [problems, total] = await Promise.all([
     prisma.problem.findMany({
-      where: Object.keys(where).length ? where : undefined,
+      where,
       include: {
         testCases: { orderBy: { id: "asc" } },
       },
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
       skip,
       take: pageSize,
     }),
-    prisma.problem.count({ where: Object.keys(where).length ? where : undefined }),
+    prisma.problem.count({ where }),
   ]);
   const submissionCounts = await getPracticeSubmissionCountsByProblem({
     problemIds: problems.map((problem) => problem.id),

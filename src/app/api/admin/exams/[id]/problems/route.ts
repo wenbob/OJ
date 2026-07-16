@@ -64,7 +64,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       select: { id: true, examType: true },
     }),
     prisma.problem.findMany({
-      where: { id: { in: problemIds } },
+      where: { archivedAt: null, id: { in: problemIds } },
       select: {
         id: true,
         title: true,

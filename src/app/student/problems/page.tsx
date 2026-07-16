@@ -39,6 +39,7 @@ export default async function StudentProblemsPage({ searchParams }: PageProps) {
     : "programming";
   const { page, pageSize, skip } = readPaginationFromObject(query);
   const where = {
+    archivedAt: null,
     problemType,
     ...(normalizedCategory ? { category: normalizedCategory } : {}),
   };
@@ -59,7 +60,7 @@ export default async function StudentProblemsPage({ searchParams }: PageProps) {
     }),
     prisma.problem.count({ where }),
     prisma.problem.findMany({
-      where: { problemType },
+      where: { archivedAt: null, problemType },
       select: { category: true },
       orderBy: { category: "asc" },
     }),

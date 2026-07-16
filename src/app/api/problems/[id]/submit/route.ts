@@ -83,7 +83,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     include: { testCases: { orderBy: { id: "asc" } } },
   });
 
-  if (!problem) {
+  if (!problem || problem.archivedAt) {
     return NextResponse.json({ error: "题目不存在" }, { status: 404 });
   }
   if (!code.trim()) {

@@ -44,9 +44,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error }, { status: 400 });
     }
 
-    const deletedCount = await prisma.$transaction(async (tx) => {
+    const archivedCount = await prisma.$transaction(async (tx) => {
       const existingProblems = await tx.problem.findMany({
-        where: { id: { in: ids } },
+        where: { archivedAt: null, id: { in: ids } },
         select: { id: true },
       });
       const existingIds = existingProblems.map((problem) => problem.id);
@@ -66,13 +66,27 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const result = await tx.problem.deleteMany({
-        where: { id: { in: existingIds } },
+      const examConflict = await tx.examProblem.findFirst({
+        where: {
+          problemId: { in: existingIds },
+          exam: { status: "published" },
+        },
+        select: { exam: { select: { title: true } } },
+      });
+      if (examConflict) {
+        throw new Error(
+          `选中题目正在已发布考试《${examConflict.exam.title}》中，请先取消发布`,
+        );
+      }
+
+      const result = await tx.problem.updateMany({
+        where: { archivedAt: null, id: { in: existingIds } },
+        data: { archivedAt: new Date() },
       });
       return result.count;
     });
 
-    return NextResponse.json({ deletedCount });
+    return NextResponse.json({ archivedCount, deletedCount: archivedCount });
   } catch (error) {
     if (error instanceof PayloadTooLargeError) {
       return NextResponse.json({ error: error.message }, { status: 413 });
@@ -80,11 +94,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error && error.message.includes("专项练习")
+          error instanceof Error &&
+          (error.message.includes("专项练习") || error.message.includes("已发布考试"))
             ? error.message
-            : "批量删除题目失败",
+            : "批量下架题目失败",
       },
-      { status: error instanceof Error && error.message.includes("专项练习") ? 409 : 500 },
+      {
+        status:
+          error instanceof Error &&
+          (error.message.includes("专项练习") || error.message.includes("已发布考试"))
+            ? 409
+            : 500,
+      },
     );
   }
 }

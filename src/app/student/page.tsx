@@ -47,7 +47,7 @@ export default async function StudentHomePage() {
     learningReview,
     activeAssignments,
   ] = await Promise.all([
-    prisma.problem.count(),
+    prisma.problem.count({ where: { archivedAt: null } }),
     prisma.exam.count({ where: { status: "published" } }),
     prisma.submission.count({
       where: { userId: user.id, submissionType: "practice" },
