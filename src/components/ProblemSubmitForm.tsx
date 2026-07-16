@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { SendHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ProblemAiAssist } from "@/components/ProblemAiAssist";
+import { ProblemRunPanel } from "@/components/ProblemRunPanel";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatRuntime } from "@/lib/format";
 import type { ProblemType } from "@/lib/objectiveProblem";
@@ -57,6 +58,7 @@ export function ProblemSubmitForm({
   problemType = "programming",
   problemId,
   refreshOnSuccess = false,
+  sampleCount = 0,
 }: {
   aiEnabled?: boolean;
   aiStudentId?: number;
@@ -72,6 +74,7 @@ export function ProblemSubmitForm({
   problemType?: ProblemType;
   problemId: number;
   refreshOnSuccess?: boolean;
+  sampleCount?: number;
 }) {
   const router = useRouter();
   const objective = problemType === "objective";
@@ -285,6 +288,17 @@ export function ProblemSubmitForm({
     result?.caseResults?.[0];
   const hasActualOutput =
     outputCase?.actualOutput !== undefined && outputCase.actualOutput !== null;
+  const submitButton = (
+    <button
+      className="btn btn-primary mt-4 w-full"
+      disabled={pending || disabled || timeExpired}
+      onClick={submit}
+      type="button"
+    >
+      <SendHorizontal size={16} />
+      {pending ? "提交中" : objective ? "提交答案" : "提交代码"}
+    </button>
+  );
 
   return (
     <>
@@ -331,15 +345,21 @@ export function ProblemSubmitForm({
           {loadError}
         </p>
       ) : null}
-      <button
-        className="btn btn-primary mt-4 w-full"
-        disabled={pending || disabled || timeExpired}
-        onClick={submit}
-        type="button"
-      >
-        <SendHorizontal size={16} />
-        {pending ? "提交中" : objective ? "提交答案" : "提交代码"}
-      </button>
+      {objective ? (
+        submitButton
+      ) : (
+        <ProblemRunPanel
+          code={code}
+          disabled={disabled || timeExpired}
+          disabledMessage={disabledMessage ?? "考试已结束，不能继续试运行"}
+          examId={examId}
+          problemId={problemId}
+          sampleCount={sampleCount}
+          submitPending={pending}
+        >
+          {submitButton}
+        </ProblemRunPanel>
+      )}
       {showObjectiveExamConfirm ? (
         <div
           aria-label="确认提交答案并交卷"

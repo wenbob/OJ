@@ -142,6 +142,7 @@ export default async function AdminPracticeProblemPage({ params }: PageProps) {
             detailHrefBase="/admin/submissions"
             problemType={problemType}
             problemId={problem.id}
+            sampleCount={samples.length}
           />
         </aside>
       </div>

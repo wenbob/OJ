@@ -1,8 +1,18 @@
 type QueueItem<T> = {
+  priority: JudgeQueuePriority;
   reject: (reason?: unknown) => void;
   resolve: (value: T) => void;
   task: () => Promise<T>;
 };
+
+export type JudgeQueuePriority = "submission" | "trial";
+
+export class JudgeQueueFullError extends Error {
+  constructor() {
+    super("评测队列繁忙，请稍后再提交");
+    this.name = "JudgeQueueFullError";
+  }
+}
 
 const queue: QueueItem<unknown>[] = [];
 let runningCount = 0;
@@ -35,18 +45,34 @@ function drainQueue() {
   }
 }
 
-export function enqueueJudgeTask<T>(task: () => Promise<T>) {
+export function enqueueJudgeTask<T>(
+  task: () => Promise<T>,
+  { priority = "submission" }: { priority?: JudgeQueuePriority } = {},
+) {
   return new Promise<T>((resolve, reject) => {
     if (queue.length >= readMaxQueueSize()) {
-      reject(new Error("评测队列繁忙，请稍后再提交"));
+      reject(new JudgeQueueFullError());
       return;
     }
 
-    queue.push({
+    const item = {
+      priority,
       reject,
       resolve: resolve as (value: unknown) => void,
       task,
-    });
+    } satisfies QueueItem<unknown>;
+    if (priority === "submission") {
+      const firstTrialIndex = queue.findIndex(
+        (queuedItem) => queuedItem.priority === "trial",
+      );
+      if (firstTrialIndex >= 0) {
+        queue.splice(firstTrialIndex, 0, item);
+      } else {
+        queue.push(item);
+      }
+    } else {
+      queue.push(item);
+    }
     drainQueue();
   });
 }

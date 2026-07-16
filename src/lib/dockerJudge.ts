@@ -2,44 +2,22 @@ import { spawn } from "node:child_process";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type {
-  JudgeCaseResult,
-  JudgeInput,
-  JudgeResult,
-} from "@/lib/judge";
+import {
+  buildRunCaseResult,
+  compileErrorRunResult,
+  summarizeRunCases,
+  type CppProcessResult,
+  type RunCppInput,
+  type RunCppResult,
+} from "@/lib/cppRun";
 import {
   DEFAULT_PROCESS_OUTPUT_LIMIT_BYTES,
   createLimitedOutputCollector,
 } from "@/lib/processOutputLimit";
-import type { SubmissionStatus } from "@/lib/status";
-
-type ProcessResult = {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  timedOut: boolean;
-  runtimeMs: number;
-  errorMessage?: string;
-};
 
 function readPositiveInt(value: string | undefined, fallback: number) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function normalizeOutput(value: string) {
-  return value
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .map((line) => line.replace(/[ \t]+$/g, ""))
-    .join("\n")
-    .trimEnd();
-}
-
-function truncateOutput(value: string, maxLength = 5000) {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength)}\n...（内容过长，已截断）`;
 }
 
 function dockerImage() {
@@ -82,7 +60,7 @@ function runProcess({
   input: string;
   timeoutMs: number;
   containerName: string;
-}): Promise<ProcessResult> {
+}): Promise<CppProcessResult> {
   return new Promise((resolve) => {
     const startedAt = Date.now();
     const outputLimitBytes = readPositiveInt(
@@ -110,7 +88,7 @@ function runProcess({
       cleanup.on("error", () => {});
     };
 
-    const finish = (result: Omit<ProcessResult, "runtimeMs">) => {
+    const finish = (result: Omit<CppProcessResult, "runtimeMs">) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -216,12 +194,13 @@ export function buildDockerRunArgs({
   ];
 }
 
-export async function dockerJudgeCppCode({
+export async function dockerRunCppCode({
   code,
+  expectedOutputs,
+  inputs,
   memoryLimitMb = readPositiveInt(process.env.JUDGE_MEMORY_LIMIT_MB, 128),
-  testCases,
   timeLimitMs = readPositiveInt(process.env.JUDGE_TIME_LIMIT_MS, 2000),
-}: JudgeInput): Promise<JudgeResult> {
+}: RunCppInput): Promise<RunCppResult> {
   const compileTimeoutMs = readPositiveInt(
     process.env.JUDGE_COMPILE_TIMEOUT_MS,
     30000,
@@ -250,46 +229,30 @@ export async function dockerJudgeCppCode({
     });
 
     if (compile.errorMessage) {
-      return {
-        status: "Compile Error",
-        passedCount: 0,
-        totalCount: testCases.length,
+      return compileErrorRunResult({
         runtimeMs: compile.runtimeMs,
         errorMessage: compile.errorMessage,
-        caseResults: [],
-      };
+      });
     }
 
     if (compile.timedOut) {
-      return {
-        status: "Compile Error",
-        passedCount: 0,
-        totalCount: testCases.length,
+      return compileErrorRunResult({
         runtimeMs: compile.runtimeMs,
         errorMessage: "Docker 编译超时",
-        caseResults: [],
-      };
+      });
     }
 
     if (compile.exitCode !== 0) {
       const compileMessage = compile.stderr || compile.stdout || "编译失败";
-      return {
-        status: "Compile Error",
-        passedCount: 0,
-        totalCount: testCases.length,
+      return compileErrorRunResult({
         runtimeMs: compile.runtimeMs,
         errorMessage: normalizeDockerErrorMessage(compileMessage),
-        caseResults: [],
-      };
+      });
     }
 
-    let passedCount = 0;
-    let runtimeMs = 0;
-    let firstError = "";
-    let status: SubmissionStatus = "Accepted";
-    const caseResults: JudgeCaseResult[] = [];
+    const cases = [];
 
-    for (const [index, testCase] of testCases.entries()) {
+    for (const [index, input] of inputs.entries()) {
       const runContainerName = createContainerName();
       const run = await runProcess({
         args: buildDockerRunArgs({
@@ -299,58 +262,32 @@ export async function dockerJudgeCppCode({
           workDir,
         }),
         containerName: runContainerName,
-        input: testCase.input,
+        input,
         timeoutMs: timeLimitMs,
       });
-      runtimeMs += run.runtimeMs;
-
-      let caseStatus: SubmissionStatus = "Accepted";
-      let errorMessage = "";
-      const actualOutput = truncateOutput(run.stdout);
-      const expectedOutput = truncateOutput(testCase.output);
-
-      if (run.timedOut) {
-        caseStatus = "Time Limit Exceeded";
-        errorMessage = `运行超过 ${timeLimitMs}ms`;
-      } else if (run.errorMessage || run.exitCode !== 0) {
-        caseStatus = "Runtime Error";
-        const runMessage =
-          run.errorMessage ||
-          run.stderr ||
-          "程序运行时异常，可能触发了容器资源限制";
-        errorMessage =
-          normalizeDockerErrorMessage(runMessage);
-      } else if (normalizeOutput(run.stdout) !== normalizeOutput(testCase.output)) {
-        caseStatus = "Wrong Answer";
-        errorMessage = "程序输出与标准输出不一致";
-      } else {
-        passedCount += 1;
-      }
-
-      if (caseStatus !== "Accepted" && status === "Accepted") {
-        status = caseStatus;
-        firstError = errorMessage;
-      }
-
-      caseResults.push({
-        caseIndex: index + 1,
-        status: caseStatus,
-        input: truncateOutput(testCase.input),
-        expectedOutput,
-        actualOutput,
-        runtimeMs: run.runtimeMs,
-        errorMessage: errorMessage ? truncateOutput(errorMessage) : undefined,
-      });
+      cases.push(
+        buildRunCaseResult({
+          caseIndex: index + 1,
+          expectedOutput: expectedOutputs?.[index],
+          input,
+          processResult: {
+            ...run,
+            errorMessage: run.errorMessage
+              ? normalizeDockerErrorMessage(run.errorMessage)
+              : undefined,
+            stderr: normalizeDockerErrorMessage(run.stderr),
+          },
+          runtimeErrorFallback:
+            "程序运行时异常，可能触发了容器资源限制",
+          timeLimitMs,
+        }),
+      );
     }
 
-    return {
-      status,
-      passedCount,
-      totalCount: testCases.length,
-      runtimeMs,
-      errorMessage: firstError || undefined,
-      caseResults,
-    };
+    return summarizeRunCases({
+      cases,
+      compared: expectedOutputs !== undefined,
+    });
   } finally {
     await rm(workDir, { recursive: true, force: true });
   }

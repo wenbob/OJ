@@ -318,6 +318,7 @@ export default async function StudentExamTakePage({
                 }
                 problemType={selectedProblemType}
                 problemId={selectedProblem.id}
+                sampleCount={samples.length}
                 refreshOnSuccess
               />
             </aside>

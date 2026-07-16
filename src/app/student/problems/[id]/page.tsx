@@ -177,6 +177,7 @@ export default async function StudentProblemDetailPage({
             }
             problemType={problemType}
             problemId={problem.id}
+            sampleCount={samples.length}
           />
         </aside>
       </div>

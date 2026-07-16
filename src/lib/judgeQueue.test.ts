@@ -64,6 +64,56 @@ describe("enqueueJudgeTask", () => {
     }
   });
 
+  it("runs a formal submission before trial runs that have not started", async () => {
+    const previousConcurrency = process.env.JUDGE_CONCURRENCY;
+    process.env.JUDGE_CONCURRENCY = "1";
+    const order: string[] = [];
+    let releaseRunning: (() => void) | undefined;
+
+    try {
+      const running = enqueueJudgeTask(
+        () =>
+          new Promise<void>((resolve) => {
+            order.push("running-trial");
+            releaseRunning = resolve;
+          }),
+        { priority: "trial" },
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const firstTrial = enqueueJudgeTask(
+        async () => {
+          order.push("trial-1");
+        },
+        { priority: "trial" },
+      );
+      const secondTrial = enqueueJudgeTask(
+        async () => {
+          order.push("trial-2");
+        },
+        { priority: "trial" },
+      );
+      const submission = enqueueJudgeTask(async () => {
+        order.push("submission");
+      });
+
+      releaseRunning?.();
+      await Promise.all([running, firstTrial, secondTrial, submission]);
+      expect(order).toEqual([
+        "running-trial",
+        "submission",
+        "trial-1",
+        "trial-2",
+      ]);
+    } finally {
+      if (previousConcurrency === undefined) {
+        delete process.env.JUDGE_CONCURRENCY;
+      } else {
+        process.env.JUDGE_CONCURRENCY = previousConcurrency;
+      }
+    }
+  });
+
   it("rejects new judge tasks when the pending queue is full", async () => {
     const previousConcurrency = process.env.JUDGE_CONCURRENCY;
     const previousMaxQueueSize = process.env.JUDGE_MAX_QUEUE_SIZE;

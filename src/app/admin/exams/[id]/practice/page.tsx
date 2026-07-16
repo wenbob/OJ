@@ -267,6 +267,7 @@ export default async function AdminExamPracticePage({
                 problemType={selectedProblemType}
                 problemId={selectedProblem.id}
                 refreshOnSuccess
+                sampleCount={samples.length}
               />
             </aside>
           </div>
