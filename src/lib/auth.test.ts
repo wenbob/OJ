@@ -15,6 +15,7 @@ describe("session tokens", () => {
     const token = createSessionToken({
       id: 1,
       role: "student",
+      sessionVersion: 4,
       username: "alice",
     });
 
@@ -24,5 +25,23 @@ describe("session tokens", () => {
     const { readSessionToken } = await import("./auth");
 
     expect(readSessionToken(token)).toBeNull();
+  });
+
+  it("round-trips the signed session version", async () => {
+    process.env.SESSION_SECRET = "test-secret-that-is-long-enough-for-session-tests";
+    const { createSessionToken, readSessionToken } = await import("./auth");
+    const token = createSessionToken({
+      id: 7,
+      role: "student",
+      sessionVersion: 12,
+      username: "bob",
+    });
+
+    expect(readSessionToken(token)).toMatchObject({
+      id: 7,
+      role: "student",
+      sessionVersion: 12,
+      username: "bob",
+    });
   });
 });

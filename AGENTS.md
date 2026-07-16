@@ -106,6 +106,11 @@ Generating static pages using 1 worker
 
 ## 题型与考试规则
 
+- 学生账号使用 `User.sessionVersion` 保证只保留最后一次登录会话；管理员允许多设备登录。修改密码或角色必须递增会话版本。
+- 学生新设备登录前必须先结算该学生所有 `in_progress` 考试；旧设备 API 返回 401，并在页面聚焦或每 30 秒检查时退出。
+- 学生考试答题页必须使用锁定布局；离开考试路由、后退、刷新、关闭页面或退出账号调用现有幂等交卷接口，同场切题和切换浏览器标签不交卷。
+- 日常题库的“已通过”实时读取该学生全部历史 `Accepted`，日常和考试、编程和客观题都计入；不得因后续失败取消标记。
+
 - `Problem.problemType` 和 `Exam.examType` 只允许 `programming`、`objective`。
 - 一场考试只能包含与 `Exam.examType` 相同的题目，题目搜索、Markdown 导入、添加题目和发布接口都必须校验。
 - 客观题标准答案保存在 `Problem.objectiveItems`，学生题目接口和考试答题接口不得返回 `answer` 字段。

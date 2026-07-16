@@ -6,7 +6,10 @@ import {
 } from "@/lib/pagination";
 import { isProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
-import { getPracticeSubmissionCountsByProblem } from "@/lib/problemSubmissionCounts";
+import {
+  getAcceptedProblemIds,
+  getPracticeSubmissionCountsByProblem,
+} from "@/lib/problemSubmissionCounts";
 
 export async function GET(request: NextRequest) {
   const auth = await requireApiUser(request);
@@ -40,12 +43,17 @@ export async function GET(request: NextRequest) {
     }),
     prisma.problem.count({ where }),
   ]);
-  const submissionCounts = await getPracticeSubmissionCountsByProblem({
-    problemIds: problems.map((problem) => problem.id),
-    userId: auth.user?.id,
-  });
+  const problemIds = problems.map((problem) => problem.id);
+  const [submissionCounts, acceptedProblemIds] = await Promise.all([
+    getPracticeSubmissionCountsByProblem({
+      problemIds,
+      userId: auth.user?.id,
+    }),
+    getAcceptedProblemIds({ problemIds, userId: auth.user.id }),
+  ]);
   const items = problems.map((problem) => ({
     ...problem,
+    isAccepted: acceptedProblemIds.has(problem.id),
     mySubmissionCount: submissionCounts.get(problem.id) ?? 0,
   }));
 

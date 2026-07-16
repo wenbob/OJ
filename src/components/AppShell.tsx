@@ -4,6 +4,7 @@ import { CurrentUser } from "@/lib/auth";
 import { LogoutButton } from "@/components/LogoutButton";
 import { RankEmblem } from "@/components/RankEmblem";
 import { ShellNav } from "@/components/ShellNav";
+import { SessionPresenceGuard } from "@/components/SessionPresenceGuard";
 import { getStudentRankingSummaryForUser } from "@/lib/ranking";
 import { getPublicSettings } from "@/lib/settings";
 
@@ -16,11 +17,13 @@ export async function AppShell({
   user,
   title,
   nav,
+  locked = false,
   children,
 }: {
   user: CurrentUser;
   title: string;
   nav: NavItem[];
+  locked?: boolean;
   children: React.ReactNode;
 }) {
   const { siteName } = await getPublicSettings();
@@ -45,24 +48,37 @@ export async function AppShell({
 
   return (
     <div className="min-h-screen">
+      {user.role === "student" ? <SessionPresenceGuard /> : null}
       <header className="arena-shell-header">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
-          <Link className="group flex items-center gap-3" href={user.role === "admin" ? "/admin" : "/student"}>
-            <span className="arena-brand-mark">
-              <Code2 size={20} />
-            </span>
-            <span>
-              <span className="block text-xs font-black uppercase tracking-[0.2em] text-clay">
-                {siteName}
-              </span>
-              <span className="block text-xl font-black tracking-tight text-ink-950">{title}</span>
-            </span>
-          </Link>
+          {locked ? (
+            <div
+              className="flex items-center gap-3"
+              aria-label={`${siteName} ${title}`}
+            >
+              <BrandIdentity siteName={siteName} title={title} />
+            </div>
+          ) : (
+            <Link
+              className="group flex items-center gap-3"
+              href={user.role === "admin" ? "/admin" : "/student"}
+            >
+              <BrandIdentity siteName={siteName} title={title} />
+            </Link>
+          )}
 
           <div className="flex flex-wrap items-center gap-2">
+            {locked ? (
+              <span className="border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-black text-amber-900">
+                考试进行中
+              </span>
+            ) : null}
             {currentRanking ? (
               <span className="identity-chip flex items-center gap-3 px-3 py-2">
-                <RankEmblem className="rank-emblem-sm" tierTitle={currentRanking.tierTitle} />
+                <RankEmblem
+                  className="rank-emblem-sm"
+                  tierTitle={currentRanking.tierTitle}
+                />
                 <span className="min-w-0">
                   <span className="block max-w-56 truncate text-sm font-black text-ink-950">
                     {user.username} · {currentRanking.displayTitle}
@@ -77,12 +93,32 @@ export async function AppShell({
                 {user.username} · {user.role === "admin" ? "管理员" : "学生"}
               </span>
             )}
-            <LogoutButton />
+            {!locked ? <LogoutButton /> : null}
           </div>
         </div>
-        <ShellNav items={shellNav} />
+        {!locked ? <ShellNav items={shellNav} /> : null}
       </header>
-      <main className="app-stage mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-9">{children}</main>
+      <main className="app-stage mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-9">
+        {children}
+      </main>
     </div>
+  );
+}
+
+function BrandIdentity({ siteName, title }: { siteName: string; title: string }) {
+  return (
+    <>
+      <span className="arena-brand-mark">
+        <Code2 size={20} />
+      </span>
+      <span>
+        <span className="block text-xs font-black uppercase tracking-[0.2em] text-clay">
+          {siteName}
+        </span>
+        <span className="block text-xl font-black tracking-tight text-ink-950">
+          {title}
+        </span>
+      </span>
+    </>
   );
 }

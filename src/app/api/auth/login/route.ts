@@ -8,6 +8,7 @@ import {
 } from "@/lib/loginRateLimit";
 import { verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
+import { finishExamRecord } from "@/lib/examScoring";
 import {
   PayloadTooLargeError,
   REQUEST_LIMITS,
@@ -67,10 +68,43 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "账号角色异常" }, { status: 403 });
   }
 
+  let sessionUser;
+  if (user.role === "student") {
+    const inProgressRecords = await prisma.examRecord.findMany({
+      where: { status: "in_progress", userId: user.id },
+      select: { examId: true },
+    });
+    for (const record of inProgressRecords) {
+      await finishExamRecord({
+        examId: record.examId,
+        status: "submitted",
+        userId: user.id,
+      });
+    }
+
+    sessionUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { sessionVersion: { increment: 1 } },
+      select: {
+        id: true,
+        role: true,
+        sessionVersion: true,
+        username: true,
+      },
+    });
+  } else {
+    sessionUser = {
+      id: user.id,
+      role: user.role,
+      sessionVersion: user.sessionVersion,
+      username: user.username,
+    };
+  }
+
   const safeUser = {
-    id: user.id,
-    username: user.username,
-    role: user.role as "student" | "admin",
+    id: sessionUser.id,
+    username: sessionUser.username,
+    role: sessionUser.role as "student" | "admin",
   };
   const response = NextResponse.json({
     user: safeUser,
@@ -78,5 +112,8 @@ export async function POST(request: NextRequest) {
   });
 
   clearLoginFailures(rateLimitKey);
-  return attachSessionResponse(response, safeUser);
+  return attachSessionResponse(response, {
+    ...safeUser,
+    sessionVersion: sessionUser.sessionVersion,
+  });
 }

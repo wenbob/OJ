@@ -71,6 +71,7 @@ function createTx() {
       upsert: vi.fn().mockResolvedValue({}),
     },
     user: {
+      findUnique: vi.fn().mockResolvedValue({ role: "student" }),
       findUniqueOrThrow: vi.fn().mockResolvedValue({
         createdAt: new Date("2026-06-28T00:00:00.000Z"),
         id: 2,
@@ -294,6 +295,59 @@ describe("admin users API custom title handling", () => {
       where: { userId: 2 },
     });
     expect(tx.studentProfile.upsert).not.toHaveBeenCalled();
+  });
+
+  it("revokes existing sessions when the password changes", async () => {
+    const tx = createTx();
+    mocks.prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+
+    const response = await PUT(
+      jsonRequest({
+        customTitle: "",
+        password: "new-secret-123",
+        role: "student",
+        username: "alice",
+      }),
+      routeContext("2"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(tx.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          passwordHash: "hashed-password",
+          sessionVersion: { increment: 1 },
+        }),
+      }),
+    );
+  });
+
+  it("revokes sessions when changing a student into an administrator", async () => {
+    const tx = createTx();
+    mocks.prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+
+    const response = await PUT(
+      jsonRequest({
+        customTitle: "",
+        password: "",
+        role: "admin",
+        username: "alice",
+      }),
+      routeContext("2"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(tx.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          role: "admin",
+          sessionVersion: { increment: 1 },
+        }),
+      }),
+    );
+    expect(tx.studentProfile.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 2 },
+    });
   });
 
   it("blocks non-admin callers before mutating data", async () => {

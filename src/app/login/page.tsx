@@ -4,7 +4,13 @@ import { getPublicSettings } from "@/lib/settings";
 import { LoginForm } from "./login-form";
 import { BookOpenCheck, Code2, ShieldCheck, Trophy } from "lucide-react";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reason?: string | string[] }>;
+}) {
+  const query = await searchParams;
+  const reason = Array.isArray(query.reason) ? query.reason[0] : query.reason;
   const [user, settings] = await Promise.all([
     getCurrentUser(),
     getPublicSettings(),
@@ -43,7 +49,7 @@ export default async function LoginPage() {
           <p className="mt-2 text-sm font-semibold leading-6 text-ink-600">
             使用老师发放的账号进入学生端或管理员端。
           </p>
-          <LoginForm />
+          <LoginForm reason={reason} />
         </div>
       </section>
     </main>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ExamCountdown } from "@/components/ExamCountdown";
+import { ExamExitGuard } from "@/components/ExamExitGuard";
 import { ExamSubmitButton } from "@/components/ExamSubmitButton";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
 import { ProblemSamples } from "@/components/ProblemSamples";
@@ -153,7 +154,8 @@ export default async function StudentExamTakePage({
     exam.examType !== "objective" || exam.problems.length > 1;
 
   return (
-    <AppShell nav={studentNav} title="学生端" user={user}>
+    <AppShell locked nav={studentNav} title="考试答题" user={user}>
+      <ExamExitGuard examId={exam.id} />
       <section className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
@@ -176,9 +178,6 @@ export default async function StudentExamTakePage({
           ) : (
             <ExamSubmitButton examId={exam.id} />
           )}
-          <Link className="btn btn-secondary" href={`/student/exams/${exam.id}`}>
-            返回考试详情
-          </Link>
         </div>
       </section>
 
@@ -288,12 +287,6 @@ export default async function StudentExamTakePage({
                         </span>
                         <span>{selectedLatest.runtimeMs}ms</span>
                         <span>{formatDate(selectedLatest.createdAt)}</span>
-                        <Link
-                          className="btn btn-secondary mt-2 w-full"
-                          href={`/student/submissions/${selectedLatest.id}`}
-                        >
-                          查看提交详情
-                        </Link>
                       </>
                     )}
                   </div>

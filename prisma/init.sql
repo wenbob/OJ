@@ -19,6 +19,7 @@ CREATE TABLE "User" (
   "username" TEXT NOT NULL,
   "passwordHash" TEXT NOT NULL,
   "role" TEXT NOT NULL,
+  "sessionVersion" INTEGER NOT NULL DEFAULT 0,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

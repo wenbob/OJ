@@ -12,6 +12,7 @@ model User {
   username                   String                    @unique
   passwordHash               String
   role                       String
+  sessionVersion             Int                       @default(0)
   createdAt                  DateTime                  @default(now())
   submissions                Submission[]
   examRecords                ExamRecord[]

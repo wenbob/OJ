@@ -10,7 +10,10 @@ import {
   readPaginationFromObject,
 } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
-import { getPracticeSubmissionCountsByProblem } from "@/lib/problemSubmissionCounts";
+import {
+  getAcceptedProblemIds,
+  getPracticeSubmissionCountsByProblem,
+} from "@/lib/problemSubmissionCounts";
 
 const studentNav = [
   { href: "/student", label: "首页" },
@@ -65,10 +68,11 @@ export default async function StudentProblemsPage({ searchParams }: PageProps) {
       orderBy: { category: "asc" },
     }),
   ]);
-  const submissionCounts = await getPracticeSubmissionCountsByProblem({
-    problemIds: problems.map((problem) => problem.id),
-    userId: user.id,
-  });
+  const problemIds = problems.map((problem) => problem.id);
+  const [submissionCounts, acceptedProblemIds] = await Promise.all([
+    getPracticeSubmissionCountsByProblem({ problemIds, userId: user.id }),
+    getAcceptedProblemIds({ problemIds, userId: user.id }),
+  ]);
 
   const categories = Array.from(
     new Set(
@@ -139,32 +143,51 @@ export default async function StudentProblemsPage({ searchParams }: PageProps) {
               </tr>
             </thead>
             <tbody>
-              {problems.map((problem) => (
-                <tr className="border-b border-ink-950/10" key={problem.id}>
-                  <td className="px-5 py-4 font-black">{problem.title}</td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {problem.difficulty}
-                  </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {problem.category || "未分类"}
-                  </td>
-                  <td className="px-5 py-4">
-                    <ProblemTypeBadge type={problem.problemType} />
-                  </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {submissionCounts.get(problem.id) ?? 0}
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <Link
-                      className="inline-flex items-center gap-1 text-sm font-black text-steel hover:text-clay"
-                      href={`/student/problems/${problem.id}`}
-                    >
-                      开始做题
-                      <ChevronRight size={16} />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {problems.map((problem) => {
+                const isAccepted = acceptedProblemIds.has(problem.id);
+                return (
+                  <tr
+                    className={`border-b border-ink-950/10 transition-colors ${
+                      isAccepted
+                        ? "bg-emerald-50/80 hover:bg-emerald-100/70"
+                        : ""
+                    }`}
+                    key={problem.id}
+                  >
+                    <td className="px-5 py-4 font-black">
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        {problem.title}
+                        {isAccepted ? (
+                          <span className="border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-xs font-black text-emerald-800">
+                            已通过
+                          </span>
+                        ) : null}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                      {problem.difficulty}
+                    </td>
+                    <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                      {problem.category || "未分类"}
+                    </td>
+                    <td className="px-5 py-4">
+                      <ProblemTypeBadge type={problem.problemType} />
+                    </td>
+                    <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                      {submissionCounts.get(problem.id) ?? 0}
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <Link
+                        className="inline-flex items-center gap-1 text-sm font-black text-steel hover:text-clay"
+                        href={`/student/problems/${problem.id}`}
+                      >
+                        {isAccepted ? "再次练习" : "开始做题"}
+                        <ChevronRight size={16} />
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
               {problems.length === 0 ? (
                 <tr>
                   <td

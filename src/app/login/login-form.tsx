@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
 
-export function LoginForm() {
+export function LoginForm({ reason }: { reason?: string }) {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -36,6 +36,13 @@ export function LoginForm() {
 
   return (
     <form className="mt-8 grid gap-5" onSubmit={submit}>
+      {reason ? (
+        <p className="border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900" role="status">
+          {reason === "session_replaced"
+            ? "该账号已在其他设备登录，请重新登录。"
+            : "登录状态已失效，请重新登录。"}
+        </p>
+      ) : null}
       <label className="grid gap-2 text-sm font-bold text-ink-800">
         用户名
         <input

@@ -72,12 +72,22 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
   try {
     const user = await prisma.$transaction(async (tx) => {
+      const existingUser = await tx.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+      if (!existingUser) throw new Error("用户不存在");
+      const shouldRevokeSessions = Boolean(password) || existingUser.role !== role;
+
       await tx.user.update({
         where: { id: userId },
         data: {
           username,
           role,
           ...(password ? { passwordHash: await hashPassword(password) } : {}),
+          ...(shouldRevokeSessions
+            ? { sessionVersion: { increment: 1 } }
+            : {}),
         },
         select: { id: true, username: true, role: true, createdAt: true },
       });
