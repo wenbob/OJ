@@ -178,7 +178,7 @@ Docker 编译超时
 本地打包：
 
 ```powershell
-cd D:\CODEX_sum\五一题目训练
+cd D:\CODEX_sum\c++在线平台系统
 git archive -o oj.zip HEAD
 ```
 
