@@ -215,6 +215,23 @@ export function SettingsForm({ initialSettings }: { initialSettings: SystemSetti
         <p className="mt-2 text-sm font-semibold text-ink-600">
           关闭后，学生日常刷题页不会显示 AI 按钮；服务端接口也会拒绝请求。
         </p>
+        <label className="mt-5 grid max-w-md gap-2 text-sm font-bold text-ink-800">
+          AI 对话记录保留时间
+          <select
+            className="field"
+            onChange={(event) => update("aiConversationRetentionDays", event.target.value)}
+            value={settings.aiConversationRetentionDays}
+          >
+            <option value="30">30 天</option>
+            <option value="90">90 天</option>
+            <option value="180">180 天（推荐）</option>
+            <option value="365">365 天</option>
+            <option value="0">永久保留</option>
+          </select>
+        </label>
+        <p className="mt-2 text-sm font-semibold text-ink-600">
+          只保存学生可见的问答和调用统计，不保存学生代码、完整 Prompt 或模型推理内容。
+        </p>
       </section>
 
       <section className="surface p-5">

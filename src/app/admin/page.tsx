@@ -10,6 +10,7 @@ import {
   Settings,
   Trophy,
   Users,
+  BrainCircuit,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requirePageUser } from "@/lib/auth";
@@ -127,6 +128,14 @@ export default async function AdminHomePage() {
             icon={<Activity size={23} />}
             label="教师学情看板"
             text="识别学生困难，确认并下发数据库中的专项练习"
+          />
+          <AdminEntry
+            className="lg:col-span-4"
+            count="AI"
+            href="/admin/ai-usage"
+            icon={<BrainCircuit size={23} />}
+            label="AI 使用与对话"
+            text="查看学生使用次数、调用消耗和与 AI 的具体问答"
           />
           <AdminEntry
             className="lg:col-span-4"

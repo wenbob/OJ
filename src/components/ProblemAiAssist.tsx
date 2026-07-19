@@ -11,22 +11,20 @@ import {
 import { useEffect, useRef, useState } from "react";
 import {
   appendAiChatExchange,
+  AI_CHAT_QUICK_PROMPTS,
+  createAiChatClientId,
   createAiChatStorageKey,
-  readStoredAiChat,
+  readStoredAiChatState,
+  serializeAiChatState,
   toAiChatHistory,
   type AiChatMessage,
 } from "@/lib/aiChat";
+import { readAiAssistEventStream } from "@/lib/aiAssistStream";
 
 type AiChatMode = "overview" | "next_step" | "code_review" | "question";
 
 const AI_CHAT_COOLDOWN_MS = 20_000;
 const AI_CHAT_MAX_QUESTION_CHARS = 300;
-
-const quickPrompts: Record<Exclude<AiChatMode, "question">, string> = {
-  overview: "我想先理解这道题",
-  next_step: "请告诉我接下来最应该做什么",
-  code_review: "请帮我检查当前代码哪里有问题",
-};
 
 export function ProblemAiAssist({
   code,
@@ -41,11 +39,14 @@ export function ProblemAiAssist({
 }) {
   const storageKey = createAiChatStorageKey({ examId, problemId, studentId });
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
+  const [conversationId, setConversationId] = useState("");
   const [loadedStorageKey, setLoadedStorageKey] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [pendingPrompt, setPendingPrompt] = useState("");
+  const [streamingAdvice, setStreamingAdvice] = useState("");
+  const [streamStatus, setStreamStatus] = useState("");
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const messageEndRef = useRef<HTMLDivElement>(null);
@@ -60,11 +61,16 @@ export function ProblemAiAssist({
     const frame = window.requestAnimationFrame(() => {
       if (!storageKey) {
         setMessages([]);
+        setConversationId("");
         setLoadedStorageKey(null);
         return;
       }
 
-      setMessages(readStoredAiChat(window.localStorage.getItem(storageKey)));
+      const stored = readStoredAiChatState(
+        window.localStorage.getItem(storageKey),
+      );
+      setMessages(stored.messages);
+      setConversationId(stored.conversationId);
       setLoadedStorageKey(storageKey);
       setQuestion("");
       setError("");
@@ -74,9 +80,12 @@ export function ProblemAiAssist({
   }, [storageKey]);
 
   useEffect(() => {
-    if (!storageKey || loadedStorageKey !== storageKey) return;
-    window.localStorage.setItem(storageKey, JSON.stringify(messages));
-  }, [loadedStorageKey, messages, storageKey]);
+    if (!storageKey || loadedStorageKey !== storageKey || !conversationId) return;
+    window.localStorage.setItem(
+      storageKey,
+      serializeAiChatState({ conversationId, messages }),
+    );
+  }, [conversationId, loadedStorageKey, messages, storageKey]);
 
   useEffect(() => {
     if (cooldownUntil <= Date.now()) return;
@@ -95,7 +104,7 @@ export function ProblemAiAssist({
       });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [messages, pending]);
+  }, [messages, pending, streamingAdvice, streamStatus]);
 
   function startCooldown(durationMs = AI_CHAT_COOLDOWN_MS) {
     const startedAt = Date.now();
@@ -105,7 +114,7 @@ export function ProblemAiAssist({
 
   async function ask(mode: AiChatMode) {
     const userText =
-      mode === "question" ? question.trim() : quickPrompts[mode];
+      mode === "question" ? question.trim() : AI_CHAT_QUICK_PROMPTS[mode];
     if (!userText) {
       setError("请先写下你对这道题的疑问。");
       return;
@@ -114,23 +123,35 @@ export function ProblemAiAssist({
     setError("");
     setPending(true);
     setPendingPrompt(userText);
+    setStreamingAdvice("");
+    setStreamStatus("AI 已收到问题，正在准备思考……");
+    const requestId = createAiChatClientId();
 
     try {
       const response = await fetch("/api/ai/problem-assist", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Accept: "text/event-stream",
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           code,
+          conversationId: conversationId || createAiChatClientId(),
           examId,
           history: toAiChatHistory(messages),
           mode,
           problemId,
           question: mode === "question" ? userText : undefined,
+          requestId,
+          stream: true,
         }),
       });
-      const data = await response.json().catch(() => null);
 
       if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        if (typeof data?.conversationId === "string" && data.conversationId) {
+          setConversationId(data.conversationId);
+        }
         const retryAfterSeconds = Number(data?.retryAfterSeconds);
         if (Number.isInteger(retryAfterSeconds) && retryAfterSeconds > 0) {
           startCooldown(retryAfterSeconds * 1000);
@@ -151,7 +172,56 @@ export function ProblemAiAssist({
         return;
       }
 
-      const advice = typeof data?.advice === "string" ? data.advice.trim() : "";
+      let advice = "";
+      let cached = false;
+      let streamCompleted = false;
+      let streamError: { error: string; status: number } | null = null;
+      const contentType = response.headers.get("content-type") || "";
+
+      if (contentType.includes("text/event-stream") && response.body) {
+        await readAiAssistEventStream(response.body, (event) => {
+          if (event.event === "status") {
+            setStreamStatus(event.data.message);
+          } else if (event.event === "chunk") {
+            advice += event.data.text;
+            setStreamingAdvice(advice);
+          } else if (event.event === "done") {
+            cached = event.data.cached;
+            streamCompleted = true;
+            setConversationId(event.data.conversationId);
+          } else if (event.event === "error") {
+            streamError = {
+              error: event.data.error,
+              status: event.data.status,
+            };
+            setConversationId(event.data.conversationId);
+          }
+        });
+        if (!streamCompleted && !streamError) {
+          streamError = {
+            error: "AI 回复连接中断，请稍后再试。",
+            status: 502,
+          };
+        }
+      } else {
+        const data = await response.json().catch(() => null);
+        advice = typeof data?.advice === "string" ? data.advice : "";
+        cached = Boolean(data?.cached);
+        if (typeof data?.conversationId === "string" && data.conversationId) {
+          setConversationId(data.conversationId);
+        }
+      }
+
+      if (streamError) {
+        const failure = streamError as { error: string; status: number };
+        if (failure.status === 502 || failure.status === 504) {
+          startCooldown();
+        }
+        setError(failure.error || "AI 请求失败，请稍后再试。");
+        return;
+      }
+
+      advice = advice.trim();
       if (!advice) {
         setError("AI 这次没有返回清楚的提示，请稍后再试。");
         startCooldown();
@@ -177,18 +247,29 @@ export function ProblemAiAssist({
         ),
       );
       if (mode === "question") setQuestion("");
-      if (!data?.cached) startCooldown();
+      if (!cached) startCooldown();
     } catch {
       setError("AI 请求失败，请稍后再试。");
       startCooldown();
     } finally {
       setPending(false);
       setPendingPrompt("");
+      setStreamingAdvice("");
+      setStreamStatus("");
     }
   }
 
   function clearChat() {
+    if (
+      messages.length > 0 &&
+      !window.confirm(
+        "确定清空当前面板吗？老师端已经保存的辅导记录会继续保留。",
+      )
+    ) {
+      return;
+    }
     setMessages([]);
+    setConversationId(createAiChatClientId());
     setError("");
     if (storageKey) window.localStorage.removeItem(storageKey);
   }
@@ -263,12 +344,32 @@ export function ProblemAiAssist({
             </article>
           ))}
           {pending ? (
-            <div className="border border-indigo-200 bg-indigo-50 p-3 text-sm font-bold leading-6 text-indigo-900">
-              <p>{pendingPrompt}</p>
-              <p className="mt-1 text-xs text-indigo-700">
-                AI 正在结合题目和你的代码思考，难题可能需要几分钟……
-              </p>
-            </div>
+            <>
+              <article className="ml-auto max-w-[92%] border border-steel/20 bg-steel/10 p-3 text-sm font-semibold leading-6 text-ink-900">
+                <p className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] text-ink-500">
+                  我的问题
+                </p>
+                <p>{pendingPrompt}</p>
+              </article>
+              {streamingAdvice ? (
+                <article className="max-w-[92%] border border-indigo-200 bg-white p-3 text-sm font-semibold leading-6 text-ink-800">
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] text-ink-500">
+                    AI 提示 · 正在回复
+                  </p>
+                  <p className="whitespace-pre-wrap">
+                    {streamingAdvice}
+                    <span
+                      aria-hidden="true"
+                      className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-indigo-500 align-middle"
+                    />
+                  </p>
+                </article>
+              ) : null}
+              <div className="border border-indigo-200 bg-indigo-50 p-3 text-xs font-bold leading-5 text-indigo-800">
+                <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
+                {streamStatus || "AI 正在结合题目和你的代码思考……"}
+              </div>
+            </>
           ) : null}
           <div ref={messageEndRef} />
         </div>
@@ -305,7 +406,7 @@ export function ProblemAiAssist({
         </button>
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold text-indigo-700">
-        <span>{question.length}/{AI_CHAT_MAX_QUESTION_CHARS} 字 · Ctrl/⌘ + Enter 发送</span>
+        <span>{question.length}/{AI_CHAT_MAX_QUESTION_CHARS} 字</span>
         {remainingSeconds > 0 ? (
           <span aria-live="polite">请 {remainingSeconds} 秒后再使用 AI</span>
         ) : (

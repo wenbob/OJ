@@ -17,7 +17,9 @@ describe("ProblemRunPanel", () => {
 
     expect(html).toContain("运行样例");
     expect(html).toContain("自定义输入");
-    expect(html).toContain("运行全部样例");
+    expect(html).toContain("在线自测");
+    expect(html).not.toContain("将一次编译并运行全部");
+    expect(html).not.toContain("样例通过不代表全部测试点通过");
     expect(html).toContain("提交代码");
   });
 

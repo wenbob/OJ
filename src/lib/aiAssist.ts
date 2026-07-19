@@ -27,6 +27,13 @@ export type AiAssistProblemContext = {
   samples: { input: string; output: string }[];
 };
 
+export type AiAssistProviderTelemetry = {
+  model: string | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+};
+
 export const AI_ASSIST_TIMEOUT_MS = 240_000;
 export const AI_ASSIST_MAX_TOKENS = 4_096;
 export const AI_ASSIST_MAX_CODE_BYTES = 24 * 1024;
@@ -223,7 +230,11 @@ export function sanitizeAiAssistResponse(content: string) {
   return cleaned;
 }
 
-export async function requestDeepSeekAdvice(prompt: string) {
+export async function requestDeepSeekAdvice(
+  prompt: string,
+  onTelemetry?: (telemetry: AiAssistProviderTelemetry) => void,
+  onProviderRequest?: () => void,
+) {
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("AI 服务暂未配置，请联系老师。");
@@ -235,6 +246,7 @@ export async function requestDeepSeekAdvice(prompt: string) {
 
   let response: Response;
   try {
+    onProviderRequest?.();
     response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
@@ -268,6 +280,12 @@ export async function requestDeepSeekAdvice(prompt: string) {
   }
 
   let data: {
+    model?: unknown;
+    usage?: {
+      prompt_tokens?: unknown;
+      completion_tokens?: unknown;
+      total_tokens?: unknown;
+    };
     choices?: {
       finish_reason?: unknown;
       message?: { content?: unknown; reasoning_content?: unknown };
@@ -281,6 +299,12 @@ export async function requestDeepSeekAdvice(prompt: string) {
     }
     throw new Error("AI 服务返回格式异常");
   }
+  onTelemetry?.({
+    model: typeof data.model === "string" ? data.model : model,
+    promptTokens: readOptionalTokenCount(data.usage?.prompt_tokens),
+    completionTokens: readOptionalTokenCount(data.usage?.completion_tokens),
+    totalTokens: readOptionalTokenCount(data.usage?.total_tokens),
+  });
   const choice = data?.choices?.[0];
   const content = choice?.message?.content;
   if (typeof content !== "string") {
@@ -300,4 +324,10 @@ export async function requestDeepSeekAdvice(prompt: string) {
   }
 
   return sanitized;
+}
+
+function readOptionalTokenCount(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+    ? value
+    : null;
 }

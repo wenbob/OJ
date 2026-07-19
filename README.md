@@ -239,8 +239,9 @@ npm run db:status
 - AI 只在编程题中出现，并同时受“学生个人 AI 权限”和日常练习/当前考试 AI 开关控制；任一条件关闭时页面隐藏，服务端也拒绝请求。
 - 学生可以选择“理解题目”“下一步提示”“检查当前代码”，也可以自由追问当前题目；后两类提示和自由提问会读取编辑器里的最新代码。
 - AI 只讲当前题目的意思、思路、下一步动作和问题位置，不提供完整代码、可复制代码语句、最终答案或隐藏测试数据。
-- 对话只保存在当前浏览器，按学生、题目和日常/考试隔离；最多保留 20 条，发给 AI 时只携带最近 12 条且不保存代码快照。
+- 学生端在当前浏览器保留最近 20 条消息，发给 AI 时只携带最近 12 条；服务端另存学生实际可见问答和调用统计供老师审阅，但不保存代码快照、完整 Prompt 或内部推理。
 - 同一学生在所有题目、考试和模式中共用服务端 20 秒冷却；只有不包含学生代码和对话的“理解题目”可使用同题 5 分钟缓存。
+- 请求发出后页面会立即显示思考状态，并每 2 秒更新用时；最终回复通过安全检查后逐段流式出现，难题等待期间不会呈现为页面卡死。
 
 ### 专项练习
 
@@ -597,6 +598,21 @@ POST /api/admin/problems/bulk-delete
 - 不能删除当前登录账号。
 - 密码使用 `passwordHash` 保存，不明文存储。
 
+### AI 使用与对话审阅
+
+页面：
+
+```text
+/admin/ai-usage
+/admin/ai-usage/[studentId]
+```
+
+- 按今天、近 7 天、近 30 天、全部或自定义日期查看学生 AI 使用、真实模型调用、缓存、失败和 Token。
+- 今日视图提供北京时间 24 小时分布；总览会保留未使用过 AI 的学生。
+- 学生明细按题目和对话展示学生可见提问、清洗后的最终回复、状态、耗时、模型和 Token。
+- 只记录功能上线后的新请求；学生清空本地面板不会删除教师端历史。
+- 不保存学生代码、客户端历史副本、完整 Prompt、隐藏测试点、完整错误日志或 `reasoning_content`。
+
 ### 日常提交记录
 
 页面：
@@ -722,6 +738,7 @@ ended      已结束，学生端不可继续答题和提交
 - 默认评测时间限制 `defaultTimeLimitMs`
 - 默认评测内存限制 `defaultMemoryLimitMb`
 - 日常练习 AI 助手开关 `aiPracticeEnabled`
+- AI 对话记录保留时间 `aiConversationRetentionDays`（30、90、180、365 天或永久，默认 180 天）
 - 是否允许学生自助注册 `allowStudentRegister`
 
 说明：
@@ -1038,6 +1055,8 @@ JUDGE_CONCURRENCY=1
 - `LearningAssignment`：教师下发给学生的专项练习，保存标题、说明、截止日期和归档状态。
 - `LearningAssignmentProblem`：专项练习题目及顺序、题目信息快照和 `completedAt`。
 - `LearningInsightSnapshot`：按学生和分析周期缓存 AI 教师摘要及聚合统计哈希。
+- `AiConversation`：学生在一道题中的一次 AI 对话，保存学生、日常/考试范围和题目/考试标题快照。
+- `AiConversationTurn`：AI 对话回合，保存可见问答、处理状态、响应时长、真实模型调用次数及 API 返回的 Token 数据；不保存代码或内部推理。
 - `SystemSetting`：系统设置，按 key-value 保存站点配置。
 
 提交类型：
@@ -1084,6 +1103,7 @@ npm run seed
 0006_learning_dashboard_assignments
 0007_problem_archiving
 0008_student_single_session
+0009_ai_usage_audit
 ```
 
 本地开发创建新迁移：
@@ -1179,6 +1199,8 @@ Windows 可以使用“任务计划程序”定时运行 `scripts/backup-sqlite.
 /admin/leaderboard
 /admin/learning
 /admin/learning/[studentId]
+/admin/ai-usage
+/admin/ai-usage/[studentId]
 /admin/submissions
 /admin/submissions/[id]
 /admin/exam-submissions

@@ -2,6 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearAiAssistAdviceCache } from "@/lib/aiAssistCache";
 import { clearAiAssistCooldowns } from "@/lib/aiAssistRateLimit";
 import { requestDeepSeekAdvice } from "@/lib/aiAssist";
+import {
+  readAiAssistEventStream,
+  type AiAssistStreamEvent,
+} from "@/lib/aiAssistStream";
+import {
+  completeAiUsageTurn,
+  createPendingAiUsageTurn,
+  failAiUsageTurn,
+  findExistingAiUsageTurn,
+} from "@/lib/aiUsageAudit";
 import { prisma } from "@/lib/prisma";
 import { POST } from "./route";
 
@@ -18,7 +28,29 @@ vi.mock("@/lib/aiAssist", async () => {
   );
   return {
     ...actual,
-    requestDeepSeekAdvice: vi.fn(async () => "先考虑边界，再处理输入输出。"),
+    requestDeepSeekAdvice: vi.fn(
+      async (
+        _prompt: string,
+        _onTelemetry?: unknown,
+        onProviderRequest?: () => void,
+      ) => {
+        onProviderRequest?.();
+        return "先考虑边界，再处理输入输出。";
+      },
+    ),
+  };
+});
+
+vi.mock("@/lib/aiUsageAudit", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/aiUsageAudit")>(
+    "@/lib/aiUsageAudit",
+  );
+  return {
+    ...actual,
+    findExistingAiUsageTurn: vi.fn(async () => ({ kind: "none" })),
+    createPendingAiUsageTurn: vi.fn(async () => ({ id: 1 })),
+    completeAiUsageTurn: vi.fn(async () => ({})),
+    failAiUsageTurn: vi.fn(async () => ({})),
   };
 });
 
@@ -82,6 +114,104 @@ describe("POST /api/ai/problem-assist", () => {
 
     expect(response.status).toBe(200);
     expect(body.advice).toContain("边界");
+    expect(body.conversationId).toBeTruthy();
+    expect(body.requestId).toBeTruthy();
+    expect(createPendingAiUsageTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "overview",
+        problemId: 10,
+        studentId: 1,
+        userContent: "我想先理解这道题",
+      }),
+    );
+    expect(createPendingAiUsageTurn).not.toHaveBeenCalledWith(
+      expect.objectContaining({ code: expect.anything() }),
+    );
+    expect(completeAiUsageTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ cached: false, providerCallCount: 1 }),
+    );
+  });
+
+  it("streams status updates and safe advice while preserving audit logging", async () => {
+    const response = await POST(
+      request({ problemId: 10, mode: "overview", code: "", stream: true }) as never,
+    );
+    const events: AiAssistStreamEvent[] = [];
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(response.headers.get("x-accel-buffering")).toBe("no");
+    if (!response.body) throw new Error("stream body is missing");
+    await readAiAssistEventStream(response.body, (event) => events.push(event));
+
+    expect(events[0]).toMatchObject({
+      event: "status",
+      data: { phase: "thinking" },
+    });
+    expect(
+      events
+        .filter((event) => event.event === "chunk")
+        .map((event) => (event.event === "chunk" ? event.data.text : ""))
+        .join(""),
+    ).toBe("先考虑边界，再处理输入输出。");
+    expect(events.at(-1)).toMatchObject({
+      event: "done",
+      data: { cached: false },
+    });
+    expect(completeAiUsageTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ cached: false, providerCallCount: 1 }),
+    );
+  });
+
+  it("streams a safe error event when the provider fails", async () => {
+    vi.mocked(requestDeepSeekAdvice).mockImplementationOnce(
+      async (_prompt, _onTelemetry, onProviderRequest) => {
+        onProviderRequest?.();
+        throw new Error("AI 服务请求失败：429");
+      },
+    );
+    const response = await POST(
+      request({ problemId: 10, mode: "overview", code: "", stream: true }) as never,
+    );
+    const events: AiAssistStreamEvent[] = [];
+
+    if (!response.body) throw new Error("stream body is missing");
+    await readAiAssistEventStream(response.body, (event) => events.push(event));
+
+    expect(response.status).toBe(200);
+    expect(events.at(-1)).toMatchObject({
+      event: "error",
+      data: {
+        error: "AI 服务正忙，请稍后再试。",
+        status: 502,
+      },
+    });
+    expect(failAiUsageTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ providerCallCount: 1 }),
+    );
+  });
+
+  it("keeps provider telemetry when saving the final audit record fails", async () => {
+    vi.mocked(completeAiUsageTurn).mockRejectedValueOnce(new Error("database busy"));
+
+    const response = await POST(
+      request({
+        code: "int main() { return 0; }",
+        mode: "next_step",
+        problemId: 10,
+      }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toContain("使用记录");
+    expect(requestDeepSeekAdvice).toHaveBeenCalledTimes(1);
+    expect(failAiUsageTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerCallCount: 1,
+        telemetry: expect.objectContaining({ totalTokens: null }),
+      }),
+    );
   });
 
   it("rejects students whose personal AI access is disabled", async () => {
@@ -97,6 +227,7 @@ describe("POST /api/ai/problem-assist", () => {
     expect(response.status).toBe(403);
     expect(body.error).toContain("尚未开通");
     expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
+    expect(createPendingAiUsageTurn).not.toHaveBeenCalled();
   });
 
   it("does not return cached advice when the practice AI switch is disabled", async () => {
@@ -214,8 +345,11 @@ describe("POST /api/ai/problem-assist", () => {
   });
 
   it("does not retry provider rate-limit errors immediately", async () => {
-    vi.mocked(requestDeepSeekAdvice).mockRejectedValueOnce(
-      new Error("AI 服务请求失败：429"),
+    vi.mocked(requestDeepSeekAdvice).mockImplementationOnce(
+      async (_prompt, _onTelemetry, onProviderRequest) => {
+        onProviderRequest?.();
+        throw new Error("AI 服务请求失败：429");
+      },
     );
 
     const response = await POST(
@@ -226,6 +360,38 @@ describe("POST /api/ai/problem-assist", () => {
     expect(response.status).toBe(502);
     expect(body.error).toBe("AI 服务正忙，请稍后再试。");
     expect(requestDeepSeekAdvice).toHaveBeenCalledTimes(1);
+    expect(failAiUsageTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorMessage: "AI 服务正忙，请稍后再试。",
+        providerCallCount: 1,
+      }),
+    );
+  });
+
+  it("replays a completed request id without another provider call", async () => {
+    vi.mocked(findExistingAiUsageTurn).mockResolvedValueOnce({
+      kind: "completed",
+      advice: "已经完成的回复",
+      cached: false,
+      conversationId: "conversation-fixed",
+      requestId: "request-fixed",
+    });
+
+    const response = await POST(
+      request({
+        conversationId: "conversation-fixed",
+        requestId: "request-fixed",
+        problemId: 10,
+        mode: "overview",
+      }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.replayed).toBe(true);
+    expect(body.advice).toBe("已经完成的回复");
+    expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
+    expect(createPendingAiUsageTurn).not.toHaveBeenCalled();
   });
 
   it("reports timeout errors clearly without retrying for another two minutes", async () => {

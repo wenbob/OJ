@@ -8,14 +8,31 @@ import {
   buildAiAssistPrompt,
   isAiAssistTimeoutError,
   requestDeepSeekAdvice,
+  type AiAssistProviderTelemetry,
   type AiAssistHistoryMessage,
   type AiAssistMode,
 } from "@/lib/aiAssist";
+import {
+  AiUsageAuditError,
+  completeAiUsageTurn,
+  createPendingAiUsageTurn,
+  emptyAiProviderTelemetry,
+  failAiUsageTurn,
+  findExistingAiUsageTurn,
+  isValidAiClientId,
+  mergeAiProviderTelemetry,
+  normalizeAiClientId,
+} from "@/lib/aiUsageAudit";
 import {
   createAiAssistAdviceCacheKey,
   getCachedAiAssistAdvice,
   setCachedAiAssistAdvice,
 } from "@/lib/aiAssistCache";
+import {
+  encodeAiAssistStreamEvent,
+  splitAiAssistAdvice,
+  type AiAssistStreamEvent,
+} from "@/lib/aiAssistStream";
 import {
   consumeAiAssistCooldown,
   reserveAiAssistRequest,
@@ -77,9 +94,22 @@ function readHistory(value: unknown) {
   return { error: null, history };
 }
 
+class AiAssistExecutionError extends Error {
+  constructor(
+    error: unknown,
+    readonly providerCallCount: number,
+    readonly telemetry: AiAssistProviderTelemetry,
+  ) {
+    super(error instanceof Error ? error.message : "AI 服务异常");
+    this.name = error instanceof Error ? error.name : "Error";
+  }
+}
+
 async function requestValidAiAdvice(prompt: string) {
   const maxAttempts = 2;
   let lastError: unknown;
+  let providerCallCount = 0;
+  let telemetry = { ...emptyAiProviderTelemetry };
   let retryInstruction =
     "上一次回答没有通过安全检查。请不要抄写、引用或改写学生的任何一行源码，不要出现代码符号、代码语句或完整表达式。只用行号和自然语言说明问题与下一步。";
 
@@ -91,11 +121,17 @@ async function requestValidAiAdvice(prompt: string) {
           : `${prompt}
 
 重新回答要求：${retryInstruction}`;
-      const advice = (await requestDeepSeekAdvice(attemptPrompt)).trim();
+      const advice = (
+        await requestDeepSeekAdvice(attemptPrompt, (value) => {
+          telemetry = mergeAiProviderTelemetry(telemetry, value);
+        }, () => {
+          providerCallCount += 1;
+        })
+      ).trim();
       if (!advice) {
         throw new Error("AI 这次没有返回清楚的思路，请稍后再试。");
       }
-      return advice;
+      return { advice, providerCallCount, telemetry };
     } catch (error) {
       lastError = error;
       if (
@@ -106,12 +142,12 @@ async function requestValidAiAdvice(prompt: string) {
           "上一次把时间都用在思考，没有写出最终正文。这次不要展开长推理，直接给出不超过 300 字的最终提示。仍然不能抄写源码或提供代码。";
       }
       if (attempt >= maxAttempts || !isRetryableAiAssistError(error)) {
-        throw error;
+        throw new AiAssistExecutionError(error, providerCallCount, telemetry);
       }
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error("AI 服务异常");
+  throw new AiAssistExecutionError(lastError, providerCallCount, telemetry);
 }
 
 function isRetryableAiAssistError(error: unknown) {
@@ -148,6 +184,216 @@ function safeAiAssistErrorMessage(error: unknown) {
   return "AI 服务异常，请稍后再试。";
 }
 
+class AiAssistResponseError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+async function executeLoggedAiAssist({
+  cacheKey,
+  prompt,
+  requestId,
+  startedAt,
+}: {
+  cacheKey: string | null;
+  prompt: string;
+  requestId: string;
+  startedAt: number;
+}) {
+  if (cacheKey) {
+    const cachedAdvice = getCachedAiAssistAdvice({ key: cacheKey });
+    if (cachedAdvice) {
+      try {
+        await completeAiUsageTurn({
+          advice: cachedAdvice,
+          cached: true,
+          completedAt: new Date(),
+          providerCallCount: 0,
+          requestId,
+          startedAt,
+          telemetry: emptyAiProviderTelemetry,
+        });
+      } catch {
+        throw new AiAssistResponseError(
+          "AI 使用记录暂时无法保存，请稍后再试。",
+          503,
+        );
+      }
+      return { advice: cachedAdvice, cached: true };
+    }
+  }
+
+  let result: Awaited<ReturnType<typeof requestValidAiAdvice>>;
+  try {
+    result = await requestValidAiAdvice(prompt);
+  } catch (error) {
+    const safeError = safeAiAssistErrorMessage(error);
+    try {
+      await failAiUsageTurn({
+        completedAt: new Date(),
+        errorMessage: safeError,
+        providerCallCount:
+          error instanceof AiAssistExecutionError ? error.providerCallCount : 0,
+        requestId,
+        startedAt,
+        telemetry:
+          error instanceof AiAssistExecutionError
+            ? error.telemetry
+            : emptyAiProviderTelemetry,
+      });
+    } catch {
+      // Stale pending rows are marked interrupted by the next maintenance pass.
+    }
+    throw new AiAssistResponseError(safeError, 502);
+  }
+
+  try {
+    await completeAiUsageTurn({
+      advice: result.advice,
+      cached: false,
+      completedAt: new Date(),
+      providerCallCount: result.providerCallCount,
+      requestId,
+      startedAt,
+      telemetry: result.telemetry,
+    });
+  } catch {
+    const storageError = "AI 使用记录暂时无法保存，请稍后再试。";
+    try {
+      await failAiUsageTurn({
+        completedAt: new Date(),
+        errorMessage: storageError,
+        providerCallCount: result.providerCallCount,
+        requestId,
+        startedAt,
+        telemetry: result.telemetry,
+      });
+    } catch {
+      // Maintenance later converts an unrecoverable pending row to interrupted.
+    }
+    throw new AiAssistResponseError(storageError, 503);
+  }
+
+  if (cacheKey) {
+    setCachedAiAssistAdvice({ advice: result.advice, key: cacheKey });
+  }
+  return { advice: result.advice, cached: false };
+}
+
+function createAiAssistStreamResponse({
+  conversationId,
+  execute,
+  release,
+  requestId,
+}: {
+  conversationId: string;
+  execute: () => Promise<{ advice: string; cached: boolean }>;
+  release: () => void;
+  requestId: string;
+}) {
+  const encoder = new TextEncoder();
+  let clientClosed = false;
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const emit = (event: AiAssistStreamEvent) => {
+        if (clientClosed) return;
+        try {
+          controller.enqueue(encoder.encode(encodeAiAssistStreamEvent(event)));
+        } catch {
+          clientClosed = true;
+        }
+      };
+      const streamStartedAt = Date.now();
+      emit({
+        event: "status",
+        data: {
+          phase: "thinking",
+          message: "AI 已收到问题，正在结合题目和你的代码思考……",
+          elapsedSeconds: 0,
+        },
+      });
+      const heartbeat = setInterval(() => {
+        const elapsedSeconds = Math.floor((Date.now() - streamStartedAt) / 1000);
+        emit({
+          event: "status",
+          data: {
+            phase: "thinking",
+            message: `AI 仍在认真思考，已用时 ${elapsedSeconds} 秒……`,
+            elapsedSeconds,
+          },
+        });
+      }, 2_000);
+
+      void (async () => {
+        try {
+          const result = await execute();
+          clearInterval(heartbeat);
+          emit({
+            event: "status",
+            data: {
+              phase: "answering",
+              message: "AI 已想好，正在整理提示……",
+            },
+          });
+          for (const text of splitAiAssistAdvice(result.advice)) {
+            emit({ event: "chunk", data: { text } });
+            await new Promise((resolve) => setTimeout(resolve, 24));
+          }
+          emit({
+            event: "done",
+            data: {
+              cached: result.cached,
+              conversationId,
+              requestId,
+            },
+          });
+        } catch (error) {
+          clearInterval(heartbeat);
+          emit({
+            event: "error",
+            data: {
+              error:
+                error instanceof AiAssistResponseError
+                  ? error.message
+                  : "AI 服务异常，请稍后再试。",
+              conversationId,
+              requestId,
+              status: error instanceof AiAssistResponseError ? error.status : 502,
+            },
+          });
+        } finally {
+          clearInterval(heartbeat);
+          release();
+          if (!clientClosed) {
+            try {
+              controller.close();
+            } catch {
+              clientClosed = true;
+            }
+          }
+        }
+      })();
+    },
+    cancel() {
+      clientClosed = true;
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireApiUser(request, "student");
   if (auth.response) return auth.response;
@@ -177,6 +423,23 @@ export async function POST(request: NextRequest) {
   const question =
     typeof record.question === "string" ? record.question.trim() : "";
   const parsedHistory = readHistory(record.history);
+  if (record.stream !== undefined && typeof record.stream !== "boolean") {
+    return NextResponse.json({ error: "流式参数不合法" }, { status: 400 });
+  }
+  const wantsStream =
+    record.stream === true ||
+    request.headers.get("accept")?.includes("text/event-stream") === true;
+  if (
+    record.conversationId !== undefined &&
+    !isValidAiClientId(record.conversationId)
+  ) {
+    return NextResponse.json({ error: "AI 对话标识不合法" }, { status: 400 });
+  }
+  if (record.requestId !== undefined && !isValidAiClientId(record.requestId)) {
+    return NextResponse.json({ error: "AI 请求标识不合法" }, { status: 400 });
+  }
+  const conversationId = normalizeAiClientId(record.conversationId);
+  const requestId = normalizeAiClientId(record.requestId);
 
   if (!Number.isInteger(problemId)) {
     return NextResponse.json({ error: "题目 ID 不合法" }, { status: 400 });
@@ -255,6 +518,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let examTitle: string | null = null;
   if (examId === null) {
     const enabled = boolSetting(await getSetting("aiPracticeEnabled"));
     if (!enabled) {
@@ -289,6 +553,7 @@ export async function POST(request: NextRequest) {
     if (!examRecord || examRecord.status !== "in_progress") {
       return NextResponse.json({ error: "考试未开始或已结束" }, { status: 403 });
     }
+    examTitle = exam.title;
   }
 
   const latestSubmission =
@@ -332,6 +597,52 @@ export async function POST(request: NextRequest) {
       ? createAiAssistAdviceCacheKey({ mode, problemId, prompt })
       : null;
 
+  let existingTurn: Awaited<ReturnType<typeof findExistingAiUsageTurn>>;
+  try {
+    existingTurn = await findExistingAiUsageTurn({
+      requestId,
+      studentId: auth.user.id,
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "AI 使用记录暂时无法读取，请稍后再试。" },
+      { status: 503 },
+    );
+  }
+  if (existingTurn.kind === "forbidden") {
+    return NextResponse.json({ error: "AI 请求标识无权使用" }, { status: 403 });
+  }
+  if (existingTurn.kind === "pending") {
+    return NextResponse.json(
+      {
+        error: "AI 正在处理这次请求，请等待完成",
+        conversationId: existingTurn.conversationId,
+        requestId: existingTurn.requestId,
+      },
+      { status: 409 },
+    );
+  }
+  if (existingTurn.kind === "completed") {
+    return NextResponse.json({
+      advice: existingTurn.advice,
+      cached: existingTurn.cached,
+      conversationId: existingTurn.conversationId,
+      replayed: true,
+      requestId: existingTurn.requestId,
+    });
+  }
+  if (existingTurn.kind === "failed") {
+    return NextResponse.json(
+      {
+        error: existingTurn.error,
+        conversationId: existingTurn.conversationId,
+        replayed: true,
+        requestId: existingTurn.requestId,
+      },
+      { status: 502 },
+    );
+  }
+
   const reservation = reserveAiAssistRequest({ userId: auth.user.id });
   if (!reservation.allowed) {
     const error =
@@ -370,24 +681,71 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (cacheKey) {
-    const cachedAdvice = getCachedAiAssistAdvice({ key: cacheKey });
-    if (cachedAdvice) {
-      reservation.release();
-      return NextResponse.json({ advice: cachedAdvice, cached: true });
-    }
+  try {
+    await createPendingAiUsageTurn({
+      clientConversationId: conversationId,
+      examId,
+      examTitle,
+      mode,
+      problemId,
+      problemTitle: problem.title,
+      requestId,
+      scope: examId === null ? "practice" : "exam",
+      studentId: auth.user.id,
+      userContent:
+        mode === "question"
+          ? question
+          : mode === "overview"
+            ? "我想先理解这道题"
+            : mode === "next_step"
+              ? "请告诉我接下来最应该做什么"
+              : "请帮我检查当前代码哪里有问题",
+    });
+  } catch (error) {
+    reservation.release();
+    return NextResponse.json(
+      {
+        error:
+          error instanceof AiUsageAuditError && error.reason === "forbidden"
+            ? error.message
+            : "AI 使用记录暂时无法保存，请稍后再试。",
+      },
+      { status: error instanceof AiUsageAuditError ? 403 : 503 },
+    );
+  }
+
+  const startedAt = Date.now();
+  const execute = () =>
+    executeLoggedAiAssist({ cacheKey, prompt, requestId, startedAt });
+
+  if (wantsStream) {
+    return createAiAssistStreamResponse({
+      conversationId,
+      execute,
+      release: reservation.release,
+      requestId,
+    });
   }
 
   try {
-    const advice = await requestValidAiAdvice(prompt);
-    if (cacheKey) {
-      setCachedAiAssistAdvice({ advice, key: cacheKey });
-    }
-    return NextResponse.json({ advice, cached: false });
+    const result = await execute();
+    return NextResponse.json({
+      advice: result.advice,
+      cached: result.cached,
+      conversationId,
+      requestId,
+    });
   } catch (error) {
     return NextResponse.json(
-      { error: safeAiAssistErrorMessage(error) },
-      { status: 502 },
+      {
+        error:
+          error instanceof AiAssistResponseError
+            ? error.message
+            : "AI 服务异常，请稍后再试。",
+        conversationId,
+        requestId,
+      },
+      { status: error instanceof AiAssistResponseError ? error.status : 502 },
     );
   } finally {
     reservation.release();

@@ -194,22 +194,11 @@ export function ProblemRunPanel({
         </div>
 
         {mode === "samples" ? (
-          <div className="mt-4 border border-ink-950/10 bg-white/75 p-3">
-            {sampleCount > 0 ? (
-              <>
-                <p className="text-sm font-bold text-ink-700">
-                  将一次编译并运行全部 {sampleCount} 组公开样例。
-                </p>
-                <p className="mt-1 text-xs font-semibold text-amber-800">
-                  样例通过不代表全部测试点通过，完成后仍需正式提交。
-                </p>
-              </>
-            ) : (
-              <p className="text-sm font-bold text-amber-800">
-                该题暂无公开样例，请切换到“自定义输入”。
-              </p>
-            )}
-          </div>
+          sampleCount === 0 ? (
+            <p className="mt-4 border border-ink-950/10 bg-white/75 p-3 text-sm font-bold text-amber-800">
+              该题暂无公开样例，请切换到“自定义输入”。
+            </p>
+          ) : null
         ) : (
           <div className="mt-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -250,7 +239,7 @@ export function ProblemRunPanel({
             : cooldownSeconds > 0
               ? `${cooldownSeconds} 秒后可再次运行`
               : mode === "samples"
-                ? `运行全部样例${sampleCount > 0 ? `（${sampleCount} 组）` : ""}`
+                ? "在线自测"
                 : "运行自定义输入"}
         </button>
       </section>

@@ -63,4 +63,19 @@ describe("browser identity system settings", () => {
       validateSystemSettings({ ...defaultSystemSettings, browserTitle: "标".repeat(61) }),
     ).toContain("60");
   });
+
+  it("accepts supported AI retention periods and rejects arbitrary values", () => {
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiConversationRetentionDays: "180",
+      }),
+    ).toBe("");
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiConversationRetentionDays: "45",
+      }),
+    ).toContain("保留时间");
+  });
 });

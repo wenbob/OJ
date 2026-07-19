@@ -5,6 +5,8 @@ import {
   appendAiChatExchange,
   createAiChatStorageKey,
   readStoredAiChat,
+  readStoredAiChatState,
+  serializeAiChatState,
   toAiChatHistory,
   type AiChatMessage,
 } from "./aiChat";
@@ -57,5 +59,17 @@ describe("AI chat browser history", () => {
     expect(updated).toHaveLength(AI_CHAT_MAX_STORED_MESSAGES);
     expect(history).toHaveLength(AI_CHAT_MAX_CONTEXT_MESSAGES);
     expect(history.at(-1)).toEqual({ role: "assistant", content: "消息 101" });
+  });
+
+  it("upgrades legacy arrays to a versioned conversation state", () => {
+    const legacy = JSON.stringify([message(1), message(2)]);
+    const state = readStoredAiChatState(legacy);
+
+    expect(state.conversationId).toBeTruthy();
+    expect(state.messages).toHaveLength(2);
+    expect(JSON.parse(serializeAiChatState(state))).toMatchObject({
+      version: 2,
+      conversationId: state.conversationId,
+    });
   });
 });

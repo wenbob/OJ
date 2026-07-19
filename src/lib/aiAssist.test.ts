@@ -191,6 +191,67 @@ describe("AI assist prompts", () => {
     expect(sanitizeAiAssistResponse("   \n\t  ")).toBe("");
   });
 
+  it("does not count a provider request when the API key is missing", async () => {
+    const originalApiKey = process.env.DEEPSEEK_API_KEY;
+    delete process.env.DEEPSEEK_API_KEY;
+    const onProviderRequest = vi.fn();
+
+    try {
+      await expect(
+        requestDeepSeekAdvice("题目", undefined, onProviderRequest),
+      ).rejects.toThrow("暂未配置");
+      expect(onProviderRequest).not.toHaveBeenCalled();
+    } finally {
+      if (originalApiKey === undefined) {
+        delete process.env.DEEPSEEK_API_KEY;
+      } else {
+        process.env.DEEPSEEK_API_KEY = originalApiKey;
+      }
+    }
+  });
+
+  it("reports actual provider attempts and returned token usage", async () => {
+    const originalFetch = global.fetch;
+    const originalApiKey = process.env.DEEPSEEK_API_KEY;
+    process.env.DEEPSEEK_API_KEY = "test-key";
+    const onTelemetry = vi.fn();
+    const onProviderRequest = vi.fn();
+    global.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          model: "deepseek-v4-pro",
+          usage: {
+            prompt_tokens: 120,
+            completion_tokens: 30,
+            total_tokens: 150,
+          },
+          choices: [{ message: { content: "先读清楚输入，再判断范围。" } }],
+        }),
+        { status: 200 },
+      ),
+    ) as never;
+
+    try {
+      await expect(
+        requestDeepSeekAdvice("题目", onTelemetry, onProviderRequest),
+      ).resolves.toContain("判断范围");
+      expect(onProviderRequest).toHaveBeenCalledTimes(1);
+      expect(onTelemetry).toHaveBeenCalledWith({
+        model: "deepseek-v4-pro",
+        promptTokens: 120,
+        completionTokens: 30,
+        totalTokens: 150,
+      });
+    } finally {
+      global.fetch = originalFetch;
+      if (originalApiKey === undefined) {
+        delete process.env.DEEPSEEK_API_KEY;
+      } else {
+        process.env.DEEPSEEK_API_KEY = originalApiKey;
+      }
+    }
+  });
+
   it("does not expose reasoning-only responses as student advice", async () => {
     const originalFetch = global.fetch;
     const originalApiKey = process.env.DEEPSEEK_API_KEY;

@@ -21,6 +21,7 @@ export const defaultSystemSettings = {
   defaultMemoryLimitMb: "128",
   allowStudentRegister: "false",
   aiPracticeEnabled: "false",
+  aiConversationRetentionDays: "180",
 };
 
 export type SystemSettingKey = keyof typeof defaultSystemSettings;
@@ -140,6 +141,9 @@ export function validateSystemSettings(settings: SystemSettings) {
     return "默认评测内存限制必须大于 0";
   }
   if (!settings.defaultCppTemplate.trim()) return "默认 C++ 代码模板不能为空";
+  if (!["0", "30", "90", "180", "365"].includes(settings.aiConversationRetentionDays)) {
+    return "AI 对话保留时间不合法";
+  }
   return "";
 }
 

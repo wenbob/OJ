@@ -32,6 +32,7 @@ export async function AppShell({
     : null;
   const supplementalItems = user.role === "admin"
     ? [
+        { href: "/admin/ai-usage", label: "AI 使用" },
         { href: "/admin/learning", label: "学情看板" },
         { href: "/admin/leaderboard", label: "天梯榜" },
       ]

@@ -146,6 +146,9 @@ DEEPSEEK_MODEL=deepseek-v4-pro
 - 选择判断题不开放 AI 助手，避免泄露答案。
 - 服务端统一执行 20 秒冷却；只有不含个人代码和对话的“理解题目”使用同题 5 分钟缓存。
 - DeepSeek 请求超时为 240 秒，输出预算为 4096 tokens；对推理未完成或输出不合格的结果返回友好错误，不把内部推理内容交给学生。
+- 新学生端使用 SSE 接收思考心跳和安全回复片段，旧客户端 JSON 响应继续兼容；回复必须先通过完整安全清洗，不能直接透传上游原始 token。
+- AI 请求进入实际处理后会写入 `AiConversation` / `AiConversationTurn`，供管理员查看使用量和学生可见问答；缓存命中不会虚增模型调用或 Token。
+- 审计记录不保存代码、完整 Prompt、客户端历史、隐藏测试点、内部推理、API Key 或请求头；默认保留 180 天，可在系统设置改为 30、90、365 天或永久。
 
 ## 3. Docker Judge 镜像说明
 
@@ -217,13 +220,14 @@ server {
         proxy_http_version 1.1;
         proxy_read_timeout 600s;
         proxy_send_timeout 600s;
+        proxy_buffering off;
+        proxy_cache off;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection "";
     }
 
     location / {
