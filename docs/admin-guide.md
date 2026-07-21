@@ -279,6 +279,15 @@ npx tsx scripts/sync-luogu-objective-problems.ts
 
 确认输出后再加 `--apply` 更新。脚本以洛谷有题公开原文为准，校验题干、选项、答案、分值和数学公式，只原位更新已存在的正式真题，不创建缺失套题，也不改变题目 ID 和提交关联。
 
+如果需要直接修正 `D:\GESP-md文档\选择判断` 下一级至三级的原始版和标准导入版 Markdown，先只读预检，再显式写入：
+
+```bash
+npx tsx scripts/sync-luogu-objective-markdown.ts
+npx tsx scripts/sync-luogu-objective-markdown.ts --apply
+```
+
+脚本固定核对 41 套真题、82 份 Markdown，写入前会在 `D:\GESP-md文档\backups` 建立逐文件备份；也可用 `--root=绝对路径` 指定其他选择判断目录。题库 Markdown 位于项目仓库之外，不会随网站代码发布或推送到 GitHub。
+
 ## 7. 如何创建模拟考试
 
 进入：
