@@ -41,5 +41,27 @@
 
 ## GitHub
 
-- 功能提交：`64ab4fb Add batch problem import and objective math rendering`。
-- 已推送到 `origin/main` 和 `oj2026/main`。
+- 首次功能提交：`64ab4fb Add batch problem import and objective math rendering`，已推送到 `origin/main` 和 `oj2026/main`。
+
+## 同日增量：编程题富文本与解析卡死修复
+
+- 新增共享 `ProblemRichText` 组件，把 KaTeX、代码块、行内代码、标题、列表、表格、链接、粗体和洛谷受信任 CDN 图片扩展到编程题题面、选择判断题以及两类导入预览。
+- Markdown 解析器会移除文件开头的 UTF-8 BOM，避免首个一级标题无法识别。
+- 解析后页面卡死的根因是递归处理粗体内容时复用了模块级 `/g` 正则，嵌套调用会改写同一个 `lastIndex`，外层循环可能反复匹配同一位置。修复后每次递归调用都会创建独立正则实例。
+- 本次只调整网站解析与显示，没有导入或修改 `D:\GESP-md文档` 中的题目数据，也没有数据库结构变更。
+
+增量本地验证：
+
+- `npm run test`：55 个测试文件、264 个测试全部通过。
+- `npx tsc --noEmit` 和 `npm run lint` 通过。
+- 16 题来源文档解析未再卡死：5 道满足至少两组样例的题目可解析，其余 11 道只因样例不足被正常拒绝；预览共生成 129 个 KaTeX 节点。
+
+增量发布：
+
+- 功能提交：`55d390e fix: render imported problem markdown safely`。
+- Linux standalone 包大小为 49,724,539 字节，SHA-256 为 `f40dd22f0479a3c141714e955b4c4153611be53d6bf9ada5b88f9ab031ac38e3`。
+- 数据库备份：`/www/backups/prod-20260721-165242-before-problem-rich-text.db`；旧版本目录：`/www/oj-old-20260721-165242`。
+- 服务器没有执行 `npm ci`、Next.js 构建、`seed` 或数据库初始化；9 个迁移均已应用，没有待执行迁移。
+- 切换前后数据计数一致：用户 27、题目 760、提交 1428、测试点 1345、考试记录 2。SQLite `quick_check` 为 `ok`，外键检查无异常。
+- PM2、内外网健康检查、登录页与实际静态资源、`127.0.0.1:3000` 监听均正常；真实 Docker Judge 运行 `19 + 23` 得到 `42`，状态为 Accepted，且提交总数未增加。
+- 本次增量和洁癖收尾提交仅按要求推送到 `origin/main`；未更新 `oj2026` 远端。

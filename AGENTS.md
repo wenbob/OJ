@@ -121,6 +121,7 @@ Generating static pages using 1 worker
 - 客观题提交不进入 Docker Judge；每行对应一道小题，逐题结果写入 `SubmissionCaseResult`，考试分数取单次提交的最高小题分值合计。
 - 客观题小题分值必须是正整数，`ExamProblem.score` 使用小题分值总和。
 - 客观题 Markdown 导入选项必须是单行 `A. 选项内容`；题干可用代码块，选项内代码或输出用行内代码，不要支持或生成 `A.` 后接代码块的格式。
+- 题面与导入预览的 Markdown/KaTeX 渲染集中在 `src/components/ProblemRichText.tsx`，编程题和客观题必须复用；递归解析行内内容时，每次调用都要新建带 `g` 标志的正则，禁止共享会改变 `lastIndex` 的模块级正则。
 - 单大题选择判断考试和管理员考试练习页隐藏左侧“考试题目”导航以扩大题面；同场多题时必须保留导航。
 - 选择判断考试通过“提交答案”二次确认后交卷，提示文案不要写死“右侧”，避免布局变化后失真。
 
