@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
+import { ProblemRichText } from "@/components/ProblemRichText";
 import { ProblemSamples } from "@/components/ProblemSamples";
 import { ProblemSubmitForm } from "@/components/ProblemSubmitForm";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
@@ -285,7 +286,11 @@ function ProblemSection({ title, value }: { title: string; value: string }) {
   return (
     <section className="mt-8">
       <h3 className="text-xl font-black">{title}</h3>
-      <p className="mt-3 whitespace-pre-wrap leading-7 text-ink-800">{value}</p>
+      <ProblemRichText
+        className="mt-3 leading-7 text-ink-800"
+        codeClassName="text-sm"
+        value={value}
+      />
     </section>
   );
 }

@@ -3,6 +3,7 @@
 import { Check, FileText, FileUp, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, useState } from "react";
+import { ProblemRichText } from "@/components/ProblemRichText";
 import type {
   ObjectiveItem,
   ProblemType,
@@ -506,7 +507,11 @@ function PreviewBlock({ title, value }: { title: string; value: string }) {
   return (
     <div>
       <h3 className="text-sm font-black text-ink-800">{title}</h3>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink-700">{value}</p>
+      <ProblemRichText
+        className="mt-2 text-sm leading-6 text-ink-700"
+        codeClassName="text-xs"
+        value={value}
+      />
     </div>
   );
 }
@@ -561,14 +566,18 @@ function ObjectivePreview({ items }: { items: ObjectiveItem[] }) {
                 答案 {item.answer} · {item.score} 分
               </span>
             </div>
-            <p className="mt-2 whitespace-pre-wrap text-sm font-semibold text-ink-800">
-              {item.stem}
-            </p>
-            <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-ink-600">
-              {item.options
+            <ProblemRichText
+              className="mt-2 text-sm font-semibold text-ink-800"
+              codeClassName="text-xs"
+              value={item.stem}
+            />
+            <ProblemRichText
+              className="mt-2 text-xs leading-5 text-ink-600"
+              codeClassName="text-xs"
+              value={item.options
                 .map((option) => `${option.label}. ${option.text}`)
                 .join("\n")}
-            </p>
+            />
           </div>
         ))}
       </div>

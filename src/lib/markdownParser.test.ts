@@ -298,6 +298,13 @@ int main() { return 0; }
 });
 
 describe("parseProblemsMarkdown", () => {
+  it("接受 Windows UTF-8 BOM 开头的批量文档", () => {
+    const result = parseProblemsMarkdown(`\uFEFF${validMarkdown}`);
+
+    expect(result.errors).toEqual([]);
+    expect(result.problems).toHaveLength(1);
+  });
+
   it("单题 Markdown 正常解析", () => {
     const result = parseProblemsMarkdown(validMarkdown);
 

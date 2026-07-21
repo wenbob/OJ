@@ -40,7 +40,10 @@ function cleanText(value?: string) {
 }
 
 function normalizeMarkdown(markdown: string) {
-  return markdown.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  return markdown
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
 }
 
 function escapeRegExp(value: string) {
