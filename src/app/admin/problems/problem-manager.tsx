@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FileUp, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import {
   parseObjectiveItems,
@@ -115,6 +115,7 @@ export function ProblemManager({
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const reloadRequestIdRef = useRef(0);
   const allCurrentPageSelected =
     problems.length > 0 && problems.every((problem) => selectedIds.includes(problem.id));
 
@@ -133,31 +134,44 @@ export function ProblemManager({
     page = pagination.page,
     problemType = selectedProblemType,
   ) {
+    const requestId = ++reloadRequestIdRef.current;
     const query = new URLSearchParams();
     if (category) query.set("category", category);
     query.set("problemType", problemType);
     query.set("page", String(page));
     query.set("pageSize", String(pagination.pageSize));
-    const response = await fetch(`/api/admin/problems?${query}`);
-    const data = await response.json();
-    if (response.ok) {
-      const nextProblems: ProblemItem[] = data.items ?? data.problems ?? [];
-      setProblems(nextProblems);
-      setSelectedIds([]);
-      setPagination({
-        total: data.total ?? nextProblems.length,
-        page: data.page ?? page,
-        pageSize: data.pageSize ?? pagination.pageSize,
-        totalPages: data.totalPages ?? 1,
-      });
-      setCategoryOptions((current) =>
-        Array.from(
-          new Set([
-            ...current,
-            ...nextProblems.map((problem) => problem.category).filter(Boolean),
-          ]),
-        ),
-      );
+    try {
+      const response = await fetch(`/api/admin/problems?${query}`);
+      const data = await response.json();
+      if (requestId !== reloadRequestIdRef.current) return;
+      if (response.ok) {
+        const nextProblems: ProblemItem[] = data.items ?? data.problems ?? [];
+        setProblems(nextProblems);
+        setSelectedIds([]);
+        setPagination({
+          total: data.total ?? nextProblems.length,
+          page: data.page ?? page,
+          pageSize: data.pageSize ?? pagination.pageSize,
+          totalPages: data.totalPages ?? 1,
+        });
+        const categoryValues: unknown[] = Array.isArray(data.categories)
+          ? data.categories.filter(
+              (value: unknown): value is string =>
+                typeof value === "string" && Boolean(value.trim()),
+            )
+          : nextProblems.map((problem) => problem.category).filter(Boolean);
+        const responseCategories = categoryValues.filter(
+          (value): value is string => typeof value === "string",
+        );
+        setCategoryOptions(
+          Array.from(new Set(responseCategories.map((value) => value.trim()))),
+        );
+        return;
+      }
+      setError(data.error ?? "题目列表加载失败");
+    } catch {
+      if (requestId !== reloadRequestIdRef.current) return;
+      setError("题目列表加载失败，请稍后重试");
     }
   }
 
@@ -178,6 +192,7 @@ export function ProblemManager({
   async function selectProblemType(problemType: ProblemType) {
     setSelectedProblemType(problemType);
     setSelectedCategory("");
+    setCategoryOptions([]);
     setSelectedIds([]);
     setMessage("");
     setError("");

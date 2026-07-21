@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { BrowserIdentity } from "@/components/BrowserIdentity";
 import { resolveBrowserTitle } from "@/lib/browserIdentity";
 import { getPublicSettings } from "@/lib/settings";
+import "katex/dist/katex.min.css";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {

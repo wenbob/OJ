@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, FileUp, Search } from "lucide-react";
+import { Check, FileText, FileUp, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, useState } from "react";
 import type {
@@ -20,7 +20,26 @@ type ParsedProblem = {
   samples: { input: string; output: string }[];
   dataRange: string;
   objectiveItems?: ObjectiveItem[];
+  sourceDocumentIndex: number;
+  sourceFileName: string;
 };
+
+type ImportDocument = {
+  id: string;
+  markdown: string;
+  name: string;
+};
+
+type ImportDocumentResult = {
+  errors: string[];
+  index: number;
+  name: string;
+  problemCount: number;
+};
+
+const MAX_IMPORT_DOCUMENTS = 20;
+const MAX_IMPORT_DOCUMENT_BYTES = 1024 * 1024;
+const MAX_IMPORT_BATCH_BYTES = 8 * 1024 * 1024;
 
 const template = `# A+B 问题
 
@@ -129,32 +148,91 @@ odd
 
 export function ImportClient() {
   const router = useRouter();
-  const [markdown, setMarkdown] = useState(template);
+  const [documents, setDocuments] = useState<ImportDocument[]>([
+    { id: "programming-template", markdown: template, name: "编程题模板.md" },
+  ]);
+  const [activeDocumentId, setActiveDocumentId] = useState(
+    "programming-template",
+  );
   const [defaultDifficulty, setDefaultDifficulty] = useState("入门");
   const [defaultCategory, setDefaultCategory] = useState("基础语法");
   const [preview, setPreview] = useState<ParsedProblem[]>([]);
+  const [documentResults, setDocumentResults] = useState<ImportDocumentResult[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const activeDocument =
+    documents.find((document) => document.id === activeDocumentId) ??
+    documents[0];
+
+  function clearPreview() {
+    setPreview([]);
+    setDocumentResults([]);
+    setParseErrors([]);
+  }
+
+  function applyTemplate(name: string, markdown: string, id: string) {
+    setDocuments([{ id, markdown, name }]);
+    setActiveDocumentId(id);
+    clearPreview();
+    setError("");
+  }
 
   async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setMarkdown(await file.text());
-    setPreview([]);
-    setParseErrors([]);
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    if (files.length === 0) return;
+
+    if (files.length > MAX_IMPORT_DOCUMENTS) {
+      setError(`一次最多选择 ${MAX_IMPORT_DOCUMENTS} 个 Markdown 文档`);
+      return;
+    }
+
+    const invalidFile = files.find((file) => !file.name.toLowerCase().endsWith(".md"));
+    if (invalidFile) {
+      setError(`《${invalidFile.name}》不是 .md 文档`);
+      return;
+    }
+
+    const oversizedFile = files.find(
+      (file) => file.size > MAX_IMPORT_DOCUMENT_BYTES,
+    );
+    if (oversizedFile) {
+      setError(`《${oversizedFile.name}》超过 1MB，暂时不能导入`);
+      return;
+    }
+
+    if (files.reduce((total, file) => total + file.size, 0) > MAX_IMPORT_BATCH_BYTES) {
+      setError("所选 Markdown 文档内容合计不能超过 8MB");
+      return;
+    }
+
+    const nextDocuments = await Promise.all(
+      files.map(async (file, index) => ({
+        id: `${file.name}:${file.size}:${file.lastModified}:${index}`,
+        markdown: await file.text(),
+        name: file.name,
+      })),
+    );
+    setDocuments(nextDocuments);
+    setActiveDocumentId(nextDocuments[0].id);
+    clearPreview();
     setError("");
   }
 
   async function parsePreview() {
     setPending(true);
     setError("");
-    setPreview([]);
-    setParseErrors([]);
+    clearPreview();
+    if (documents.length === 0) {
+      setPending(false);
+      setError("请先选择 Markdown 文档");
+      return;
+    }
     const response = await fetch("/api/admin/problems/import/parse", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ markdown, defaultDifficulty, defaultCategory }),
+      body: JSON.stringify({ documents, defaultDifficulty, defaultCategory }),
     });
     const data = await response.json();
     setPending(false);
@@ -164,6 +242,9 @@ export function ImportClient() {
       return;
     }
     setPreview(Array.isArray(data.problems) ? data.problems : []);
+    setDocumentResults(
+      Array.isArray(data.documents) ? data.documents : [],
+    );
     setParseErrors(Array.isArray(data.errors) ? data.errors : []);
   }
 
@@ -196,15 +277,16 @@ export function ImportClient() {
           <div>
             <h1 className="text-2xl font-black">Markdown 导入题目</h1>
             <p className="mt-1 text-sm font-semibold text-ink-600">
-              每道题可以在 Markdown 内声明难度和分类；下方默认值只在文档缺少对应字段时兜底。
+              一次最多选择 20 个文档；每道题会按自己的题型、难度和分类生成标签，默认值只在缺少字段时兜底。
             </p>
           </div>
           <label className="btn btn-secondary cursor-pointer">
             <FileUp size={16} />
-            上传 .md
+            选择多个 .md
             <input
               accept=".md,text/markdown,text/plain"
               className="hidden"
+              multiple
               onChange={onFileChange}
               type="file"
             />
@@ -214,9 +296,7 @@ export function ImportClient() {
           <button
             className="btn btn-secondary px-3 py-2 text-sm"
             onClick={() => {
-              setMarkdown(template);
-              setPreview([]);
-              setParseErrors([]);
+              applyTemplate("编程题模板.md", template, "programming-template");
             }}
             type="button"
           >
@@ -225,23 +305,59 @@ export function ImportClient() {
           <button
             className="btn btn-secondary px-3 py-2 text-sm"
             onClick={() => {
-              setMarkdown(objectiveProblemMarkdownTemplate);
-              setPreview([]);
-              setParseErrors([]);
+              applyTemplate(
+                "选择判断题模板.md",
+                objectiveProblemMarkdownTemplate,
+                "objective-template",
+              );
             }}
             type="button"
           >
             使用选择判断模板
           </button>
         </div>
+        <div className="mt-4 border border-ink-950/10 bg-white/55 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-black text-ink-800">
+              已选择 {documents.length} 个文档
+            </p>
+            <p className="text-xs font-semibold text-ink-500">
+              点击文件名可检查或修改对应内容
+            </p>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {documents.map((document) => (
+              <button
+                className={`inline-flex max-w-full items-center gap-2 border px-3 py-2 text-left text-xs font-black ${
+                  activeDocument?.id === document.id
+                    ? "border-steel bg-steel text-white"
+                    : "border-ink-950/10 bg-white text-ink-700 hover:border-steel"
+                }`}
+                key={document.id}
+                onClick={() => setActiveDocumentId(document.id)}
+                title={document.name}
+                type="button"
+              >
+                <FileText size={14} />
+                <span className="truncate">{document.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <textarea
           className="field mt-3 min-h-[620px] resize-y font-mono text-sm leading-6"
           onChange={(event) => {
-            setMarkdown(event.target.value);
-            setPreview([]);
-            setParseErrors([]);
+            const markdown = event.target.value;
+            setDocuments((current) =>
+              current.map((document) =>
+                document.id === activeDocument?.id
+                  ? { ...document, markdown }
+                  : document,
+              ),
+            );
+            clearPreview();
           }}
-          value={markdown}
+          value={activeDocument?.markdown ?? ""}
         />
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <label className="grid gap-2 text-sm font-bold text-ink-800">
@@ -303,8 +419,22 @@ export function ImportClient() {
         {preview.length > 0 ? (
           <div className="mt-5 grid gap-5">
             <p className="border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">
-              共解析到 {preview.length} 道题
+              共解析 {documentResults.length} 个文档、{preview.length} 道题；编程题 {preview.filter((problem) => problem.problemType === "programming").length} 道，选择判断题 {preview.filter((problem) => problem.problemType === "objective").length} 道
             </p>
+            <div className="flex flex-wrap gap-2">
+              {documentResults.map((document) => (
+                <span
+                  className={`border px-2 py-1 text-xs font-black ${
+                    document.errors.length > 0
+                      ? "border-rose-200 bg-rose-50 text-rose-700"
+                      : "border-steel/20 bg-steel/10 text-steel"
+                  }`}
+                  key={`${document.index}-${document.name}`}
+                >
+                  {document.name} · {document.problemCount} 题
+                </span>
+              ))}
+            </div>
             {preview.map((problem, problemIndex) => (
               <details
                 className="border border-ink-950/10 bg-white/65 p-4 open:bg-white/82"
@@ -315,6 +445,18 @@ export function ImportClient() {
                   题目 {problemIndex + 1}：{problem.title}
                 </summary>
                 <div className="mt-4 grid gap-4">
+                  <div className="flex flex-wrap gap-2">
+                    <PreviewTag value={problem.sourceFileName} />
+                    <PreviewTag
+                      value={
+                        problem.problemType === "objective"
+                          ? "选择判断题"
+                          : "编程题"
+                      }
+                    />
+                    <PreviewTag value={problem.category} />
+                    <PreviewTag value={problem.difficulty} />
+                  </div>
                   <div className="grid gap-3 sm:grid-cols-4">
                     <PreviewBlock
                       title="题型"
@@ -366,6 +508,14 @@ function PreviewBlock({ title, value }: { title: string; value: string }) {
       <h3 className="text-sm font-black text-ink-800">{title}</h3>
       <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink-700">{value}</p>
     </div>
+  );
+}
+
+function PreviewTag({ value }: { value: string }) {
+  return (
+    <span className="border border-clay/20 bg-clay/10 px-2 py-1 text-xs font-black text-clay">
+      {value}
+    </span>
   );
 }
 

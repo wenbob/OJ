@@ -102,6 +102,7 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
         initialPagination={buildPaginationMeta({ page, pageSize, total })}
         initialProblemType={problemType}
         initialProblems={initialProblems}
+        key={`${problemType}:${normalizedCategory}:${page}:${pageSize}:${createValue === "1" ? "create" : "list"}`}
         openCreateForm={createValue === "1"}
       />
     </AppShell>

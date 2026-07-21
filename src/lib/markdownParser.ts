@@ -300,9 +300,12 @@ function parseSingleProblemBlock(
     throw new ProblemMarkdownError("缺少分类");
   }
 
-  const problemType = normalizeProblemTypeLabel(
-    cleanText(getOptionalSection(normalized, "题型")),
-  );
+  const declaredProblemType = cleanText(getOptionalSection(normalized, "题型"));
+  const problemType = declaredProblemType
+    ? normalizeProblemTypeLabel(declaredProblemType)
+    : getOptionalSection(normalized, "客观题")
+      ? "objective"
+      : "programming";
 
   const description = getRequiredSection(
     normalized,

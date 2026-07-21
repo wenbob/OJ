@@ -9,7 +9,7 @@ export const REQUEST_LIMITS = {
   authJsonBytes: 4 * 1024,
   aiAssistJsonBytes: 64 * 1024,
   codeBytes: 128 * 1024,
-  markdownImportJsonBytes: 2 * 1024 * 1024,
+  markdownImportJsonBytes: 24 * 1024 * 1024,
   problemRunJsonBytes: 192 * 1024,
   problemPayloadJsonBytes: 2 * 1024 * 1024,
   settingsJsonBytes: 512 * 1024,

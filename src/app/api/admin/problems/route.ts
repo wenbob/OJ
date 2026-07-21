@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     ...(category ? { category } : {}),
     ...(problemType ? { problemType } : {}),
   };
-  const [problems, total] = await Promise.all([
+  const [problems, total, categoryRows] = await Promise.all([
     prisma.problem.findMany({
       where,
       include: {
@@ -40,6 +40,14 @@ export async function GET(request: NextRequest) {
       take: pageSize,
     }),
     prisma.problem.count({ where }),
+    prisma.problem.findMany({
+      where: {
+        archivedAt: null,
+        ...(problemType ? { problemType } : {}),
+      },
+      select: { category: true },
+      orderBy: { category: "asc" },
+    }),
   ]);
   const submissionCounts = await getPracticeSubmissionCountsByProblem({
     problemIds: problems.map((problem) => problem.id),
@@ -52,6 +60,13 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     items,
     problems: items,
+    categories: Array.from(
+      new Set(
+        categoryRows
+          .map((problem) => problem.category?.trim() || "未分类")
+          .filter(Boolean),
+      ),
+    ),
     ...buildPaginationMeta({ page, pageSize, total }),
   });
 }

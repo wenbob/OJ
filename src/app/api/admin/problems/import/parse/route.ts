@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
-import { parseProblemsMarkdown } from "@/lib/markdownParser";
+import { parseProblemImportDocuments } from "@/lib/problemImportBatch";
 import {
   PayloadTooLargeError,
   REQUEST_LIMITS,
@@ -35,7 +35,23 @@ export async function POST(request: NextRequest) {
       : typeof record.category === "string"
         ? record.category
         : undefined;
-  const result = parseProblemsMarkdown(markdown, {
+  const documents = Array.isArray(record.documents)
+    ? record.documents.map((item, index) => {
+        const document =
+          typeof item === "object" && item
+            ? (item as Record<string, unknown>)
+            : {};
+        return {
+          name:
+            typeof document.name === "string"
+              ? document.name
+              : `文档 ${index + 1}.md`,
+          markdown:
+            typeof document.markdown === "string" ? document.markdown : "",
+        };
+      })
+    : [{ name: "手动输入.md", markdown }];
+  const result = parseProblemImportDocuments(documents, {
     defaultCategory,
     defaultDifficulty,
   });

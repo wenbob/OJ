@@ -1,3 +1,5 @@
+import katex from "katex";
+import type { ReactNode } from "react";
 import type { PublicObjectiveItem } from "@/lib/objectiveProblem";
 
 type ObjectiveProblemContentItem = PublicObjectiveItem & {
@@ -72,12 +74,12 @@ export function ObjectiveProblemContent({
   );
 }
 
-type RichTextPart =
+export type ObjectiveRichTextPart =
   | { type: "text"; value: string }
   | { type: "code"; value: string };
 
-function splitFencedCode(value: string): RichTextPart[] {
-  const parts: RichTextPart[] = [];
+export function splitObjectiveFencedCode(value: string): ObjectiveRichTextPart[] {
+  const parts: ObjectiveRichTextPart[] = [];
   const pattern = /```[^\n]*\n([\s\S]*?)```/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -97,21 +99,95 @@ function splitFencedCode(value: string): RichTextPart[] {
   return parts.length > 0 ? parts : [{ type: "text", value }];
 }
 
-function renderInlineCode(value: string) {
-  return value.split(/(`[^`\n]+`)/g).map((part, index) => {
-    if (part.startsWith("`") && part.endsWith("`")) {
-      return (
-        <code
-          className="border border-ink-950/10 bg-stone-100 px-1 py-0.5 font-mono text-[0.92em] font-bold text-ink-900"
-          key={index}
-        >
-          {part.slice(1, -1)}
-        </code>
-      );
+const inlineRichTextPattern =
+  /`[^`\n]+`|!\[[^\]]*\]\(https?:\/\/[^)\s]+\)|\$\$[\s\S]+?\$\$|\$(?:\\.|[^$\n])+\$/g;
+
+function isTrustedObjectiveImage(value: string) {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return (
+      hostname === "cdn.luogu.com.cn" ||
+      hostname.endsWith(".cdn.luogu.com.cn") ||
+      hostname === "cdn.luogu.org" ||
+      hostname.endsWith(".cdn.luogu.org")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function renderMath(value: string, key: number) {
+  const displayMode = value.startsWith("$$") && value.endsWith("$$");
+  const source = value.slice(displayMode ? 2 : 1, displayMode ? -2 : -1);
+  const html = katex.renderToString(source, {
+    displayMode,
+    output: "htmlAndMathml",
+    strict: "warn",
+    throwOnError: false,
+  });
+
+  return (
+    <span
+      className={
+        displayMode
+          ? "my-2 block max-w-full overflow-x-auto py-1"
+          : "inline-block max-w-full align-middle"
+      }
+      dangerouslySetInnerHTML={{ __html: html }}
+      key={key}
+    />
+  );
+}
+
+function renderInlineRichText(value: string) {
+  const result: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  inlineRichTextPattern.lastIndex = 0;
+
+  while ((match = inlineRichTextPattern.exec(value)) !== null) {
+    if (match.index > lastIndex) {
+      result.push(<span key={result.length}>{value.slice(lastIndex, match.index)}</span>);
     }
 
-    return <span key={index}>{part}</span>;
-  });
+    const token = match[0];
+    if (token.startsWith("`") && token.endsWith("`")) {
+      result.push(
+        <code
+          className="border border-ink-950/10 bg-stone-100 px-1 py-0.5 font-mono text-[0.92em] font-bold text-ink-900"
+          key={result.length}
+        >
+          {token.slice(1, -1)}
+        </code>,
+      );
+    } else if (token.startsWith("![")) {
+      const image = /^!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)$/.exec(token);
+      if (image && isTrustedObjectiveImage(image[2])) {
+        result.push(
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            alt={image[1] || "题目插图"}
+            className="my-3 h-auto max-h-[32rem] max-w-full border border-ink-950/10 bg-white object-contain p-2"
+            key={result.length}
+            loading="lazy"
+            src={image[2]}
+          />,
+        );
+      } else {
+        result.push(<span key={result.length}>{token}</span>);
+      }
+    } else {
+      result.push(renderMath(token, result.length));
+    }
+
+    lastIndex = match.index + token.length;
+  }
+
+  if (lastIndex < value.length) {
+    result.push(<span key={result.length}>{value.slice(lastIndex)}</span>);
+  }
+
+  return result.length > 0 ? result : value;
 }
 
 function ObjectiveRichText({
@@ -123,7 +199,7 @@ function ObjectiveRichText({
   codeClassName: string;
   value: string;
 }) {
-  const parts = splitFencedCode(value);
+  const parts = splitObjectiveFencedCode(value);
 
   return (
     <div className={`grid gap-3 ${className}`}>
@@ -137,7 +213,7 @@ function ObjectiveRichText({
           </pre>
         ) : part.value.trim() ? (
           <p className="whitespace-pre-wrap" key={index}>
-            {renderInlineCode(part.value)}
+            {renderInlineRichText(part.value)}
           </p>
         ) : null,
       )}

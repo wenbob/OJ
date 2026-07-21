@@ -212,7 +212,7 @@ pm2 restart oj --update-env
 server {
     listen 80;
     server_name 39.105.91.81;
-    client_max_body_size 3m;
+    client_max_body_size 25m;
 
     # AI 难题允许较长推理；不要沿用 Nginx 默认 60 秒读取超时。
     location = /api/ai/problem-assist {
