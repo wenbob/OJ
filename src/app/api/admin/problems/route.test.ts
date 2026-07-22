@@ -10,10 +10,13 @@ const mocks = vi.hoisted(() => ({
     examProblem: { findFirst: vi.fn() },
     learningAssignmentProblem: { count: vi.fn() },
     problem: {
+      aggregate: vi.fn(),
       count: vi.fn(),
+      create: vi.fn(),
       findMany: vi.fn(),
       updateMany: vi.fn(),
     },
+    problemCategoryOrder: { findMany: vi.fn() },
   },
   requireApiUser: vi.fn(),
   getPracticeSubmissionCountsByProblem: vi.fn(),
@@ -48,6 +51,7 @@ describe("admin problem archiving", () => {
     mocks.prisma.learningAssignmentProblem.count.mockResolvedValue(0);
     mocks.prisma.examProblem.findFirst.mockResolvedValue(null);
     mocks.prisma.problem.updateMany.mockResolvedValue({ count: 1 });
+    mocks.prisma.problemCategoryOrder.findMany.mockResolvedValue([]);
     mocks.getPracticeSubmissionCountsByProblem.mockResolvedValue(new Map());
   });
 
@@ -103,17 +107,17 @@ describe("admin problem archiving", () => {
   it("returns every category for the selected problem type, not only the current page", async () => {
     mocks.prisma.problem.findMany
       .mockResolvedValueOnce([
+        { category: "GESP 一级" },
+        { category: "GESP 一级" },
+        { category: "一级模拟" },
+      ])
+      .mockResolvedValueOnce([
         {
           id: 12,
           category: "GESP 一级",
           problemType: "objective",
           testCases: [],
         },
-      ])
-      .mockResolvedValueOnce([
-        { category: "GESP 一级" },
-        { category: "GESP 一级" },
-        { category: "一级模拟" },
       ]);
     mocks.prisma.problem.count.mockResolvedValue(14);
 
@@ -125,11 +129,81 @@ describe("admin problem archiving", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.categories).toEqual(["GESP 一级", "一级模拟"]);
+    expect(body.categories).toEqual(["一级模拟", "GESP 一级"]);
+    expect(mocks.prisma.problem.findMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: { archivedAt: null, problemType: "objective" },
+      }),
+    );
     expect(mocks.prisma.problem.findMany).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        where: { archivedAt: null, problemType: "objective" },
+        orderBy: [{ sortOrder: "desc" }, { id: "desc" }],
+      }),
+    );
+  });
+
+  it("sorts titles naturally before applying pagination", async () => {
+    mocks.prisma.problem.findMany
+      .mockResolvedValueOnce([{ category: "综合" }])
+      .mockResolvedValueOnce([
+        { id: 10, title: "第 10 题" },
+        { id: 2, title: "第 2 题" },
+        { id: 1, title: "第 1 题" },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 2,
+          title: "第 2 题",
+          category: "综合",
+          problemType: "programming",
+          testCases: [],
+        },
+        {
+          id: 1,
+          title: "第 1 题",
+          category: "综合",
+          problemType: "programming",
+          testCases: [],
+        },
+      ]);
+    mocks.prisma.problem.count.mockResolvedValue(3);
+
+    const response = await GET(
+      new NextRequest(
+        "http://local.test/api/admin/problems?problemType=programming&sort=title-asc&page=1&pageSize=2",
+      ),
+    );
+    const body = await response.json();
+
+    expect(body.sort).toBe("title-asc");
+    expect(body.items.map((item: { id: number }) => item.id)).toEqual([1, 2]);
+    expect(mocks.prisma.problem.findMany).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: [1, 2] } }),
+      }),
+    );
+  });
+
+  it("uses creation time only as an administrator view sort", async () => {
+    mocks.prisma.problem.findMany
+      .mockResolvedValueOnce([{ category: "综合" }])
+      .mockResolvedValueOnce([]);
+    mocks.prisma.problem.count.mockResolvedValue(0);
+
+    const response = await GET(
+      new NextRequest(
+        "http://local.test/api/admin/problems?problemType=programming&sort=oldest",
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.prisma.problem.findMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
     );
   });

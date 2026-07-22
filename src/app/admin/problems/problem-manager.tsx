@@ -1,8 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { FileUp, Pencil, Plus, Save, Trash2, X } from "lucide-react";
-import type { FormEvent } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  FileUp,
+  GripVertical,
+  ListOrdered,
+  Pencil,
+  Plus,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
+import type { DragEvent, FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import {
@@ -12,6 +23,12 @@ import {
   type ProblemType,
 } from "@/lib/objectiveProblem";
 import type { PaginationMeta } from "@/lib/pagination";
+import {
+  moveItemRelative,
+  moveProblemRelative,
+  type ProblemDropPlacement,
+  type ProblemListSort,
+} from "@/lib/problemOrdering";
 
 type TestCaseForm = {
   id?: number;
@@ -36,11 +53,20 @@ type ProblemItem = {
   testCases: TestCaseForm[];
   submissions?: number;
   _count?: { submissions: number };
+  sortPosition: number;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 };
 
 type ProblemForm = Omit<
   ProblemItem,
-  "id" | "submissions" | "_count" | "objectiveItems"
+  | "id"
+  | "submissions"
+  | "_count"
+  | "objectiveItems"
+  | "sortPosition"
+  | "canMoveUp"
+  | "canMoveDown"
 > & {
   objectiveItems: ObjectiveItem[];
 };
@@ -82,12 +108,26 @@ const blankForm: ProblemForm = {
   ],
 };
 
+const problemSortLabels: Record<ProblemListSort, string> = {
+  custom: "自定义顺序",
+  "title-asc": "标题升序",
+  "title-desc": "标题降序",
+  newest: "最新创建优先",
+  oldest: "最早创建优先",
+};
+
+function getDropPlacement(event: DragEvent<HTMLElement>): ProblemDropPlacement {
+  const bounds = event.currentTarget.getBoundingClientRect();
+  return event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+}
+
 export function ProblemManager({
   categories,
   initialCategory,
   initialPagination,
   initialProblemType,
   initialProblems,
+  initialSort,
   openCreateForm,
 }: {
   categories: string[];
@@ -95,6 +135,7 @@ export function ProblemManager({
   initialPagination: PaginationMeta;
   initialProblemType: ProblemType;
   initialProblems: ProblemItem[];
+  initialSort: ProblemListSort;
   openCreateForm: boolean;
 }) {
   const [categoryOptions, setCategoryOptions] = useState(categories);
@@ -103,6 +144,8 @@ export function ProblemManager({
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [selectedProblemType, setSelectedProblemType] =
     useState<ProblemType>(initialProblemType);
+  const [selectedSort, setSelectedSort] =
+    useState<ProblemListSort>(initialSort);
   const [form, setForm] = useState<ProblemForm>(() => ({
     ...blankForm,
     category: openCreateForm && initialCategory ? initialCategory : blankForm.category,
@@ -115,6 +158,21 @@ export function ProblemManager({
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [movingProblemId, setMovingProblemId] = useState<number | null>(null);
+  const [draggedProblemId, setDraggedProblemId] = useState<number | null>(null);
+  const [problemDropTarget, setProblemDropTarget] = useState<{
+    problemId: number;
+    placement: ProblemDropPlacement;
+  } | null>(null);
+  const [savingCurrentOrder, setSavingCurrentOrder] = useState(false);
+  const [categorySortOpen, setCategorySortOpen] = useState(false);
+  const [categoryDraft, setCategoryDraft] = useState<string[]>(categories);
+  const [categoryPending, setCategoryPending] = useState(false);
+  const [draggedCategory, setDraggedCategory] = useState<string | null>(null);
+  const [categoryDropTarget, setCategoryDropTarget] = useState<{
+    category: string;
+    placement: ProblemDropPlacement;
+  } | null>(null);
   const reloadRequestIdRef = useRef(0);
   const allCurrentPageSelected =
     problems.length > 0 && problems.every((problem) => selectedIds.includes(problem.id));
@@ -129,15 +187,27 @@ export function ProblemManager({
     });
   }, [openCreateForm]);
 
+  function resetProblemDrag() {
+    setDraggedProblemId(null);
+    setProblemDropTarget(null);
+  }
+
+  function resetCategoryDrag() {
+    setDraggedCategory(null);
+    setCategoryDropTarget(null);
+  }
+
   async function reload(
     category = selectedCategory,
     page = pagination.page,
     problemType = selectedProblemType,
+    sort = selectedSort,
   ) {
     const requestId = ++reloadRequestIdRef.current;
     const query = new URLSearchParams();
     if (category) query.set("category", category);
     query.set("problemType", problemType);
+    query.set("sort", sort);
     query.set("page", String(page));
     query.set("pageSize", String(pagination.pageSize));
     try {
@@ -154,6 +224,7 @@ export function ProblemManager({
           pageSize: data.pageSize ?? pagination.pageSize,
           totalPages: data.totalPages ?? 1,
         });
+        setSelectedSort(data.sort ?? sort);
         const categoryValues: unknown[] = Array.isArray(data.categories)
           ? data.categories.filter(
               (value: unknown): value is string =>
@@ -179,29 +250,46 @@ export function ProblemManager({
     setSelectedCategory(category);
     setMessage("");
     setError("");
-    window.history.pushState(
-      null,
-      "",
-      category
-        ? `/admin/problems?problemType=${selectedProblemType}&category=${encodeURIComponent(category)}`
-        : `/admin/problems?problemType=${selectedProblemType}`,
-    );
-    await reload(category, 1, selectedProblemType);
+    const query = new URLSearchParams({
+      problemType: selectedProblemType,
+      sort: selectedSort,
+    });
+    if (category) query.set("category", category);
+    window.history.pushState(null, "", `/admin/problems?${query}`);
+    await reload(category, 1, selectedProblemType, selectedSort);
   }
 
   async function selectProblemType(problemType: ProblemType) {
+    resetProblemDrag();
+    resetCategoryDrag();
     setSelectedProblemType(problemType);
     setSelectedCategory("");
     setCategoryOptions([]);
     setSelectedIds([]);
+    setCategorySortOpen(false);
+    setCategoryDraft([]);
     setMessage("");
     setError("");
     window.history.pushState(
       null,
       "",
-      `/admin/problems?problemType=${problemType}`,
+      `/admin/problems?problemType=${problemType}&sort=${selectedSort}`,
     );
-    await reload("", 1, problemType);
+    await reload("", 1, problemType, selectedSort);
+  }
+
+  async function selectSort(sort: ProblemListSort) {
+    resetProblemDrag();
+    setSelectedSort(sort);
+    setMessage("");
+    setError("");
+    const query = new URLSearchParams({
+      problemType: selectedProblemType,
+      sort,
+    });
+    if (selectedCategory) query.set("category", selectedCategory);
+    window.history.pushState(null, "", `/admin/problems?${query}`);
+    await reload(selectedCategory, 1, selectedProblemType, sort);
   }
 
   async function goPage(page: number) {
@@ -210,10 +298,11 @@ export function ProblemManager({
     setError("");
     if (selectedCategory) query.set("category", selectedCategory);
     query.set("problemType", selectedProblemType);
+    query.set("sort", selectedSort);
     query.set("page", String(page));
     query.set("pageSize", String(pagination.pageSize));
     window.history.pushState(null, "", `/admin/problems?${query}`);
-    await reload(selectedCategory, page, selectedProblemType);
+    await reload(selectedCategory, page, selectedProblemType, selectedSort);
   }
 
   function updateField<K extends keyof ProblemForm>(key: K, value: ProblemForm[K]) {
@@ -443,6 +532,366 @@ export function ProblemManager({
     await reload(selectedCategory, pagination.page);
   }
 
+  async function moveProblem(
+    problem: ProblemItem,
+    direction: "up" | "down",
+  ) {
+    if (selectedSort !== "custom" || movingProblemId !== null) return;
+
+    setMovingProblemId(problem.id);
+    setMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/admin/problems/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          problemId: problem.id,
+          problemType: selectedProblemType,
+          direction,
+          category: selectedCategory,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error ?? "调整题目顺序失败");
+        return;
+      }
+      if (!data.moved) {
+        setMessage(direction === "up" ? "已经是第一道题" : "已经是最后一道题");
+        return;
+      }
+
+      const nextPosition = Number(data.position) ||
+        problem.sortPosition + (direction === "up" ? -1 : 1);
+      const nextPage = Math.max(
+        1,
+        Math.ceil(nextPosition / pagination.pageSize),
+      );
+      const query = new URLSearchParams({
+        problemType: selectedProblemType,
+        sort: "custom",
+        page: String(nextPage),
+        pageSize: String(pagination.pageSize),
+      });
+      if (selectedCategory) query.set("category", selectedCategory);
+      window.history.pushState(null, "", `/admin/problems?${query}`);
+      setMessage(direction === "up" ? "题目已上移" : "题目已下移");
+      await reload(selectedCategory, nextPage, selectedProblemType, "custom");
+    } catch {
+      setError("调整题目顺序失败，请稍后重试");
+    } finally {
+      setMovingProblemId(null);
+    }
+  }
+
+  function startProblemDrag(
+    event: DragEvent<HTMLButtonElement>,
+    problemId: number,
+  ) {
+    if (
+      selectedSort !== "custom" ||
+      movingProblemId !== null ||
+      pending ||
+      savingCurrentOrder
+    ) {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(problemId));
+    setDraggedProblemId(problemId);
+    setProblemDropTarget(null);
+    // 不要在 dragstart 清空提示：提示条消失会让表格瞬间位移，
+    // Chromium 会因此取消刚开始的原生拖动。
+  }
+
+  function dragProblemOver(
+    event: DragEvent<HTMLTableRowElement>,
+    targetProblemId: number,
+  ) {
+    if (
+      draggedProblemId === null ||
+      draggedProblemId === targetProblemId ||
+      movingProblemId !== null
+    ) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const placement = getDropPlacement(event);
+    setProblemDropTarget((current) =>
+      current?.problemId === targetProblemId && current.placement === placement
+        ? current
+        : { problemId: targetProblemId, placement },
+    );
+  }
+
+  async function dropProblem(
+    event: DragEvent<HTMLTableRowElement>,
+    targetProblemId: number,
+  ) {
+    event.preventDefault();
+    const problemId = draggedProblemId;
+    const placement = getDropPlacement(event);
+    resetProblemDrag();
+    if (
+      problemId === null ||
+      problemId === targetProblemId ||
+      selectedSort !== "custom" ||
+      movingProblemId !== null
+    ) {
+      return;
+    }
+
+    const reordered = moveProblemRelative(
+      problems,
+      problemId,
+      targetProblemId,
+      placement,
+    );
+    if (reordered.every((problem, index) => problem.id === problems[index]?.id)) {
+      return;
+    }
+
+    const pageOffset = (pagination.page - 1) * pagination.pageSize;
+    setProblems(
+      reordered.map((problem, index) => ({
+        ...problem,
+        sortPosition: pageOffset + index + 1,
+        canMoveUp: pageOffset + index > 0,
+        canMoveDown: pageOffset + index + 1 < pagination.total,
+      })),
+    );
+    setMovingProblemId(problemId);
+    setMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/admin/problems/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          problemId,
+          targetProblemId,
+          placement,
+          problemType: selectedProblemType,
+          category: selectedCategory,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error ?? "拖动题目失败");
+        await reload(
+          selectedCategory,
+          pagination.page,
+          selectedProblemType,
+          "custom",
+        );
+        return;
+      }
+      if (data.moved === false) {
+        setMessage("题目位置没有变化");
+        await reload(
+          selectedCategory,
+          pagination.page,
+          selectedProblemType,
+          "custom",
+        );
+        return;
+      }
+      // 当前页顺序已乐观更新，成功后无需再刷新表格；立即释放拖动状态，
+      // 避免下一次抓取被无关的列表请求阻塞。
+      setMessage("题目顺序已保存");
+    } catch {
+      setError("拖动题目失败，请稍后重试");
+      await reload(
+        selectedCategory,
+        pagination.page,
+        selectedProblemType,
+        "custom",
+      );
+    } finally {
+      setMovingProblemId(null);
+    }
+  }
+
+  async function saveCurrentProblemOrder() {
+    if (
+      selectedSort === "custom" ||
+      savingCurrentOrder ||
+      movingProblemId !== null
+    ) {
+      return;
+    }
+
+    const scope = selectedCategory
+      ? `“${selectedCategory}”分类`
+      : selectedProblemType === "programming"
+        ? "全部编程题"
+        : "全部选择判断题";
+    if (
+      !confirm(
+        `确定将“${problemSortLabels[selectedSort]}”保存为${scope}的自定义题序吗？学生题库会立即跟随新的顺序。`,
+      )
+    ) {
+      return;
+    }
+
+    setSavingCurrentOrder(true);
+    setMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/admin/problems/order/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          problemType: selectedProblemType,
+          category: selectedCategory,
+          sort: selectedSort,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error ?? "保存当前题序失败");
+        return;
+      }
+
+      const query = new URLSearchParams({
+        problemType: selectedProblemType,
+        sort: "custom",
+        page: String(pagination.page),
+        pageSize: String(pagination.pageSize),
+      });
+      if (selectedCategory) query.set("category", selectedCategory);
+      window.history.pushState(null, "", `/admin/problems?${query}`);
+      setSelectedSort("custom");
+      setMessage(
+        `已保存 ${Number(data.updatedCount) || 0} 道题的当前题序，学生端已同步`,
+      );
+      await reload(
+        selectedCategory,
+        pagination.page,
+        selectedProblemType,
+        "custom",
+      );
+    } catch {
+      setError("保存当前题序失败，请稍后重试");
+    } finally {
+      setSavingCurrentOrder(false);
+    }
+  }
+
+  function openCategorySort() {
+    resetCategoryDrag();
+    setCategoryDraft(categoryOptions);
+    setCategorySortOpen(true);
+    setMessage("");
+    setError("");
+  }
+
+  function closeCategorySort() {
+    resetCategoryDrag();
+    setCategoryDraft(categoryOptions);
+    setCategorySortOpen(false);
+  }
+
+  function moveCategory(index: number, direction: "up" | "down") {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= categoryDraft.length) return;
+    setCategoryDraft((current) => {
+      const next = [...current];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next;
+    });
+  }
+
+  function startCategoryDrag(
+    event: DragEvent<HTMLButtonElement>,
+    category: string,
+  ) {
+    if (categoryPending) {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", category);
+    setDraggedCategory(category);
+    setCategoryDropTarget(null);
+  }
+
+  function dragCategoryOver(
+    event: DragEvent<HTMLDivElement>,
+    targetCategory: string,
+  ) {
+    if (
+      draggedCategory === null ||
+      draggedCategory === targetCategory ||
+      categoryPending
+    ) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const placement = getDropPlacement(event);
+    setCategoryDropTarget((current) =>
+      current?.category === targetCategory && current.placement === placement
+        ? current
+        : { category: targetCategory, placement },
+    );
+  }
+
+  function dropCategory(
+    event: DragEvent<HTMLDivElement>,
+    targetCategory: string,
+  ) {
+    event.preventDefault();
+    const sourceCategory = draggedCategory;
+    const placement = getDropPlacement(event);
+    resetCategoryDrag();
+    if (sourceCategory === null || sourceCategory === targetCategory) return;
+
+    setCategoryDraft((current) => {
+      const sourceIndex = current.indexOf(sourceCategory);
+      const targetIndex = current.indexOf(targetCategory);
+      return moveItemRelative(current, sourceIndex, targetIndex, placement);
+    });
+  }
+
+  async function saveCategoryOrder() {
+    setCategoryPending(true);
+    setMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/admin/problems/categories/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          problemType: selectedProblemType,
+          categories: categoryDraft,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error ?? "保存分类顺序失败");
+        return;
+      }
+      const savedCategories = Array.isArray(data.categories)
+        ? data.categories.filter(
+            (category: unknown): category is string =>
+              typeof category === "string" && Boolean(category.trim()),
+          )
+        : categoryDraft;
+      setCategoryOptions(savedCategories);
+      setCategoryDraft(savedCategories);
+      setCategorySortOpen(false);
+      setMessage("分类顺序已保存，学生题库和组卷筛选会同步使用");
+    } catch {
+      setError("保存分类顺序失败，请稍后重试");
+    } finally {
+      setCategoryPending(false);
+    }
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_520px]">
       <section className="surface overflow-hidden">
@@ -476,23 +925,160 @@ export function ProblemManager({
               选择判断题
             </CategoryButton>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <CategoryButton
-              active={!selectedCategory}
-              onClick={() => selectCategory("")}
-            >
-              全部
-            </CategoryButton>
-            {categoryOptions.map((category) => (
-              <CategoryButton
-                active={selectedCategory === category}
-                key={category}
-                onClick={() => selectCategory(category)}
-              >
-                {category}
-              </CategoryButton>
-            ))}
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="grid min-w-52 gap-2 text-sm font-bold text-ink-800">
+                管理员查看排序
+                <select
+                  className="field"
+                  disabled={movingProblemId !== null || savingCurrentOrder}
+                  onChange={(event) =>
+                    void selectSort(event.target.value as ProblemListSort)
+                  }
+                  value={selectedSort}
+                >
+                  <option value="custom">自定义顺序</option>
+                  <option value="title-asc">标题升序</option>
+                  <option value="title-desc">标题降序</option>
+                  <option value="newest">最新创建优先</option>
+                  <option value="oldest">最早创建优先</option>
+                </select>
+              </label>
+              {selectedSort !== "custom" ? (
+                <button
+                  className="btn btn-primary px-3 py-2"
+                  disabled={savingCurrentOrder || movingProblemId !== null}
+                  onClick={() => void saveCurrentProblemOrder()}
+                  type="button"
+                >
+                  <Save size={15} />
+                  {savingCurrentOrder ? "保存中" : "保存当前题序"}
+                </button>
+              ) : null}
+            </div>
+            <p className="max-w-xl text-xs font-semibold leading-5 text-ink-600">
+              {selectedSort === "custom"
+                ? "可拖动当前页题目快速排序；跨页继续使用上下按钮。学生端会跟随保存后的顺序。"
+                : "当前是管理员预览；可将当前筛选范围的全部分页保存为自定义题序。"}
+            </p>
           </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              <CategoryButton
+                active={!selectedCategory}
+                onClick={() => selectCategory("")}
+              >
+                全部
+              </CategoryButton>
+              {categoryOptions.map((category) => (
+                <CategoryButton
+                  active={selectedCategory === category}
+                  key={category}
+                  onClick={() => selectCategory(category)}
+                >
+                  {category}
+                </CategoryButton>
+              ))}
+            </div>
+            {categoryOptions.length > 1 && !categorySortOpen ? (
+              <button
+                className="btn btn-secondary px-3 py-2"
+                onClick={openCategorySort}
+                type="button"
+              >
+                <ListOrdered size={15} />
+                调整分类顺序
+              </button>
+            ) : null}
+          </div>
+          {categorySortOpen ? (
+            <div className="mt-4 border border-steel/20 bg-steel/5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-black text-ink-950">分类标签顺序</h2>
+                  <p className="mt-1 text-xs font-semibold text-ink-600">
+                    拖动或使用上下按钮调整草稿，确认后点击保存；学生只能查看。
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    className="btn btn-secondary px-3 py-2"
+                    disabled={categoryPending}
+                    onClick={closeCategorySort}
+                    type="button"
+                  >
+                    取消
+                  </button>
+                  <button
+                    className="btn btn-primary px-3 py-2"
+                    disabled={categoryPending}
+                    onClick={() => void saveCategoryOrder()}
+                    type="button"
+                  >
+                    <Save size={15} />
+                    {categoryPending ? "保存中" : "保存顺序"}
+                  </button>
+                </div>
+              </div>
+              <div className="mt-4 grid max-w-2xl gap-2">
+                {categoryDraft.map((category, index) => (
+                  <div
+                    className={`flex items-center gap-3 border border-ink-950/10 bg-white/75 px-3 py-2 transition ${
+                      draggedCategory === category ? "opacity-50" : ""
+                    } ${
+                      categoryDropTarget?.category === category
+                        ? categoryDropTarget.placement === "before"
+                          ? "border-t-4 border-t-clay"
+                          : "border-b-4 border-b-clay"
+                        : ""
+                    }`}
+                    key={category}
+                    onDragOver={(event) => dragCategoryOver(event, category)}
+                    onDrop={(event) => dropCategory(event, category)}
+                  >
+                    <span className="w-7 text-center text-xs font-black text-steel">
+                      {index + 1}
+                    </span>
+                    <button
+                      aria-label={`拖动分类 ${category}`}
+                      className="cursor-grab p-1 text-steel active:cursor-grabbing"
+                      disabled={categoryPending}
+                      draggable={!categoryPending}
+                      onDragEnd={resetCategoryDrag}
+                      onDragStart={(event) => startCategoryDrag(event, category)}
+                      title="按住拖动分类"
+                      type="button"
+                    >
+                      <GripVertical size={16} />
+                    </button>
+                    <span className="min-w-0 flex-1 truncate text-sm font-black text-ink-900">
+                      {category}
+                    </span>
+                    <button
+                      aria-label={`上移分类 ${category}`}
+                      className="btn btn-secondary p-2"
+                      disabled={index === 0 || categoryPending}
+                      onClick={() => moveCategory(index, "up")}
+                      title="上移分类"
+                      type="button"
+                    >
+                      <ArrowUp size={14} />
+                    </button>
+                    <button
+                      aria-label={`下移分类 ${category}`}
+                      className="btn btn-secondary p-2"
+                      disabled={index === categoryDraft.length - 1 || categoryPending}
+                      onClick={() => moveCategory(index, "down")}
+                      title="下移分类"
+                      type="button"
+                    >
+                      <ArrowDown size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-950/10 bg-white/45 p-5">
           <label className="inline-flex items-center gap-2 text-sm font-black text-ink-800">
@@ -525,10 +1111,11 @@ export function ProblemManager({
           </p>
         ) : null}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] border-collapse">
+          <table className="w-full min-w-[980px] border-collapse">
             <thead>
               <tr className="border-b border-ink-950/10 bg-white/55 text-left">
                 <th className="table-head px-5 py-3">选择</th>
+                <th className="table-head px-5 py-3">排序</th>
                 <th className="table-head px-5 py-3">标题</th>
                 <th className="table-head px-5 py-3">难度</th>
                 <th className="table-head px-5 py-3">分类</th>
@@ -540,7 +1127,20 @@ export function ProblemManager({
             </thead>
             <tbody>
               {problems.map((problem) => (
-                <tr className="border-b border-ink-950/10" key={problem.id}>
+                <tr
+                  className={`border-b transition ${
+                    draggedProblemId === problem.id ? "opacity-50" : ""
+                  } ${
+                    problemDropTarget?.problemId === problem.id
+                      ? problemDropTarget.placement === "before"
+                        ? "border-t-4 border-t-clay border-b-ink-950/10 bg-clay/5"
+                        : "border-b-4 border-b-clay bg-clay/5"
+                      : "border-b-ink-950/10"
+                  }`}
+                  key={problem.id}
+                  onDragOver={(event) => dragProblemOver(event, problem.id)}
+                  onDrop={(event) => void dropProblem(event, problem.id)}
+                >
                   <td className="px-5 py-4">
                     <input
                       aria-label={`选择题目 ${problem.title}`}
@@ -548,6 +1148,71 @@ export function ProblemManager({
                       onChange={() => toggleProblem(problem.id)}
                       type="checkbox"
                     />
+                  </td>
+                  <td className="px-5 py-4">
+                    {selectedSort === "custom" ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          aria-label={`拖动题目 ${problem.title}`}
+                          className="cursor-grab p-1 text-steel active:cursor-grabbing"
+                          disabled={
+                            movingProblemId !== null ||
+                            pending ||
+                            savingCurrentOrder
+                          }
+                          draggable={
+                            movingProblemId === null &&
+                            !pending &&
+                            !savingCurrentOrder
+                          }
+                          onDragEnd={resetProblemDrag}
+                          onDragStart={(event) =>
+                            startProblemDrag(event, problem.id)
+                          }
+                          title="按住拖动（仅当前页）"
+                          type="button"
+                        >
+                          <GripVertical size={16} />
+                        </button>
+                        <span className="min-w-8 text-center text-xs font-black text-steel">
+                          #{problem.sortPosition}
+                        </span>
+                        <button
+                          aria-label={`上移题目 ${problem.title}`}
+                          className="btn btn-secondary p-2"
+                          disabled={
+                            !problem.canMoveUp ||
+                            movingProblemId !== null ||
+                            pending ||
+                            savingCurrentOrder
+                          }
+                          onClick={() => void moveProblem(problem, "up")}
+                          title="上移题目"
+                          type="button"
+                        >
+                          <ArrowUp size={14} />
+                        </button>
+                        <button
+                          aria-label={`下移题目 ${problem.title}`}
+                          className="btn btn-secondary p-2"
+                          disabled={
+                            !problem.canMoveDown ||
+                            movingProblemId !== null ||
+                            pending ||
+                            savingCurrentOrder
+                          }
+                          onClick={() => void moveProblem(problem, "down")}
+                          title="下移题目"
+                          type="button"
+                        >
+                          <ArrowDown size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs font-semibold text-ink-500">
+                        临时查看
+                      </span>
+                    )}
                   </td>
                   <td className="px-5 py-4 font-black">{problem.title}</td>
                   <td className="px-5 py-4 text-sm font-semibold text-ink-700">
@@ -599,7 +1264,7 @@ export function ProblemManager({
                 <tr>
                   <td
                     className="px-5 py-12 text-center text-sm font-semibold text-ink-600"
-                    colSpan={8}
+                    colSpan={9}
                   >
                     当前分类下还没有题目。
                   </td>

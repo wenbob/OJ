@@ -51,6 +51,7 @@
 - [2026-07-15 AI 分层辅导、教师学情看板、专项练习与浏览器标签配置上线记录](docs/ops-review-2026-07-15.md)
 - [2026-07-16 运行样例、历史积分保护与学生会话加固记录](docs/ops-review-2026-07-16.md)
 - [2026-07-21 多文档导入与选择判断公式渲染上线记录](docs/ops-review-2026-07-21.md)
+- [2026-07-22 管理员题目与分类排序上线记录](docs/ops-review-2026-07-22.md)
 
 ## 技术栈
 
@@ -518,6 +519,8 @@ oj-code-exam-${examId}-problem-${problemId}
 - 创建考试时选择 `programming` 或 `objective`，一场考试不能混合题型。
 - 题目列表分页，默认每页 20 条。
 - 按 `Problem.category` 动态分类筛选。
+- 管理员可以在当前页拖动题目或使用上下按钮调整题序，也可以拖动分类标签后统一保存；保存后的自定义顺序会同步用于学生题库、管理员练习和组卷搜索。
+- 管理员题目管理页可按标题自然顺序或创建时间正倒序预览，并可将当前题型或分类的全部结果保存为一次性自定义题序快照；学生端不显示任何排序入口。
 - 新增题目。
 - 编辑题目。
 - 单个下架题目。
@@ -529,7 +532,7 @@ oj-code-exam-${examId}-problem-${problemId}
 - 分页或筛选变化后清空选中状态，避免误删。
 - 新增和编辑题目时维护测试点。
 - 新增和编辑题目时至少需要两组样例测试点。
-- 题目分类会影响学生端和管理员端的分类筛选。
+- 题目分类及管理员保存的分类顺序会影响学生端和管理员端的分类筛选。
 - 题目列表中的提交数量统计日常刷题总提交次数，点击数字会跳转到按该题筛选后的 `/admin/submissions?problemId=题目ID`。
 
 批量下架接口：
@@ -550,6 +553,7 @@ POST /api/admin/problems/bulk-delete
 
 ```ts
 {
+  archivedCount: number
   deletedCount: number
 }
 ```
@@ -559,9 +563,9 @@ POST /api/admin/problems/bulk-delete
 - 只有 admin 可以访问。
 - `problemIds` 必须是非空数组。
 - 每个 ID 必须是有效数字。
-- 删除使用事务。
-- 不存在的 ID 会被忽略，返回实际删除数量。
-- 题目的测试点、提交记录、提交测试点结果和考试题目关联依赖数据库级联删除。
+- 下架使用事务；不存在或已经下架的 ID 会被忽略，返回实际下架数量。
+- 已发布考试或学生未完成专项练习中的题目会拒绝下架。
+- 接口写入 `Problem.archivedAt`，保留测试点、历史提交、考试关联和学生积分；`deletedCount` 仅为旧客户端兼容字段。
 
 ### 管理员题目练习
 
@@ -1056,6 +1060,8 @@ JUDGE_CONCURRENCY=1
 - `User`：用户账号，包含 `student` 和 `admin` 两种角色；`sessionVersion` 用于废除学生旧会话，学生只保留最后一次登录，管理员保持多设备登录。
 - `StudentProfile`：学生扩展档案，保存管理员自定义头衔和个人 AI 权限；积分和段位实时从提交记录计算，不写入该表。
 - `Problem`：题目主体信息，包含标题、描述、难度、分类和第一组样例。
+- `Problem.sortOrder`：管理员维护的题库自定义顺序，数值越大越靠前；学生端只读跟随。
+- `ProblemCategoryOrder`：按题型保存分类标签顺序。
 - `Problem.problemType`：`programming` 或 `objective`；客观题小题 JSON 保存于 `objectiveItems`。
 - `TestCase`：测试点，包含样例测试点和隐藏测试点。
 - `Submission`：提交记录，保存整体评测结果、提交代码、语言、`submissionType`、可选 `examId` 和可选 `learningAssignmentId`。
@@ -1116,6 +1122,7 @@ npm run seed
 0007_problem_archiving
 0008_student_single_session
 0009_ai_usage_audit
+0010_problem_custom_ordering
 ```
 
 本地开发创建新迁移：
@@ -1287,6 +1294,9 @@ PUT    /api/admin/problems/[id]
 DELETE /api/admin/problems/[id]
 POST   /api/admin/problems/bulk-delete
 GET    /api/admin/problems/search
+POST   /api/admin/problems/order
+POST   /api/admin/problems/order/apply
+POST   /api/admin/problems/categories/order
 POST   /api/admin/problems/import/parse
 POST   /api/admin/problems/import/confirm
 

@@ -6,6 +6,7 @@ import {
 } from "@/lib/pagination";
 import { isProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import { getProblemOrderBy } from "@/lib/problemOrdering";
 import {
   getAcceptedProblemIds,
   getPracticeSubmissionCountsByProblem,
@@ -29,7 +30,9 @@ export async function GET(request: NextRequest) {
   const [problems, total] = await Promise.all([
     prisma.problem.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: problemTypeValue
+        ? getProblemOrderBy("custom")
+        : [{ problemType: "asc" }, ...getProblemOrderBy("custom")],
       skip,
       take: pageSize,
       select: {

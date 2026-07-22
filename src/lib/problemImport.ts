@@ -92,9 +92,31 @@ export async function createImportedProblems(
 ) {
   const ids: number[] = [];
   const normalizedProblems = applyProblemDefaults(problems, defaults);
+  const countsByType = new Map<string, number>();
+  for (const problem of normalizedProblems) {
+    countsByType.set(
+      problem.problemType,
+      (countsByType.get(problem.problemType) ?? 0) + 1,
+    );
+  }
+  const baseSortOrderByType = new Map<string, number>();
+  for (const problemType of countsByType.keys()) {
+    const aggregate = await tx.problem.aggregate({
+      where: { problemType },
+      _max: { sortOrder: true },
+    });
+    baseSortOrderByType.set(problemType, aggregate._max.sortOrder ?? 0);
+  }
+  const seenByType = new Map<string, number>();
 
   for (const problem of normalizedProblems) {
     const firstSample = problem.samples[0];
+    const seen = seenByType.get(problem.problemType) ?? 0;
+    const sortOrder =
+      (baseSortOrderByType.get(problem.problemType) ?? 0) +
+      (countsByType.get(problem.problemType) ?? 0) -
+      seen;
+    seenByType.set(problem.problemType, seen + 1);
     const created = await tx.problem.create({
       data: {
         title: problem.title,
@@ -107,6 +129,7 @@ export async function createImportedProblems(
         difficulty: problem.difficulty,
         category: problem.category,
         problemType: problem.problemType,
+        sortOrder,
         objectiveItems:
           problem.problemType === "objective"
             ? stringifyObjectiveItems(problem.objectiveItems ?? [])

@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { requirePageUser } from "@/lib/auth";
 import { normalizeProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import { getOrderedProblemCategories } from "@/lib/problemOrdering";
 import { ExamEditClient } from "../../exam-edit-client";
 
 const adminNav = [
@@ -50,9 +51,13 @@ export default async function AdminEditExamPage({ params }: PageProps) {
   const categoryRows = await prisma.problem.findMany({
     where: { archivedAt: null, problemType: exam.examType },
     distinct: ["category"],
-    orderBy: { category: "asc" },
     select: { category: true },
   });
+  const categories = await getOrderedProblemCategories(
+    prisma,
+    normalizeProblemType(exam.examType),
+    categoryRows.map((item) => item.category).filter(Boolean),
+  );
   const clientExam = {
     id: exam.id,
     title: exam.title,
@@ -84,7 +89,7 @@ export default async function AdminEditExamPage({ params }: PageProps) {
         </Link>
       </div>
       <ExamEditClient
-        categories={categoryRows.map((item) => item.category).filter(Boolean)}
+        categories={categories}
         exam={clientExam}
       />
     </AppShell>

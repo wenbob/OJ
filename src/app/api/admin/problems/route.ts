@@ -6,6 +6,15 @@ import {
   readPaginationFromUrl,
 } from "@/lib/pagination";
 import { normalizeProblemPayload } from "@/lib/problemPayload";
+import {
+  getNextProblemSortOrder,
+  getOrderedProblemCategories,
+  getProblemOrderBy,
+  getTitleSortedProblemPageIds,
+  isTitleProblemListSort,
+  normalizeProblemListSort,
+  orderProblemsByIds,
+} from "@/lib/problemOrdering";
 import { prisma } from "@/lib/prisma";
 import { getPracticeSubmissionCountsByProblem } from "@/lib/problemSubmissionCounts";
 import {
@@ -23,22 +32,16 @@ export async function GET(request: NextRequest) {
   if (problemType && !isProblemType(problemType)) {
     return NextResponse.json({ error: "题型不合法" }, { status: 400 });
   }
+  const listSort = normalizeProblemListSort(
+    request.nextUrl.searchParams.get("sort"),
+  );
   const { page, pageSize, skip } = readPaginationFromUrl(request.nextUrl.searchParams);
   const where = {
     archivedAt: null,
     ...(category ? { category } : {}),
     ...(problemType ? { problemType } : {}),
   };
-  const [problems, total, categoryRows] = await Promise.all([
-    prisma.problem.findMany({
-      where,
-      include: {
-        testCases: { orderBy: { id: "asc" } },
-      },
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: pageSize,
-    }),
+  const [total, categoryRows, titleRows] = await Promise.all([
     prisma.problem.count({ where }),
     prisma.problem.findMany({
       where: {
@@ -46,27 +49,60 @@ export async function GET(request: NextRequest) {
         ...(problemType ? { problemType } : {}),
       },
       select: { category: true },
-      orderBy: { category: "asc" },
     }),
+    isTitleProblemListSort(listSort)
+      ? prisma.problem.findMany({ where, select: { id: true, title: true } })
+      : Promise.resolve([]),
   ]);
+  const problems = await (async () => {
+    if (isTitleProblemListSort(listSort)) {
+      const orderedIds = getTitleSortedProblemPageIds(
+        titleRows,
+        listSort,
+        skip,
+        pageSize,
+      );
+      const pageProblems = await prisma.problem.findMany({
+        where: { ...where, id: { in: orderedIds } },
+        include: { testCases: { orderBy: { id: "asc" } } },
+      });
+      return orderProblemsByIds(pageProblems, orderedIds);
+    }
+    return prisma.problem.findMany({
+      where,
+      include: { testCases: { orderBy: { id: "asc" } } },
+      orderBy: getProblemOrderBy(listSort),
+      skip,
+      take: pageSize,
+    });
+  })();
   const submissionCounts = await getPracticeSubmissionCountsByProblem({
     problemIds: problems.map((problem) => problem.id),
   });
-  const items = problems.map((problem) => ({
+  const items = problems.map((problem, index) => ({
     ...problem,
     submissions: submissionCounts.get(problem.id) ?? 0,
+    sortPosition: skip + index + 1,
+    canMoveUp: skip + index > 0,
+    canMoveDown: skip + index + 1 < total,
   }));
+
+  const categoryNames = Array.from(
+    new Set(
+      categoryRows
+        .map((problem) => problem.category?.trim() || "未分类")
+        .filter(Boolean),
+    ),
+  );
+  const categories = problemType && isProblemType(problemType)
+    ? await getOrderedProblemCategories(prisma, problemType, categoryNames)
+    : categoryNames;
 
   return NextResponse.json({
     items,
     problems: items,
-    categories: Array.from(
-      new Set(
-        categoryRows
-          .map((problem) => problem.category?.trim() || "未分类")
-          .filter(Boolean),
-      ),
-    ),
+    categories,
+    sort: listSort,
     ...buildPaginationMeta({ page, pageSize, total }),
   });
 }
@@ -79,27 +115,31 @@ export async function POST(request: NextRequest) {
     const payload = normalizeProblemPayload(
       await readJsonWithLimit(request, REQUEST_LIMITS.problemPayloadJsonBytes),
     );
-    const problem = await prisma.problem.create({
-      data: {
-        title: payload.title,
-        description: payload.description,
-        inputDescription: payload.inputDescription,
-        outputDescription: payload.outputDescription,
-        sampleInput: payload.sampleInput,
-        sampleOutput: payload.sampleOutput,
-        dataRange: payload.dataRange,
-        difficulty: payload.difficulty,
-        category: payload.category,
-        problemType: payload.problemType,
-        objectiveItems: payload.objectiveItems ?? null,
-        testCases:
-          payload.problemType === "programming"
-            ? {
-                create: payload.testCases,
-              }
-            : undefined,
-      },
-      include: { testCases: true },
+    const problem = await prisma.$transaction(async (tx) => {
+      const sortOrder = await getNextProblemSortOrder(tx, payload.problemType);
+      return tx.problem.create({
+        data: {
+          title: payload.title,
+          description: payload.description,
+          inputDescription: payload.inputDescription,
+          outputDescription: payload.outputDescription,
+          sampleInput: payload.sampleInput,
+          sampleOutput: payload.sampleOutput,
+          dataRange: payload.dataRange,
+          difficulty: payload.difficulty,
+          category: payload.category,
+          problemType: payload.problemType,
+          sortOrder,
+          objectiveItems: payload.objectiveItems ?? null,
+          testCases:
+            payload.problemType === "programming"
+              ? {
+                  create: payload.testCases,
+                }
+              : undefined,
+        },
+        include: { testCases: true },
+      });
     });
 
     return NextResponse.json({ problem }, { status: 201 });

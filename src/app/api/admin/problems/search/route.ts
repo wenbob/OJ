@@ -3,6 +3,11 @@ import type { Prisma } from "@prisma/client";
 import { requireApiUser } from "@/lib/auth";
 import { isProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import {
+  getOrderedProblemCategories,
+  getProblemOrderBy,
+  orderProblemCategories,
+} from "@/lib/problemOrdering";
 
 export async function GET(request: NextRequest) {
   const auth = await requireApiUser(request, "admin");
@@ -35,19 +40,25 @@ export async function GET(request: NextRequest) {
       category: true,
       problemType: true,
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: problemType
+      ? getProblemOrderBy("custom")
+      : [{ problemType: "asc" }, ...getProblemOrderBy("custom")],
     take: 200,
   });
 
   const categoryRows = await prisma.problem.findMany({
     where: { archivedAt: null, ...(problemType ? { problemType } : {}) },
     distinct: ["category"],
-    orderBy: { category: "asc" },
     select: { category: true },
   });
 
+  const categoryNames = categoryRows.map((item) => item.category).filter(Boolean);
+  const categories = isProblemType(problemType)
+    ? await getOrderedProblemCategories(prisma, problemType, categoryNames)
+    : orderProblemCategories(categoryNames, []);
+
   return NextResponse.json({
     problems,
-    categories: categoryRows.map((item) => item.category).filter(Boolean),
+    categories,
   });
 }

@@ -11,6 +11,7 @@ DROP TABLE IF EXISTS "ExamRecord";
 DROP TABLE IF EXISTS "ExamProblem";
 DROP TABLE IF EXISTS "Exam";
 DROP TABLE IF EXISTS "TestCase";
+DROP TABLE IF EXISTS "ProblemCategoryOrder";
 DROP TABLE IF EXISTS "Problem";
 DROP TABLE IF EXISTS "StudentProfile";
 DROP TABLE IF EXISTS "User";
@@ -51,6 +52,7 @@ CREATE TABLE "Problem" (
   "difficulty" TEXT NOT NULL,
   "category" TEXT NOT NULL,
   "problemType" TEXT NOT NULL DEFAULT 'programming',
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,
   "objectiveItems" TEXT,
   "archivedAt" DATETIME,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -59,6 +61,19 @@ CREATE TABLE "Problem" (
 
 CREATE INDEX "Problem_problemType_category_idx" ON "Problem"("problemType", "category");
 CREATE INDEX "Problem_archivedAt_problemType_category_idx" ON "Problem"("archivedAt", "problemType", "category");
+CREATE INDEX "Problem_archivedAt_problemType_sortOrder_id_idx" ON "Problem"("archivedAt", "problemType", "sortOrder", "id");
+
+CREATE TABLE "ProblemCategoryOrder" (
+  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "problemType" TEXT NOT NULL,
+  "category" TEXT NOT NULL,
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX "ProblemCategoryOrder_problemType_category_key" ON "ProblemCategoryOrder"("problemType", "category");
+CREATE INDEX "ProblemCategoryOrder_problemType_sortOrder_idx" ON "ProblemCategoryOrder"("problemType", "sortOrder");
 
 CREATE TABLE "Exam" (
   "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,

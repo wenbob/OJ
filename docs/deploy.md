@@ -357,25 +357,28 @@ docker ps -a
 npm run db:status
 ```
 
-部署新版本优先使用“本地 Linux/Docker 构建 standalone 产物后上传”的流程，见“后续更新流程”。如果必须在服务器当前目录构建，才执行下面的低内存流程：
+部署新版本优先使用“本地 Linux/Docker 构建 standalone 产物后上传”的流程，见“后续更新流程”。只有本地 Linux 产物确实无法生成、依赖没有变化且已安排维护窗口时，才允许在服务器当前目录执行下面的应急低内存流程；依赖变化时不要在 2GB 服务器运行 `npm ci`：
 
 ```bash
-npm ci --registry=https://registry.npmmirror.com --no-audit --no-fund
-npm run check:env
-npm run db:deploy
-docker build -t oj-cpp-judge ./docker/judge-cpp
+mkdir -p /www/backups
+stamp=$(date +%Y%m%d-%H%M%S)
 pm2 stop oj
+cp /www/oj/prisma/prod.db /www/backups/prod-${stamp}.db
+test -s /www/backups/prod-${stamp}.db
+npm run check:env
 NEXT_TELEMETRY_DISABLED=1 NEXT_PRIVATE_BUILD_WORKER_COUNT=1 NODE_OPTIONS='--max-old-space-size=768' npm run build
+npm run db:deploy
 pm2 restart oj --update-env
+curl http://127.0.0.1:3000/api/health
 ```
 
-当前 2 核 2GB 服务器资源有限。如果是在 `/www/oj` 当前线上目录直接构建，必须先 `pm2 stop oj` 再低内存构建，避免构建和线上 Node 进程同时争抢内存导致 SSH、HTTP 短暂卡住。低内存构建固定使用：
+当前 2 核 2GB 服务器资源有限。在 `/www/oj` 当前线上目录应急构建时，必须先停 PM2、备份并验证数据库，再低内存构建，避免构建和线上 Node 进程同时争抢内存导致 SSH、HTTP 短暂卡住。低内存构建固定使用：
 
 ```bash
 NEXT_TELEMETRY_DISABLED=1 NEXT_PRIVATE_BUILD_WORKER_COUNT=1 NODE_OPTIONS='--max-old-space-size=768' npm run build
 ```
 
-使用 `/www/oj-new` 新目录构建时，也建议使用同样的低内存构建命令。确认构建成功后再切换目录并重启 PM2。常规发布不要在服务器构建，优先上传本地 Linux standalone 产物。
+不要把 `/www/oj-new` 当作常规服务器构建目录。常规发布只在该目录解包本地 Linux standalone 产物、复制线上环境和依赖并做切换预检。
 
 ### 清理 OJ 旧版本目录
 

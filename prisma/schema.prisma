@@ -45,6 +45,7 @@ model Problem {
   difficulty                 String
   category                   String
   problemType                String                      @default("programming")
+  sortOrder                  Int                         @default(0)
   objectiveItems             String?
   archivedAt                DateTime?
   createdAt                  DateTime                    @default(now())
@@ -57,6 +58,19 @@ model Problem {
 
   @@index([problemType, category])
   @@index([archivedAt, problemType, category])
+  @@index([archivedAt, problemType, sortOrder, id])
+}
+
+model ProblemCategoryOrder {
+  id          Int      @id @default(autoincrement())
+  problemType String
+  category    String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([problemType, category])
+  @@index([problemType, sortOrder])
 }
 
 model TestCase {

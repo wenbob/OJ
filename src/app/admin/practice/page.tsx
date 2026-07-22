@@ -10,6 +10,10 @@ import {
   readPaginationFromObject,
 } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
+import {
+  getOrderedProblemCategories,
+  getProblemOrderBy,
+} from "@/lib/problemOrdering";
 import { getPracticeSubmissionCountsByProblem } from "@/lib/problemSubmissionCounts";
 
 const adminNav = [
@@ -55,7 +59,7 @@ export default async function AdminPracticePage({ searchParams }: PageProps) {
         category: true,
         problemType: true,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: getProblemOrderBy("custom"),
       skip,
       take: pageSize,
     }),
@@ -63,19 +67,23 @@ export default async function AdminPracticePage({ searchParams }: PageProps) {
     prisma.problem.findMany({
       where: { archivedAt: null, problemType },
       select: { category: true },
-      orderBy: { category: "asc" },
     }),
   ]);
   const submissionCounts = await getPracticeSubmissionCountsByProblem({
     problemIds: problems.map((problem) => problem.id),
   });
 
-  const categories = Array.from(
+  const categoryNames = Array.from(
     new Set(
       allCategories
         .map((problem) => problem.category?.trim() || "未分类")
         .filter(Boolean),
       ),
+  );
+  const categories = await getOrderedProblemCategories(
+    prisma,
+    problemType,
+    categoryNames,
   );
   const pagination = buildPaginationMeta({ page, pageSize, total });
 

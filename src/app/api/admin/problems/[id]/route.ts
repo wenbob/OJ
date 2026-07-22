@@ -5,6 +5,7 @@ import {
   parseObjectiveItems,
 } from "@/lib/objectiveProblem";
 import { normalizeProblemPayload } from "@/lib/problemPayload";
+import { getNextProblemSortOrder } from "@/lib/problemOrdering";
 import { prisma } from "@/lib/prisma";
 import {
   PayloadTooLargeError,
@@ -38,7 +39,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const problem = await prisma.$transaction(async (tx) => {
       const currentProblem = await tx.problem.findUnique({
         where: { id: problemId },
-        select: { archivedAt: true },
+        select: { archivedAt: true, problemType: true },
       });
       if (!currentProblem || currentProblem.archivedAt) {
         throw new Error("题目不存在或已经下架");
@@ -64,6 +65,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
 
       await tx.testCase.deleteMany({ where: { problemId } });
+      const sortOrder =
+        currentProblem.problemType === payload.problemType
+          ? undefined
+          : await getNextProblemSortOrder(tx, payload.problemType);
       const updatedProblem = await tx.problem.update({
         where: { id: problemId },
         data: {
@@ -77,6 +82,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           difficulty: payload.difficulty,
           category: payload.category,
           problemType: payload.problemType,
+          sortOrder,
           objectiveItems: payload.objectiveItems ?? null,
           testCases:
             payload.problemType === "programming"

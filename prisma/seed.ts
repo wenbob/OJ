@@ -72,6 +72,7 @@ async function main() {
       dataRange: "-10^9 <= a,b <= 10^9",
       difficulty: "入门",
       category: "基础语法",
+      sortOrder: 1,
       testCases: {
         create: [
           { input: "1 2\n", output: "3\n", isSample: true },
@@ -94,6 +95,7 @@ async function main() {
       dataRange: "-10^9 <= n <= 10^9",
       difficulty: "入门",
       category: "条件判断",
+      sortOrder: 2,
       testCases: {
         create: [
           { input: "4\n", output: "even\n", isSample: true },
@@ -116,6 +118,7 @@ async function main() {
       dataRange: "-10^9 <= a,b <= 10^9",
       difficulty: "入门",
       category: "条件判断",
+      sortOrder: 3,
       testCases: {
         create: [
           { input: "3 5\n", output: "5\n", isSample: true },

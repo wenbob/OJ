@@ -43,7 +43,9 @@ describe("problems API accepted marker", () => {
 
   it("returns isAccepted using all historical Accepted submissions", async () => {
     const response = await GET(
-      new NextRequest("http://oj.local/api/problems?problemType=programming"),
+      new NextRequest(
+        "http://oj.local/api/problems?problemType=programming&sort=oldest",
+      ),
     );
     const body = await response.json();
 
@@ -57,5 +59,10 @@ describe("problems API accepted marker", () => {
       problemIds: [2],
       userId: 9,
     });
+    expect(mocks.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ sortOrder: "desc" }, { id: "desc" }],
+      }),
+    );
   });
 });
