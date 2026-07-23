@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { SendHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ProblemAiAssist } from "@/components/ProblemAiAssist";
 import { ProblemRunPanel } from "@/components/ProblemRunPanel";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -288,6 +289,43 @@ export function ProblemSubmitForm({
     result?.caseResults?.[0];
   const hasActualOutput =
     outputCase?.actualOutput !== undefined && outputCase.actualOutput !== null;
+  // AppShell 的入场动画会让内容祖先保留 transform；挂到 body 后，
+  // fixed 遮罩才能始终以当前视口为参照，不受结果区自动滚动影响。
+  const acceptedPopup =
+    showAcceptedPopup && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            aria-label="通过此题提示"
+            aria-atomic="true"
+            aria-live="polite"
+            className="ac-success-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4"
+            onClick={() => setShowAcceptedPopup(false)}
+            role="status"
+          >
+            <div
+              className="ac-success-pop relative max-h-[86vh] max-w-[86vw]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                aria-label="关闭通过提示"
+                className="hidden"
+                onClick={() => setShowAcceptedPopup(false)}
+                type="button"
+              >
+                关闭
+              </button>
+              <Image
+                alt="你通过了此题，恭喜"
+                className="max-h-[86vh] max-w-[86vw] object-contain"
+                height={1254}
+                src="/ac-success.png"
+                width={1254}
+              />
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
   const submitButton = (
     <button
       className="btn btn-primary mt-4 w-full"
@@ -452,37 +490,7 @@ export function ProblemSubmitForm({
           ) : null}
         </div>
       ) : null}
-      {showAcceptedPopup ? (
-        <div
-          aria-label="通过此题提示"
-          aria-atomic="true"
-          aria-live="polite"
-          className="ac-success-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4"
-          onClick={() => setShowAcceptedPopup(false)}
-          role="status"
-        >
-          <div
-            className="ac-success-pop relative max-h-[86vh] max-w-[86vw]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              aria-label="关闭通过提示"
-              className="hidden"
-              onClick={() => setShowAcceptedPopup(false)}
-              type="button"
-            >
-              关闭
-            </button>
-            <Image
-              alt="你通过了此题，恭喜"
-              className="max-h-[86vh] max-w-[86vw] object-contain"
-              height={1254}
-              src="/ac-success.png"
-              width={1254}
-            />
-          </div>
-        </div>
-      ) : null}
+      {acceptedPopup}
       </section>
     </>
   );

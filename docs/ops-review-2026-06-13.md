@@ -105,5 +105,21 @@ oj2026   https://github.com/wenbob/2026-OJC.git
 
 - `public/ac-success.png` 必须保持真实透明通道；不要替换为带棋盘格像素的伪透明图片。
 - AC 弹窗的自动消失由 `ProblemSubmitForm.tsx` 控制，动效在 `globals.css` 中。
+- AC 遮罩必须通过 portal 挂到 `document.body`，不要放回带 `transform` 的 `.app-stage` 内容树。
 - 字号控制属于全站编辑器能力，不要在各页面重复写一套字号状态。
 - 线上服务器内存较小，即使只改前端文件，也继续使用停 PM2 后单 worker 构建流程。
+
+## 2026-07-23 补充：提交后视口居中修复
+
+正式提交会自动滚动到结果区。原 AC 遮罩虽然使用 `position: fixed`，但它位于带入场动画 `transform` 的 `.app-stage` 内容树内，固定定位的参照因此变成该祖先；页面滚动后，提示图仍停留在旧内容位置。现已用 React portal 将同一遮罩渲染到 `document.body`，保留原动效、点击关闭和无障碍语义，并始终相对当前视口居中。
+
+本次继续使用本地 Linux/Docker 构建 standalone，服务器未执行 `npm ci` 或 Next.js 构建。发布包审计未发现 `.env`、数据库、根 `node_modules`、`.next/cache` 或嵌套压缩包，并包含 OpenSSL 3 Prisma 引擎、静态资源和 `public/ac-success.png`。
+
+生产回滚点：
+
+```text
+数据库备份：/www/backups/prod-20260723-121452-before-ac-popup.db
+旧版本目录：/www/oj-old-20260723-121452
+```
+
+上线后确认 PM2 `oj` 在线、SQLite `quick_check` 为 `ok`、服务只监听 `127.0.0.1:3000`，内外网健康检查、登录页实际 CSS/JS 资源和 AC 图片均返回 200。部署前已完成 63 个测试文件、296 项测试，以及 TypeScript、Lint 和 Linux standalone 构建检查。

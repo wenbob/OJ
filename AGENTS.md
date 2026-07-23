@@ -59,6 +59,7 @@ Generating static pages using 1 worker
 ## 提交反馈策略
 
 - AC 透明动效弹窗集中在 `src/components/ProblemSubmitForm.tsx` 和 `public/ac-success.png`。图片必须保持真实 alpha 透明背景，不要替换成带棋盘格像素的伪透明图。
+- AC 遮罩必须通过 portal 挂到 `document.body`。页面入场动画会让 `.app-stage` 等祖先保留 `transform`，若把 `position: fixed` 遮罩留在题目内容树内，它会改为相对该祖先定位，并在提交结果自动滚动后偏离当前视口中心。
 
 ## 试运行规则
 
