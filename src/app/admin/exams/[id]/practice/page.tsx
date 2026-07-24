@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AcceptedProblemIndicator } from "@/components/AcceptedProblemIndicator";
 import { AppShell } from "@/components/AppShell";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
@@ -17,6 +18,7 @@ import {
   parseObjectiveItems,
 } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import { getLatestAcceptedSubmissionIdsByProblem } from "@/lib/problemSubmissionCounts";
 import { getDefaultCppTemplate } from "@/lib/settings";
 
 const adminNav = [
@@ -72,26 +74,29 @@ export default async function AdminExamPracticePage({
   if (!exam) notFound();
 
   const problemIds = exam.problems.map((item) => item.problemId);
-  const latestSubmissions =
-    problemIds.length > 0
-      ? await prisma.submission.findMany({
-          where: {
-            userId: user.id,
-            submissionType: "practice",
-            problemId: { in: problemIds },
-          },
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            problemId: true,
-            status: true,
-            passedCount: true,
-            totalCount: true,
-            runtimeMs: true,
-            createdAt: true,
-          },
-        })
-      : [];
+  const [latestSubmissions, latestAcceptedSubmissionIds] = await Promise.all([
+    prisma.submission.findMany({
+      where: {
+        userId: user.id,
+        submissionType: "practice",
+        problemId: { in: problemIds },
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        problemId: true,
+        status: true,
+        passedCount: true,
+        totalCount: true,
+        runtimeMs: true,
+        createdAt: true,
+      },
+    }),
+    getLatestAcceptedSubmissionIdsByProblem({
+      problemIds,
+      userId: user.id,
+    }),
+  ]);
 
   const latestByProblem = new Map<number, (typeof latestSubmissions)[number]>();
   latestSubmissions.forEach((submission) => {
@@ -107,6 +112,9 @@ export default async function AdminExamPracticePage({
   const selectedLatest = selectedProblem
     ? latestByProblem.get(selectedProblem.id)
     : null;
+  const selectedAcceptedSubmissionId = selectedProblem
+    ? latestAcceptedSubmissionIds.get(selectedProblem.id)
+    : undefined;
   const selectedProblemType = normalizeProblemType(
     selectedProblem?.problemType,
   );
@@ -163,24 +171,42 @@ export default async function AdminExamPracticePage({
               <div className="divide-y divide-ink-950/10">
                 {exam.problems.map((item, index) => {
                   const latest = latestByProblem.get(item.problemId);
+                  const acceptedSubmissionId =
+                    latestAcceptedSubmissionIds.get(item.problemId);
                   const active = item.problemId === selectedProblem.id;
                   return (
-                    <Link
-                      className={`block p-4 hover:bg-white/70 ${
-                        active ? "bg-white/75" : ""
+                    <div
+                      className={`p-4 transition-colors hover:bg-white/70 ${
+                        acceptedSubmissionId
+                          ? "bg-emerald-50/80 hover:bg-emerald-100/70"
+                          : active
+                            ? "bg-white/75"
+                            : ""
                       }`}
-                      href={`/admin/exams/${exam.id}/practice?problemId=${item.problemId}`}
                       key={item.id}
                     >
-                      <p className="text-xs font-black text-ink-500">
-                        第 {index + 1} 题
-                      </p>
-                      <h3 className="mt-1 font-black">{item.problem.title}</h3>
-                      <p className="mt-1 text-xs font-bold text-ink-600">
-                        {item.problem.category || "未分类"} / {item.score} 分
-                      </p>
+                      <Link
+                        className="block"
+                        href={`/admin/exams/${exam.id}/practice?problemId=${item.problemId}`}
+                      >
+                        <p className="text-xs font-black text-ink-500">
+                          第 {index + 1} 题
+                        </p>
+                        <h3 className="mt-1 font-black">{item.problem.title}</h3>
+                        <p className="mt-1 text-xs font-bold text-ink-600">
+                          {item.problem.category || "未分类"} / {item.score} 分
+                        </p>
+                      </Link>
                       <div className="mt-3">
-                        {latest ? (
+                        {acceptedSubmissionId ? (
+                          <AcceptedProblemIndicator
+                            problemTitle={item.problem.title}
+                            problemType={normalizeProblemType(
+                              item.problem.problemType,
+                            )}
+                            submissionId={acceptedSubmissionId}
+                          />
+                        ) : latest ? (
                           <StatusBadge status={latest.status} />
                         ) : (
                           <span className="inline-flex border border-ink-950/10 bg-white/70 px-2.5 py-1 text-xs font-bold text-ink-600">
@@ -188,7 +214,7 @@ export default async function AdminExamPracticePage({
                           </span>
                         )}
                       </div>
-                    </Link>
+                    </div>
                   );
                 })}
               </div>
@@ -206,6 +232,13 @@ export default async function AdminExamPracticePage({
                   {selectedProblem.category || "未分类"}
                 </span>
                 <ProblemTypeBadge type={selectedProblemType} />
+                {selectedAcceptedSubmissionId ? (
+                  <AcceptedProblemIndicator
+                    problemTitle={selectedProblem.title}
+                    problemType={selectedProblemType}
+                    submissionId={selectedAcceptedSubmissionId}
+                  />
+                ) : null}
                 <CopyProblemButton
                   category={selectedProblem.category}
                   dataRange={selectedProblem.dataRange}

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { AcceptedProblemIndicator } from "@/components/AcceptedProblemIndicator";
 import { AppShell } from "@/components/AppShell";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
@@ -16,6 +17,7 @@ import {
   parseObjectiveItems,
 } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import { getLatestAcceptedSubmissionIdsByProblem } from "@/lib/problemSubmissionCounts";
 import { getDefaultCppTemplate } from "@/lib/settings";
 
 const adminNav = [
@@ -38,7 +40,12 @@ export default async function AdminPracticeProblemPage({ params }: PageProps) {
   const problemId = Number(id);
   if (!Number.isInteger(problemId)) notFound();
 
-  const [problem, latestSubmission, defaultCodeTemplate] = await Promise.all([
+  const [
+    problem,
+    latestSubmission,
+    latestAcceptedSubmissionIds,
+    defaultCodeTemplate,
+  ] = await Promise.all([
     prisma.problem.findUnique({
       where: { id: problemId },
       include: {
@@ -52,11 +59,17 @@ export default async function AdminPracticeProblemPage({ params }: PageProps) {
       where: { userId: user.id, problemId, submissionType: "practice" },
       orderBy: { createdAt: "desc" },
     }),
+    getLatestAcceptedSubmissionIdsByProblem({
+      problemIds: [problemId],
+      userId: user.id,
+    }),
     getDefaultCppTemplate(),
   ]);
 
   if (!problem || problem.archivedAt) notFound();
   const problemType = normalizeProblemType(problem.problemType);
+  const latestAcceptedSubmissionId =
+    latestAcceptedSubmissionIds.get(problem.id);
   const objectiveItems =
     problemType === "objective"
       ? parseObjectiveItems(problem.objectiveItems)
@@ -85,6 +98,13 @@ export default async function AdminPracticeProblemPage({ params }: PageProps) {
               {problem.category}
             </span>
             <ProblemTypeBadge type={problemType} />
+            {latestAcceptedSubmissionId ? (
+              <AcceptedProblemIndicator
+                problemTitle={problem.title}
+                problemType={problemType}
+                submissionId={latestAcceptedSubmissionId}
+              />
+            ) : null}
             <CopyProblemButton
               category={problem.category}
               dataRange={problem.dataRange}
@@ -143,6 +163,7 @@ export default async function AdminPracticeProblemPage({ params }: PageProps) {
             detailHrefBase="/admin/submissions"
             problemType={problemType}
             problemId={problem.id}
+            refreshOnSuccess
             sampleCount={samples.length}
           />
         </aside>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { AcceptedProblemIndicator } from "@/components/AcceptedProblemIndicator";
 import { AppShell } from "@/components/AppShell";
 import { Pagination } from "@/components/Pagination";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
@@ -14,7 +15,10 @@ import {
   getOrderedProblemCategories,
   getProblemOrderBy,
 } from "@/lib/problemOrdering";
-import { getPracticeSubmissionCountsByProblem } from "@/lib/problemSubmissionCounts";
+import {
+  getLatestAcceptedSubmissionIdsByProblem,
+  getPracticeSubmissionCountsByProblem,
+} from "@/lib/problemSubmissionCounts";
 
 const adminNav = [
   { href: "/admin", label: "后台首页" },
@@ -69,9 +73,14 @@ export default async function AdminPracticePage({ searchParams }: PageProps) {
       select: { category: true },
     }),
   ]);
-  const submissionCounts = await getPracticeSubmissionCountsByProblem({
-    problemIds: problems.map((problem) => problem.id),
-  });
+  const problemIds = problems.map((problem) => problem.id);
+  const [submissionCounts, latestAcceptedSubmissionIds] = await Promise.all([
+    getPracticeSubmissionCountsByProblem({ problemIds }),
+    getLatestAcceptedSubmissionIdsByProblem({
+      problemIds,
+      userId: user.id,
+    }),
+  ]);
 
   const categoryNames = Array.from(
     new Set(
@@ -139,38 +148,61 @@ export default async function AdminPracticePage({ searchParams }: PageProps) {
               </tr>
             </thead>
             <tbody>
-              {problems.map((problem) => (
-                <tr className="border-b border-ink-950/10" key={problem.id}>
-                  <td className="px-5 py-4 font-black">{problem.title}</td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {problem.difficulty}
-                  </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {problem.category || "未分类"}
-                  </td>
-                  <td className="px-5 py-4">
-                    <ProblemTypeBadge type={problem.problemType} />
-                  </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    <Link
-                      className="font-black text-steel underline-offset-4 hover:text-clay hover:underline"
-                      href={`/admin/submissions?problemId=${problem.id}`}
-                      title={`查看《${problem.title}》的提交记录`}
-                    >
-                      {submissionCounts.get(problem.id) ?? 0}
-                    </Link>
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <Link
-                      className="inline-flex items-center gap-1 text-sm font-black text-steel hover:text-clay"
-                      href={`/admin/practice/problems/${problem.id}`}
-                    >
-                      进入做题
-                      <ChevronRight size={16} />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {problems.map((problem) => {
+                const acceptedSubmissionId = latestAcceptedSubmissionIds.get(
+                  problem.id,
+                );
+                return (
+                  <tr
+                    className={`border-b border-ink-950/10 transition-colors ${
+                      acceptedSubmissionId
+                        ? "bg-emerald-50/80 hover:bg-emerald-100/70"
+                        : ""
+                    }`}
+                    key={problem.id}
+                  >
+                    <td className="px-5 py-4 font-black">
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        {problem.title}
+                        {acceptedSubmissionId ? (
+                          <AcceptedProblemIndicator
+                            problemTitle={problem.title}
+                            problemType={problemType}
+                            submissionId={acceptedSubmissionId}
+                          />
+                        ) : null}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                      {problem.difficulty}
+                    </td>
+                    <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                      {problem.category || "未分类"}
+                    </td>
+                    <td className="px-5 py-4">
+                      <ProblemTypeBadge type={problem.problemType} />
+                    </td>
+                    <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                      <Link
+                        className="font-black text-steel underline-offset-4 hover:text-clay hover:underline"
+                        href={`/admin/submissions?problemId=${problem.id}`}
+                        title={`查看《${problem.title}》的提交记录`}
+                      >
+                        {submissionCounts.get(problem.id) ?? 0}
+                      </Link>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <Link
+                        className="inline-flex items-center gap-1 text-sm font-black text-steel hover:text-clay"
+                        href={`/admin/practice/problems/${problem.id}`}
+                      >
+                        {acceptedSubmissionId ? "再次练习" : "进入做题"}
+                        <ChevronRight size={16} />
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
               {problems.length === 0 ? (
                 <tr>
                   <td
