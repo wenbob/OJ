@@ -1,4 +1,5 @@
 export const DEFAULT_PAGE_SIZE = 20;
+export const PROBLEM_LIST_PAGE_SIZE = 50;
 export const MAX_PAGE_SIZE = 100;
 
 export type PaginationMeta = {
@@ -19,18 +20,29 @@ function readNumber(value: string | string[] | undefined | null) {
 
 export function readPaginationFromObject(
   searchParams: Record<string, string | string[] | undefined>,
+  defaultPageSize = DEFAULT_PAGE_SIZE,
 ) {
   const page = Math.max(1, readNumber(searchParams.page) ?? 1);
-  const rawPageSize = readNumber(searchParams.pageSize) ?? DEFAULT_PAGE_SIZE;
+  const normalizedDefaultPageSize = Number.isInteger(defaultPageSize)
+    ? Math.min(Math.max(1, defaultPageSize), MAX_PAGE_SIZE)
+    : DEFAULT_PAGE_SIZE;
+  const rawPageSize =
+    readNumber(searchParams.pageSize) ?? normalizedDefaultPageSize;
   const pageSize = Math.min(Math.max(1, rawPageSize), MAX_PAGE_SIZE);
   return { page, pageSize, skip: (page - 1) * pageSize };
 }
 
-export function readPaginationFromUrl(searchParams: URLSearchParams) {
-  return readPaginationFromObject({
-    page: searchParams.get("page") ?? undefined,
-    pageSize: searchParams.get("pageSize") ?? undefined,
-  });
+export function readPaginationFromUrl(
+  searchParams: URLSearchParams,
+  defaultPageSize = DEFAULT_PAGE_SIZE,
+) {
+  return readPaginationFromObject(
+    {
+      page: searchParams.get("page") ?? undefined,
+      pageSize: searchParams.get("pageSize") ?? undefined,
+    },
+    defaultPageSize,
+  );
 }
 
 export function buildPaginationMeta({

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { RankEmblem } from "@/components/RankEmblem";
+import { StudentAssignmentReminderModal } from "@/components/StudentAssignmentReminderModal";
 import { requirePageUser } from "@/lib/auth";
 import { getStudentLearningReview } from "@/lib/learningReview";
 import { prisma } from "@/lib/prisma";
@@ -23,6 +24,11 @@ import {
   type StudentRankingEntry,
 } from "@/lib/ranking";
 import { getPublicSettings } from "@/lib/settings";
+import {
+  getAssignmentPublisherLabel,
+  hasIncompleteAssignmentProblems,
+  type PendingAssignmentReminderItem,
+} from "@/lib/studentAssignmentReminder";
 
 type ProgressStyle = CSSProperties & { "--progress": number };
 
@@ -61,7 +67,10 @@ export default async function StudentHomePage() {
     getStudentLearningReview(user.id),
     prisma.learningAssignment.findMany({
       where: { studentId: user.id, status: "active" },
-      include: { problems: { select: { completedAt: true } } },
+      include: {
+        createdBy: { select: { role: true, username: true } },
+        problems: { select: { completedAt: true } },
+      },
       orderBy: { createdAt: "desc" },
     }),
   ]);
@@ -70,10 +79,20 @@ export default async function StudentHomePage() {
     ? getRankTierProgress(currentRanking.points)
     : null;
   const pendingAssignments = activeAssignments.filter(
-    (assignment) =>
-      assignment.problems.length > 0 &&
-      assignment.problems.some((problem) => !problem.completedAt),
+    (assignment) => hasIncompleteAssignmentProblems(assignment.problems),
   );
+  const pendingAssignmentReminderItems: PendingAssignmentReminderItem[] =
+    pendingAssignments.map((assignment) => ({
+      completedCount: assignment.problems.filter(
+        (problem) => problem.completedAt,
+      ).length,
+      dueAt: assignment.dueAt?.toISOString() ?? null,
+      id: assignment.id,
+      problemCount: assignment.problems.length,
+      publisherLabel: getAssignmentPublisherLabel(assignment.createdBy),
+      title: assignment.title,
+      updatedAt: assignment.updatedAt.toISOString(),
+    }));
   const recentAssignment = pendingAssignments[0] ?? activeAssignments[0] ?? null;
   const recentAssignmentCompleted = recentAssignment
     ? recentAssignment.problems.filter((problem) => problem.completedAt).length
@@ -81,6 +100,10 @@ export default async function StudentHomePage() {
 
   return (
     <AppShell nav={studentNav} title="学生端" user={user}>
+      <StudentAssignmentReminderModal
+        assignments={pendingAssignmentReminderItems}
+        studentId={user.id}
+      />
       <section className="mb-6 flex items-start gap-3 border border-clay/25 bg-[#fffaf1] p-4 text-sm font-semibold leading-6 text-ink-700">
         <Megaphone aria-hidden="true" className="mt-0.5 flex-none text-clay" size={18} />
         <span>{settings.studentNotice}</span>

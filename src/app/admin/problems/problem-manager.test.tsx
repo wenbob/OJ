@@ -33,7 +33,7 @@ function renderManager(initialSort: ProblemListSort) {
       initialCategory=""
       initialPagination={{
         page: 1,
-        pageSize: 20,
+        pageSize: 50,
         total: 2,
         totalPages: 1,
       }}

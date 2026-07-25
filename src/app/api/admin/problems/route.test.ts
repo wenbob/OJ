@@ -198,12 +198,20 @@ describe("admin problem archiving", () => {
         "http://local.test/api/admin/problems?problemType=programming&sort=oldest",
       ),
     );
+    const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      page: 1,
+      pageSize: 50,
+      totalPages: 1,
+    });
     expect(mocks.prisma.problem.findMany).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        skip: 0,
+        take: 50,
       }),
     );
   });

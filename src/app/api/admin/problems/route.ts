@@ -3,6 +3,7 @@ import { requireApiUser } from "@/lib/auth";
 import { isProblemType } from "@/lib/objectiveProblem";
 import {
   buildPaginationMeta,
+  PROBLEM_LIST_PAGE_SIZE,
   readPaginationFromUrl,
 } from "@/lib/pagination";
 import { normalizeProblemPayload } from "@/lib/problemPayload";
@@ -35,7 +36,10 @@ export async function GET(request: NextRequest) {
   const listSort = normalizeProblemListSort(
     request.nextUrl.searchParams.get("sort"),
   );
-  const { page, pageSize, skip } = readPaginationFromUrl(request.nextUrl.searchParams);
+  const { page, pageSize, skip } = readPaginationFromUrl(
+    request.nextUrl.searchParams,
+    PROBLEM_LIST_PAGE_SIZE,
+  );
   const where = {
     archivedAt: null,
     ...(category ? { category } : {}),

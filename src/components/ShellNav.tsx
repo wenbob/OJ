@@ -2,16 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isShellNavItemActive } from "@/lib/shellNavigation";
 
 type NavItem = {
   href: string;
   label: string;
 };
-
-function isActivePath(pathname: string, href: string) {
-  if (href === "/student" || href === "/admin") return pathname === href;
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
 
 export function ShellNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
@@ -19,7 +15,7 @@ export function ShellNav({ items }: { items: NavItem[] }) {
   return (
     <nav aria-label="主导航" className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-4 md:px-6">
       {items.map((item) => {
-        const active = isActivePath(pathname, item.href);
+        const active = isShellNavItemActive(pathname, item.href);
         return (
           <Link
             aria-current={active ? "page" : undefined}

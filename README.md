@@ -215,6 +215,7 @@ npm run db:status
 - 页面顶部平台名称读取系统设置中的 `siteName`。
 - 登录页、学生端和管理员端共用“竞技学院”视觉语言；动效支持 `prefers-reduced-motion`。
 - 学生首页采用“今日任务 + 段位成长”布局，顶部用户信息显示当前头衔、段位积分和天梯排名。
+- 学生进入或刷新首页时，如有需要提醒的未完成专项练习，会先看到不可关闭的汇总弹窗；唯一按钮会带学生进入 `/student/assignments`，其他学生页面不会被弹窗打断。
 
 ### 头衔与天梯榜
 
@@ -262,6 +263,7 @@ npm run db:status
 ### 专项练习
 
 - 学生首页和 `/student/assignments` 展示老师下发的专项练习、说明、截止日期和完成进度。
+- 未完成提醒汇总管理员和老师下发的全部进行中任务，并显示发布者、进度与截止时间。学生点击“去完成专项练习”后进入 60 分钟静默期；期间刷新首页、退出重登或使用缓存会话都不重复提醒。满 60 分钟后若仍停留或再次进入首页，系统重新读取任务状态，仍有未完成任务才提醒；新任务或被老师修改的任务在下一次首页读取时立即提醒。
 - 只有从专项练习详情进入题目，并在任务仍为进行中时重新提交 `Accepted`，才会计入该任务；普通日常提交、考试提交、历史 AC 都不会抵扣。
 - 有权限的管理员或老师可以继续调整未归档任务的题目、顺序和说明；学生端会按保存后的任务快照只读跟随。删除已完成题只解除任务关联并重算进度，不删除历史提交或代码。
 - 如果一道题在评测期间被移出任务，本次提交仍会保存为普通练习，但不会计入专项进度，页面会给出明确说明。
@@ -279,7 +281,7 @@ npm run db:status
 已支持：
 
 - 编程题和选择判断题独立筛选。
-- 题目列表分页，默认每页 20 条。
+- 题目列表分页，默认每页 50 道。
 - 顶部按 `Problem.category` 动态生成分类筛选。
 - 点击“全部”显示全部题目，点击分类只显示该分类题目。
 - 题目列表显示标题、难度、分类、“我的提交”和进入做题入口。
@@ -485,7 +487,7 @@ oj-code-exam-${examId}-problem-${problemId}
 
 老师账号由管理员创建，登录后进入独立的 `/teacher`。老师可以练习和校验现有题目、创建并管理自己的考试、管理学生账号、查看全部学生提交与学情、维护自己下发的专项练习，以及审阅 AI 使用和天梯。
 
-老师不能访问系统设置、AI 模型配置、题目管理、题目导入、上下架、题序或分类排序，也不能使用考试 Markdown 导入。老师只能维护学生账号，不能枚举或管理老师和管理员；老师的考试和专项练习按创建者隔离。
+老师不能访问系统设置、AI 模型配置、题目管理、题目导入、上下架、题序或分类排序，也不能使用考试 Markdown 导入。老师只能查看和新增学生、调整学生个人 AI 权限，以及把学生密码重置为固定初始值 `12345678`；不能修改用户名、角色或自定义头衔，不能删除学生，也不能枚举或管理老师和管理员。老师的考试和专项练习按创建者隔离。
 
 详细操作见 [老师端使用说明](docs/teacher-guide.md)。
 
@@ -541,7 +543,7 @@ oj-code-exam-${examId}-problem-${problemId}
 已支持：
 
 - 创建考试时选择 `programming` 或 `objective`，一场考试不能混合题型。
-- 题目列表分页，默认每页 20 条。
+- 题目列表分页，默认每页 50 道。
 - 按 `Problem.category` 动态分类筛选。
 - 管理员可以在当前页拖动题目或使用上下按钮调整题序，也可以拖动分类标签后统一保存；保存后的自定义顺序会同步用于学生题库、管理员练习和组卷搜索。
 - 管理员题目管理页可按标题自然顺序或创建时间正倒序预览，并可将当前题型或分类的全部结果保存为一次性自定义题序快照；学生端不显示任何排序入口。
@@ -632,6 +634,8 @@ POST /api/admin/problems/bulk-delete
 - 不能删除当前登录账号。
 - 原密码使用不可逆 `passwordHash` 保存，页面和接口都无法查看或返回；修改密码后会递增 `sessionVersion`，使旧会话失效。
 - 桌面端编辑表单会在视口内自适应居中跟随；内容超过视口时改为面板内部滚动，移动端保持普通上下布局。
+
+老师端 `/teacher/users` 使用受限学生管理：新增学生的初始密码由服务端固定为 `12345678`，个人 AI 权限默认开启且创建前可取消。已有学生只提供 AI 权限切换和固定密码重置；老师不能编辑用户名、角色或自定义头衔，也不能删除学生。学生头衔和段位仍可只读查看。
 
 ### AI 使用与对话审阅
 
@@ -1341,7 +1345,9 @@ POST   /api/admin/problems/import/confirm
 GET    /api/admin/users
 POST   /api/admin/users
 PUT    /api/admin/users/[id]
+PATCH  /api/admin/users/[id]
 DELETE /api/admin/users/[id]
+POST   /api/admin/users/[id]/reset-password
 
 GET    /api/admin/submissions
 GET    /api/admin/submissions/[id]
@@ -1368,7 +1374,7 @@ GET    /api/admin/settings
 PUT    /api/admin/settings
 ```
 
-管理员用户接口支持 `customTitle` 和 `aiAccessEnabled` 字段：创建或编辑学生时可设置最多 20 字的自定义头衔，并可单独开通 AI 对话权限；个人 AI 权限默认关闭。
+管理员用户接口支持 `customTitle` 和 `aiAccessEnabled` 字段：管理员创建或编辑学生时可设置最多 20 字的自定义头衔，并可单独开通 AI 对话权限；个人 AI 权限默认关闭。老师使用同一组受分级鉴权保护的地址，但 `POST /api/admin/users` 只接受用户名和 AI 权限，`PATCH /api/admin/users/[id]` 只切换学生 AI 权限，固定密码重置必须调用 `/reset-password`；老师不能调用完整编辑或删除能力。
 
 `POST /api/problems/[id]/run` 接收 `code`、`mode = samples|custom`、可选 `customInput` 和学生考试使用的可选 `examId`。代码上限 128KB，自定义输入上限 32KB；接口只支持编程题，不接受 `learningAssignmentId`，样例输入和标准输出只能由服务端读取。参数错误、未登录、考试不可用、内容过大、频率过高和 Judge 不可用分别使用 400、401、403、413、429、503。
 
@@ -1378,16 +1384,19 @@ PUT    /api/admin/settings
 
 已支持分页的页面：
 
+题目列表默认每页 50 道：
+
 - `/student/problems`
 - `/admin/problems`
 - `/admin/practice`
+
+记录类列表默认每页 20 条：
+
 - `/student/submissions`
 - `/student/exam-submissions`
 - `/admin/submissions`
 - `/admin/exam-submissions`
 - `/admin/exams/[id]/records`
-
-默认每页 20 条。
 
 分页接口返回结构：
 
@@ -1404,8 +1413,8 @@ PUT    /api/admin/settings
 题目列表支持分类筛选：
 
 ```text
-GET /api/problems?page=1&pageSize=20&category=基础语法
-GET /api/admin/problems?page=1&pageSize=20&category=基础语法
+GET /api/problems?page=1&pageSize=50&category=基础语法
+GET /api/admin/problems?page=1&pageSize=50&category=基础语法
 ```
 
 学生 `GET /api/problems` 的每个题目项包含 `isAccepted`，按该学生全部历史 `Accepted` 实时计算；日常和考试 AC 均计入，后续失败不会清除“已通过”标记。

@@ -12,6 +12,7 @@ import {
   readJsonWithLimit,
 } from "@/lib/requestLimits";
 import { requireStaffApiUser } from "@/lib/staffAccess";
+import { TEACHER_STUDENT_INITIAL_PASSWORD } from "@/lib/userManagementPolicy";
 
 function readRole(value: unknown) {
   if (value === "admin" || value === "teacher" || value === "student") {
@@ -75,23 +76,43 @@ export async function POST(request: NextRequest) {
   }
   const record =
     typeof body === "object" && body ? (body as Record<string, unknown>) : {};
-  const username =
-    typeof record.username === "string" ? record.username.trim() : "";
-  const password = typeof record.password === "string" ? record.password : "";
-  const requestedRole = readRole(record.role);
+  const teacherRequest = auth.user.role === "teacher";
   if (
-    auth.user.role === "teacher" &&
-    requestedRole !== null &&
-    requestedRole !== "student"
+    teacherRequest &&
+    Object.keys(record).some(
+      (key) => key !== "username" && key !== "aiAccessEnabled",
+    )
   ) {
     return NextResponse.json(
-      { error: "老师只能创建学生账号" },
+      { error: "老师新增学生时只能填写用户名和 AI 权限" },
       { status: 403 },
     );
   }
-  const role = auth.user.role === "teacher" ? "student" : requestedRole;
-  const aiAccessEnabled = readAiAccessEnabled(record.aiAccessEnabled);
-  const customTitle = normalizeCustomTitle(record.customTitle);
+  const username =
+    typeof record.username === "string" ? record.username.trim() : "";
+  const password = teacherRequest
+    ? TEACHER_STUDENT_INITIAL_PASSWORD
+    : typeof record.password === "string"
+      ? record.password
+      : "";
+  const requestedRole = readRole(record.role);
+  if (
+    teacherRequest &&
+    record.aiAccessEnabled !== undefined &&
+    typeof record.aiAccessEnabled !== "boolean"
+  ) {
+    return NextResponse.json(
+      { error: "AI 权限必须是布尔值" },
+      { status: 400 },
+    );
+  }
+  const role = teacherRequest ? "student" : requestedRole;
+  const aiAccessEnabled = teacherRequest
+    ? record.aiAccessEnabled !== false
+    : readAiAccessEnabled(record.aiAccessEnabled);
+  const customTitle = teacherRequest
+    ? null
+    : normalizeCustomTitle(record.customTitle);
   const customTitleError = validateCustomTitle(customTitle);
 
   if (!username || !password) {

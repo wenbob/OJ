@@ -55,6 +55,12 @@ describe("problems API accepted marker", () => {
       isAccepted: true,
       mySubmissionCount: 3,
     });
+    expect(body).toMatchObject({
+      page: 1,
+      pageSize: 50,
+      total: 1,
+      totalPages: 1,
+    });
     expect(mocks.accepted).toHaveBeenCalledWith({
       problemIds: [2],
       userId: 9,
@@ -62,7 +68,24 @@ describe("problems API accepted marker", () => {
     expect(mocks.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         orderBy: [{ sortOrder: "desc" }, { id: "desc" }],
+        skip: 0,
+        take: 50,
       }),
+    );
+  });
+
+  it("keeps an explicit compatible page size", async () => {
+    const response = await GET(
+      new NextRequest(
+        "http://oj.local/api/problems?problemType=programming&page=2&pageSize=20",
+      ),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ page: 2, pageSize: 20 });
+    expect(mocks.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 20, take: 20 }),
     );
   });
 });

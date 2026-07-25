@@ -7,6 +7,7 @@ import { requirePageUser } from "@/lib/auth";
 import { isProblemType } from "@/lib/objectiveProblem";
 import {
   buildPaginationMeta,
+  PROBLEM_LIST_PAGE_SIZE,
   readPaginationFromObject,
 } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
@@ -44,7 +45,10 @@ export default async function StudentProblemsPage({ searchParams }: PageProps) {
   const problemType = isProblemType(selectedProblemType)
     ? selectedProblemType
     : "programming";
-  const { page, pageSize, skip } = readPaginationFromObject(query);
+  const { page, pageSize, skip } = readPaginationFromObject(
+    query,
+    PROBLEM_LIST_PAGE_SIZE,
+  );
   const where = {
     archivedAt: null,
     problemType,

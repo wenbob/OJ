@@ -65,9 +65,7 @@ export async function StaffStudentLearningPage({
   });
   const initialSummary = snapshot?.summary ?? null;
   const initialStale = Boolean(snapshot && snapshot.inputHash !== currentHash);
-  const suggestedTitle = detail.recommendations.targetCategories.length
-    ? `${detail.recommendations.targetCategories.join("＋")}专项练习`
-    : "编程基础专项练习";
+  const suggestedTitle = "课后练习";
 
   return (
     <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>

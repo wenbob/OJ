@@ -3,9 +3,11 @@
 import {
   Eye,
   EyeOff,
+  KeyRound,
   Pencil,
   Plus,
   Save,
+  ShieldCheck,
   Trash2,
   X,
 } from "lucide-react";
@@ -13,6 +15,7 @@ import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { formatDate } from "@/lib/format";
 import type { StaffRole } from "@/lib/staffAccess";
+import { TEACHER_STUDENT_INITIAL_PASSWORD } from "@/lib/userManagementPolicy";
 
 type UserItem = {
   aiAccessEnabled?: boolean;
@@ -46,6 +49,13 @@ const blankForm = {
   role: "student",
 };
 
+function createBlankForm(viewerRole: StaffRole) {
+  return {
+    ...blankForm,
+    aiAccessEnabled: viewerRole === "teacher",
+  };
+}
+
 export function UserManager({
   initialUsers,
   viewerRole,
@@ -54,10 +64,12 @@ export function UserManager({
   viewerRole: StaffRole;
 }) {
   const [users, setUsers] = useState(initialUsers);
-  const [form, setForm] = useState(blankForm);
+  const [form, setForm] = useState(() => createBlankForm(viewerRole));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
+  const [rowPendingId, setRowPendingId] = useState<number | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [stickyTop, setStickyTop] = useState(16);
   const formPanelRef = useRef<HTMLFormElement>(null);
@@ -112,6 +124,7 @@ export function UserManager({
   }
 
   function editUser(user: UserItem) {
+    if (viewerRole !== "admin") return;
     setEditingId(user.id);
     setForm({
       aiAccessEnabled: user.aiAccessEnabled ?? false,
@@ -123,6 +136,7 @@ export function UserManager({
     });
     setShowPassword(false);
     setError("");
+    setMessage("");
     window.requestAnimationFrame(() => {
       formPanelRef.current?.scrollTo({ top: 0 });
       usernameInputRef.current?.focus({ preventScroll: true });
@@ -131,7 +145,7 @@ export function UserManager({
 
   function resetForm() {
     setEditingId(null);
-    setForm(blankForm);
+    setForm(createBlankForm(viewerRole));
     setShowPassword(false);
     setError("");
   }
@@ -142,31 +156,48 @@ export function UserManager({
       setError("用户名不能为空");
       return;
     }
-    if (!editingId && !form.password) {
+    if (viewerRole === "admin" && !editingId && !form.password) {
       setError("新增用户时密码不能为空");
       return;
     }
-    if (form.password && form.password.length < 8) {
+    if (
+      viewerRole === "admin" &&
+      form.password &&
+      form.password.length < 8
+    ) {
       setError("密码至少需要 8 位");
       return;
     }
-    if (form.password !== form.passwordConfirm) {
+    if (
+      viewerRole === "admin" &&
+      form.password !== form.passwordConfirm
+    ) {
       setError("两次输入的密码不一致");
       return;
     }
-    if (form.customTitle.trim().length > 20) {
+    if (
+      viewerRole === "admin" &&
+      form.customTitle.trim().length > 20
+    ) {
       setError("自定义头衔不能超过 20 个字符");
       return;
     }
     setPending(true);
     setError("");
-    const payload = {
-      aiAccessEnabled: form.aiAccessEnabled,
-      customTitle: form.customTitle,
-      password: form.password,
-      role: form.role,
-      username: form.username,
-    };
+    setMessage("");
+    const payload =
+      viewerRole === "teacher"
+        ? {
+            aiAccessEnabled: form.aiAccessEnabled,
+            username: form.username,
+          }
+        : {
+            aiAccessEnabled: form.aiAccessEnabled,
+            customTitle: form.customTitle,
+            password: form.password,
+            role: form.role,
+            username: form.username,
+          };
 
     const response = await fetch(
       editingId ? `/api/admin/users/${editingId}` : "/api/admin/users",
@@ -186,9 +217,17 @@ export function UserManager({
 
     resetForm();
     await reload();
+    setMessage(
+      viewerRole === "teacher"
+        ? `学生已创建，初始密码为 ${TEACHER_STUDENT_INITIAL_PASSWORD}。`
+        : editingId
+          ? "用户信息已保存。"
+          : "用户已创建。",
+    );
   }
 
   async function deleteUser(user: UserItem) {
+    if (viewerRole !== "admin") return;
     if (!confirm(`确定要删除用户 ${user.username} 吗？该操作无法恢复。`)) return;
     const response = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE" });
     const data = await response.json().catch(() => ({}));
@@ -197,6 +236,62 @@ export function UserManager({
       return;
     }
     await reload();
+  }
+
+  async function toggleAiAccess(user: UserItem) {
+    if (viewerRole !== "teacher" || rowPendingId !== null) return;
+
+    setRowPendingId(user.id);
+    setError("");
+    setMessage("");
+    const nextEnabled = !user.aiAccessEnabled;
+    const response = await fetch(`/api/admin/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aiAccessEnabled: nextEnabled }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setRowPendingId(null);
+
+    if (!response.ok) {
+      setError(data.error ?? "AI 权限更新失败");
+      return;
+    }
+
+    await reload();
+    setMessage(
+      `已${nextEnabled ? "开启" : "关闭"}学生 ${user.username} 的 AI 权限。`,
+    );
+  }
+
+  async function resetStudentPassword(user: UserItem) {
+    if (viewerRole !== "teacher" || rowPendingId !== null) return;
+    if (
+      !confirm(
+        `确认将学生“${user.username}”的密码重置为 ${TEACHER_STUDENT_INITIAL_PASSWORD} 吗？该学生当前登录会话将失效。`,
+      )
+    ) {
+      return;
+    }
+
+    setRowPendingId(user.id);
+    setError("");
+    setMessage("");
+    const response = await fetch(
+      `/api/admin/users/${user.id}/reset-password`,
+      { method: "POST" },
+    );
+    const data = await response.json().catch(() => ({}));
+    setRowPendingId(null);
+
+    if (!response.ok) {
+      setError(data.error ?? "密码重置失败");
+      return;
+    }
+
+    setMessage(
+      `学生 ${user.username} 的密码已重置为 ${TEACHER_STUDENT_INITIAL_PASSWORD}。`,
+    );
   }
 
   return (
@@ -277,14 +372,53 @@ export function UserManager({
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex justify-end gap-2">
-                      <button className="btn btn-secondary px-3 py-2" onClick={() => editUser(user)} type="button">
-                        <Pencil size={15} />
-                        编辑
-                      </button>
-                      <button className="btn btn-danger px-3 py-2" onClick={() => deleteUser(user)} type="button">
-                        <Trash2 size={15} />
-                        删除
-                      </button>
+                      {viewerRole === "teacher" ? (
+                        <>
+                          <button
+                            className="btn btn-secondary px-3 py-2"
+                            disabled={rowPendingId !== null}
+                            onClick={() => toggleAiAccess(user)}
+                            type="button"
+                          >
+                            <ShieldCheck size={15} />
+                            {rowPendingId === user.id
+                              ? "处理中"
+                              : user.aiAccessEnabled
+                                ? "关闭 AI"
+                                : "开启 AI"}
+                          </button>
+                          <button
+                            className="btn btn-secondary px-3 py-2"
+                            disabled={rowPendingId !== null}
+                            onClick={() => resetStudentPassword(user)}
+                            type="button"
+                          >
+                            <KeyRound size={15} />
+                            {rowPendingId === user.id
+                              ? "处理中"
+                              : "重置密码"}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            className="btn btn-secondary px-3 py-2"
+                            onClick={() => editUser(user)}
+                            type="button"
+                          >
+                            <Pencil size={15} />
+                            编辑
+                          </button>
+                          <button
+                            className="btn btn-danger px-3 py-2"
+                            onClick={() => deleteUser(user)}
+                            type="button"
+                          >
+                            <Trash2 size={15} />
+                            删除
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -301,8 +435,14 @@ export function UserManager({
         style={{ top: stickyTop }}
       >
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-black">{editingId ? "编辑用户" : "新增用户"}</h2>
-          {editingId ? (
+          <h2 className="text-xl font-black">
+            {viewerRole === "teacher"
+              ? "新增学生"
+              : editingId
+                ? "编辑用户"
+                : "新增用户"}
+          </h2>
+          {viewerRole === "admin" && editingId ? (
             <button className="btn btn-secondary px-3 py-2" onClick={resetForm} type="button">
               <X size={15} />
               取消
@@ -319,90 +459,112 @@ export function UserManager({
               onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
             />
           </label>
-          <label className="grid gap-2 text-sm font-bold text-ink-800">
-            {editingId ? "设置新密码（留空则不修改）" : "密码"}
-            <span className="relative">
-              <input
-                className="field w-full pr-12"
-                minLength={8}
-                placeholder={editingId ? "留空则保持原密码" : "至少 8 位"}
-                type={showPassword ? "text" : "password"}
-                value={form.password}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    password: event.target.value,
-                  }))
-                }
-              />
-              <button
-                aria-label={showPassword ? "隐藏新密码" : "显示新密码"}
-                aria-pressed={showPassword}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-500 hover:text-steel"
-                onClick={() => setShowPassword((current) => !current)}
-                type="button"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </span>
-            {editingId ? (
-              <span className="text-xs font-semibold leading-5 text-ink-600">
-                原密码已安全加密，系统无法查看；留空不会修改密码。
+          {viewerRole === "teacher" ? (
+            <div className="border border-amber-200 bg-amber-50/70 p-4 text-sm font-bold text-amber-950">
+              <span className="block text-xs uppercase tracking-[0.14em] text-amber-800">
+                初始密码
               </span>
-            ) : null}
-          </label>
-          {!editingId || form.password ? (
-            <label className="grid gap-2 text-sm font-bold text-ink-800">
-              确认新密码
-              <input
-                className="field"
-                minLength={8}
-                placeholder="再次输入相同密码"
-                type={showPassword ? "text" : "password"}
-                value={form.passwordConfirm}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    passwordConfirm: event.target.value,
-                  }))
-                }
-              />
-            </label>
-          ) : null}
-          <label className="grid gap-2 text-sm font-bold text-ink-800">
-            角色
-            <select
-              className="field"
-              value={form.role}
-              onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}
-            >
-              <option value="student">student</option>
-              {viewerRole === "admin" ? (
-                <>
+              <code className="mt-2 block text-lg font-black">
+                {TEACHER_STUDENT_INITIAL_PASSWORD}
+              </code>
+              <span className="mt-2 block text-xs font-semibold leading-5 text-amber-800">
+                创建后请单独告知学生。老师不能设置其他密码，只能将密码重置为该初始值。
+              </span>
+            </div>
+          ) : (
+            <>
+              <label className="grid gap-2 text-sm font-bold text-ink-800">
+                {editingId ? "设置新密码（留空则不修改）" : "密码"}
+                <span className="relative">
+                  <input
+                    className="field w-full pr-12"
+                    minLength={8}
+                    placeholder={editingId ? "留空则保持原密码" : "至少 8 位"}
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        password: event.target.value,
+                      }))
+                    }
+                  />
+                  <button
+                    aria-label={showPassword ? "隐藏新密码" : "显示新密码"}
+                    aria-pressed={showPassword}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-500 hover:text-steel"
+                    onClick={() => setShowPassword((current) => !current)}
+                    type="button"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </span>
+                {editingId ? (
+                  <span className="text-xs font-semibold leading-5 text-ink-600">
+                    原密码已安全加密，系统无法查看；留空不会修改密码。
+                  </span>
+                ) : null}
+              </label>
+              {!editingId || form.password ? (
+                <label className="grid gap-2 text-sm font-bold text-ink-800">
+                  确认新密码
+                  <input
+                    className="field"
+                    minLength={8}
+                    placeholder="再次输入相同密码"
+                    type={showPassword ? "text" : "password"}
+                    value={form.passwordConfirm}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        passwordConfirm: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              ) : null}
+              <label className="grid gap-2 text-sm font-bold text-ink-800">
+                角色
+                <select
+                  className="field"
+                  value={form.role}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      role: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="student">student</option>
                   <option value="teacher">teacher</option>
                   <option value="admin">admin</option>
-                </>
-              ) : null}
-            </select>
-          </label>
-          <label className="grid gap-2 text-sm font-bold text-ink-800">
-            自定义头衔（仅学生，最多 20 字）
-            <input
-              className="field"
-              maxLength={20}
-              placeholder="留空则使用自动段位名"
-              value={form.customTitle}
-              onChange={(event) => setForm((current) => ({ ...current, customTitle: event.target.value }))}
-            />
-            <span className="text-xs font-semibold text-ink-600">
-              留空使用自动段位名；自定义头衔只影响展示，不影响积分和排名。
-            </span>
-          </label>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-bold text-ink-800">
+                自定义头衔（仅学生，最多 20 字）
+                <input
+                  className="field"
+                  maxLength={20}
+                  placeholder="留空则使用自动段位名"
+                  value={form.customTitle}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      customTitle: event.target.value,
+                    }))
+                  }
+                />
+                <span className="text-xs font-semibold text-ink-600">
+                  留空使用自动段位名；自定义头衔只影响展示，不影响积分和排名。
+                </span>
+              </label>
+            </>
+          )}
           <label className="flex items-start gap-3 border border-indigo-200 bg-indigo-50/70 p-4 text-sm font-bold text-indigo-950">
             <input
               checked={form.aiAccessEnabled}
               className="mt-0.5 h-4 w-4 accent-indigo-700"
-              disabled={form.role !== "student"}
+              disabled={viewerRole === "admin" && form.role !== "student"}
               onChange={(event) =>
                 setForm((current) => ({
                   ...current,
@@ -412,13 +574,20 @@ export function UserManager({
               type="checkbox"
             />
             <span>
-              开通 AI 对话权限
+              {viewerRole === "teacher"
+                ? "新学生默认开通 AI 对话权限"
+                : "开通 AI 对话权限"}
               <span className="mt-1 block text-xs font-semibold leading-5 text-indigo-800">
                 仍需同时开启日常练习 AI 总开关或当前考试 AI 开关。
               </span>
             </span>
           </label>
         </div>
+        {message ? (
+          <p className="mt-4 border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+            {message}
+          </p>
+        ) : null}
         {error ? (
           <p className="mt-4 border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
             {error}
@@ -426,7 +595,11 @@ export function UserManager({
         ) : null}
         <button className="btn btn-primary mt-5 w-full" disabled={pending} type="submit">
           {editingId ? <Save size={16} /> : <Plus size={16} />}
-          {pending ? "保存中" : "保存用户"}
+          {pending
+            ? "保存中"
+            : viewerRole === "teacher"
+              ? "新增学生"
+              : "保存用户"}
         </button>
       </form>
     </div>

@@ -2,6 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { requirePageUser } from "@/lib/auth";
 import {
   buildPaginationMeta,
+  PROBLEM_LIST_PAGE_SIZE,
   readPaginationFromObject,
 } from "@/lib/pagination";
 import { isProblemType, normalizeProblemType } from "@/lib/objectiveProblem";
@@ -47,7 +48,10 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
   const createValue = Array.isArray(query.create) ? query.create[0] : query.create;
   const sortValue = Array.isArray(query.sort) ? query.sort[0] : query.sort;
   const listSort = normalizeProblemListSort(sortValue);
-  const { page, pageSize, skip } = readPaginationFromObject(query);
+  const { page, pageSize, skip } = readPaginationFromObject(
+    query,
+    PROBLEM_LIST_PAGE_SIZE,
+  );
   const where = {
     archivedAt: null,
     problemType,

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PUT } from "./[id]/route";
+import { DELETE, PATCH, PUT } from "./[id]/route";
+import { POST as RESET_PASSWORD } from "./[id]/reset-password/route";
 import { GET, POST } from "./route";
 
 const mocks = vi.hoisted(() => ({
@@ -11,7 +12,9 @@ const mocks = vi.hoisted(() => ({
     $transaction: vi.fn(),
     user: {
       create: vi.fn(),
+      delete: vi.fn(),
       findMany: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
   requireApiUser: vi.fn(),
@@ -99,6 +102,8 @@ describe("admin users API custom title handling", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.hashPassword.mockResolvedValue("hashed-password");
+    mocks.prisma.user.delete.mockResolvedValue({});
+    mocks.prisma.user.updateMany.mockResolvedValue({ count: 1 });
     mocks.requireApiUser.mockResolvedValue({
       response: null,
       user: { id: 1, role: "admin", username: "admin" },
@@ -354,7 +359,42 @@ describe("admin users API custom title handling", () => {
     );
   });
 
-  it("forces teacher-created accounts to the student role", async () => {
+  it("creates teacher-managed students with the fixed password and AI enabled by default", async () => {
+    mocks.requireApiUser.mockResolvedValueOnce({
+      response: null,
+      user: { id: 4, role: "teacher", username: "coach" },
+    });
+    mocks.prisma.user.create.mockResolvedValue({
+      createdAt: new Date("2026-07-25T00:00:00.000Z"),
+      id: 5,
+      role: "student",
+      studentProfile: { aiAccessEnabled: true, customTitle: null },
+      username: "bob",
+    });
+
+    const response = await POST(
+      jsonRequest({
+        username: "bob",
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.hashPassword).toHaveBeenCalledWith("12345678");
+    expect(mocks.prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          passwordHash: "hashed-password",
+          role: "student",
+          studentProfile: {
+            create: { aiAccessEnabled: true, customTitle: null },
+          },
+          username: "bob",
+        }),
+      }),
+    );
+  });
+
+  it("lets teachers disable AI while creating a student", async () => {
     mocks.requireApiUser.mockResolvedValueOnce({
       response: null,
       user: { id: 4, role: "teacher", username: "coach" },
@@ -369,7 +409,7 @@ describe("admin users API custom title handling", () => {
 
     const response = await POST(
       jsonRequest({
-        password: "secret123",
+        aiAccessEnabled: false,
         username: "bob",
       }),
     );
@@ -377,31 +417,32 @@ describe("admin users API custom title handling", () => {
     expect(response.status).toBe(201);
     expect(mocks.prisma.user.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          role: "student",
-          username: "bob",
+        data: expect.not.objectContaining({
+          studentProfile: expect.anything(),
         }),
       }),
     );
   });
 
-  it("rejects a teacher attempting to create another teacher", async () => {
-    mocks.requireApiUser.mockResolvedValueOnce({
-      response: null,
-      user: { id: 4, role: "teacher", username: "coach" },
-    });
+  it.each(["password", "role", "customTitle"])(
+    "rejects the teacher-only forbidden create field %s",
+    async (field) => {
+      mocks.requireApiUser.mockResolvedValueOnce({
+        response: null,
+        user: { id: 4, role: "teacher", username: "coach" },
+      });
 
-    const response = await POST(
-      jsonRequest({
-        password: "secret123",
-        role: "teacher",
-        username: "other-coach",
-      }),
-    );
+      const response = await POST(
+        jsonRequest({
+          [field]: field === "role" ? "teacher" : "forbidden",
+          username: "bob",
+        }),
+      );
 
-    expect(response.status).toBe(403);
-    expect(mocks.prisma.user.create).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(403);
+      expect(mocks.prisma.user.create).not.toHaveBeenCalled();
+    },
+  );
 
   it("revokes existing sessions when the password changes", async () => {
     const tx = createTx();
@@ -486,7 +527,74 @@ describe("admin users API custom title handling", () => {
     );
   });
 
-  it("rejects a teacher attempting to modify a non-student account", async () => {
+  it("rejects teacher access to the full user edit endpoint", async () => {
+    mocks.requireApiUser.mockResolvedValueOnce({
+      response: null,
+      user: { id: 4, role: "teacher", username: "coach" },
+    });
+    const tx = createTx();
+    mocks.prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+
+    const response = await PUT(
+      jsonRequest({
+        customTitle: "老师不能修改",
+        password: "another-password",
+        role: "student",
+        username: "alice-renamed",
+      }),
+      routeContext("2"),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.user.update).not.toHaveBeenCalled();
+  });
+
+  it("lets a teacher change only a student's AI access without overwriting the title", async () => {
+    mocks.requireApiUser.mockResolvedValueOnce({
+      response: null,
+      user: { id: 4, role: "teacher", username: "coach" },
+    });
+    const tx = createTx();
+    mocks.prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+
+    const response = await PATCH(
+      jsonRequest({ aiAccessEnabled: true }),
+      routeContext("2"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(tx.studentProfile.upsert).toHaveBeenCalledWith({
+      create: {
+        aiAccessEnabled: true,
+        customTitle: null,
+        userId: 2,
+      },
+      update: { aiAccessEnabled: true },
+      where: { userId: 2 },
+    });
+    expect(tx.user.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects extra fields in a teacher AI access request", async () => {
+    mocks.requireApiUser.mockResolvedValueOnce({
+      response: null,
+      user: { id: 4, role: "teacher", username: "coach" },
+    });
+
+    const response = await PATCH(
+      jsonRequest({
+        aiAccessEnabled: true,
+        customTitle: "不能修改",
+      }),
+      routeContext("2"),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects teacher AI changes for a non-student account", async () => {
     mocks.requireApiUser.mockResolvedValueOnce({
       response: null,
       user: { id: 4, role: "teacher", username: "coach" },
@@ -495,18 +603,71 @@ describe("admin users API custom title handling", () => {
     tx.user.findUnique.mockResolvedValueOnce({ role: "teacher" });
     mocks.prisma.$transaction.mockImplementation(async (callback) => callback(tx));
 
-    const response = await PUT(
-      jsonRequest({
-        customTitle: "",
-        password: "",
-        role: "student",
-        username: "other-coach",
-      }),
+    const response = await PATCH(
+      jsonRequest({ aiAccessEnabled: true }),
       routeContext("5"),
     );
 
     expect(response.status).toBe(403);
-    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.studentProfile.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects teacher attempts to delete students", async () => {
+    mocks.requireApiUser.mockResolvedValueOnce({
+      response: null,
+      user: { id: 4, role: "teacher", username: "coach" },
+    });
+
+    const response = await DELETE(emptyRequest(), routeContext("2"));
+
+    expect(response.status).toBe(403);
+    expect(mocks.prisma.user.delete).not.toHaveBeenCalled();
+  });
+
+  it("keeps administrator user deletion available", async () => {
+    const response = await DELETE(emptyRequest(), routeContext("2"));
+
+    expect(response.status).toBe(200);
+    expect(mocks.prisma.user.delete).toHaveBeenCalledWith({
+      where: { id: 2 },
+    });
+  });
+
+  it("resets a student password to the fixed value and revokes sessions", async () => {
+    mocks.requireApiUser.mockResolvedValueOnce({
+      response: null,
+      user: { id: 4, role: "teacher", username: "coach" },
+    });
+    const response = await RESET_PASSWORD(emptyRequest(), routeContext("2"));
+
+    expect(response.status).toBe(200);
+    expect(mocks.hashPassword).toHaveBeenCalledWith("12345678");
+    expect(mocks.prisma.user.updateMany).toHaveBeenCalledWith({
+      data: {
+        passwordHash: "hashed-password",
+        sessionVersion: { increment: 1 },
+      },
+      where: { id: 2, role: "student" },
+    });
+  });
+
+  it("does not reset a non-student account", async () => {
+    mocks.requireApiUser.mockResolvedValueOnce({
+      response: null,
+      user: { id: 4, role: "teacher", username: "coach" },
+    });
+    mocks.prisma.user.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const response = await RESET_PASSWORD(emptyRequest(), routeContext("5"));
+
+    expect(response.status).toBe(404);
+    expect(mocks.prisma.user.updateMany).toHaveBeenCalledWith({
+      data: {
+        passwordHash: "hashed-password",
+        sessionVersion: { increment: 1 },
+      },
+      where: { id: 5, role: "student" },
+    });
   });
 
   it("blocks non-admin callers before mutating data", async () => {

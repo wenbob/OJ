@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
 import {
   buildPaginationMeta,
+  PROBLEM_LIST_PAGE_SIZE,
   readPaginationFromUrl,
 } from "@/lib/pagination";
 import { isProblemType } from "@/lib/objectiveProblem";
@@ -21,7 +22,10 @@ export async function GET(request: NextRequest) {
   if (problemTypeValue && !isProblemType(problemTypeValue)) {
     return NextResponse.json({ error: "题型不合法" }, { status: 400 });
   }
-  const { page, pageSize, skip } = readPaginationFromUrl(request.nextUrl.searchParams);
+  const { page, pageSize, skip } = readPaginationFromUrl(
+    request.nextUrl.searchParams,
+    PROBLEM_LIST_PAGE_SIZE,
+  );
   const where = {
     archivedAt: null,
     ...(category ? { category } : {}),
