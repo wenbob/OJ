@@ -15,8 +15,22 @@ export type LearningAssignmentValidation =
   | { data: LearningAssignmentDraft; error: null }
   | { data: null; error: string };
 
+export type LearningAssignmentProblemItem =
+  | { assignmentProblemId: number }
+  | { problemId: number };
+
+export type LearningAssignmentProblemItemsValidation =
+  | { data: LearningAssignmentProblemItem[]; error: null }
+  | { data: null; error: string };
+
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function positiveInteger(value: unknown) {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 export function validateLearningAssignmentDraft(
@@ -79,6 +93,64 @@ export function validateLearningAssignmentDraft(
     data: { dueAt, note, problemIds, studentId, title },
     error: null,
   };
+}
+
+export function validateLearningAssignmentProblemItems(
+  value: unknown,
+): LearningAssignmentProblemItemsValidation {
+  if (!Array.isArray(value)) {
+    return { data: null, error: "任务题目格式不合法" };
+  }
+  if (value.length < 1 || value.length > 10) {
+    return { data: null, error: "每份专项练习必须包含 1 至 10 道题" };
+  }
+
+  const items: LearningAssignmentProblemItem[] = [];
+  const assignmentProblemIds = new Set<number>();
+  const problemIds = new Set<number>();
+
+  for (const rawItem of value) {
+    const item =
+      typeof rawItem === "object" && rawItem
+        ? (rawItem as Record<string, unknown>)
+        : {};
+    const hasAssignmentProblemId = Object.hasOwn(
+      item,
+      "assignmentProblemId",
+    );
+    const hasProblemId = Object.hasOwn(item, "problemId");
+    if (hasAssignmentProblemId === hasProblemId) {
+      return {
+        data: null,
+        error: "每道任务题必须且只能指定现有任务题或新增题目",
+      };
+    }
+
+    if (hasAssignmentProblemId) {
+      const assignmentProblemId = positiveInteger(item.assignmentProblemId);
+      if (assignmentProblemId === null) {
+        return { data: null, error: "任务题目 ID 不合法" };
+      }
+      if (assignmentProblemIds.has(assignmentProblemId)) {
+        return { data: null, error: "同一道现有任务题不能重复添加" };
+      }
+      assignmentProblemIds.add(assignmentProblemId);
+      items.push({ assignmentProblemId });
+      continue;
+    }
+
+    const problemId = positiveInteger(item.problemId);
+    if (problemId === null) {
+      return { data: null, error: "新增题目 ID 不合法" };
+    }
+    if (problemIds.has(problemId)) {
+      return { data: null, error: "同一道新增题目不能重复添加" };
+    }
+    problemIds.add(problemId);
+    items.push({ problemId });
+  }
+
+  return { data: items, error: null };
 }
 
 export async function createLearningAssignment({
@@ -188,4 +260,151 @@ export async function getActiveAssignmentProblemIds(
     select: { problemId: true },
   });
   return rows.flatMap(({ problemId }) => (problemId === null ? [] : [problemId]));
+}
+
+export async function replaceLearningAssignmentProblems({
+  assignmentId,
+  items,
+  studentId,
+  db,
+}: {
+  assignmentId: number;
+  items: LearningAssignmentProblemItem[];
+  studentId: number;
+  db: Prisma.TransactionClient;
+}) {
+  const currentRows = await db.learningAssignmentProblem.findMany({
+    where: { assignmentId },
+    orderBy: [{ order: "asc" }, { id: "asc" }],
+  });
+  const currentById = new Map(currentRows.map((item) => [item.id, item]));
+  const currentProblemIds = new Set(
+    currentRows.flatMap((item) =>
+      item.problemId === null ? [] : [item.problemId],
+    ),
+  );
+  const keptIds = items.flatMap((item) =>
+    "assignmentProblemId" in item ? [item.assignmentProblemId] : [],
+  );
+  const newProblemIds = items.flatMap((item) =>
+    "problemId" in item ? [item.problemId] : [],
+  );
+
+  if (keptIds.some((id) => !currentById.has(id))) {
+    throw new Error("部分现有任务题不存在，请刷新后重试");
+  }
+  if (newProblemIds.some((id) => currentProblemIds.has(id))) {
+    throw new Error("已有任务题必须保留原记录，不能作为新题重复添加");
+  }
+
+  const keptProblemIds = new Set(
+    keptIds.flatMap((id) => {
+      const problemId = currentById.get(id)?.problemId ?? null;
+      return problemId === null ? [] : [problemId];
+    }),
+  );
+  if (newProblemIds.some((id) => keptProblemIds.has(id))) {
+    throw new Error("同一份专项练习不能重复添加同一道题");
+  }
+
+  const [newProblems, conflicts] = await Promise.all([
+    newProblemIds.length
+      ? db.problem.findMany({
+          where: {
+            archivedAt: null,
+            id: { in: newProblemIds },
+          },
+          select: {
+            category: true,
+            difficulty: true,
+            id: true,
+            problemType: true,
+            title: true,
+          },
+        })
+      : [],
+    newProblemIds.length
+      ? db.learningAssignmentProblem.findMany({
+          where: {
+            completedAt: null,
+            problemId: { in: newProblemIds },
+            assignment: {
+              id: { not: assignmentId },
+              status: "active",
+              studentId,
+            },
+          },
+          select: { problemId: true, problemTitle: true },
+        })
+      : [],
+  ]);
+
+  if (newProblems.length !== newProblemIds.length) {
+    throw new Error("部分新增题目不存在或已下架，请重新选择");
+  }
+  if (newProblems.some((problem) => problem.problemType !== "programming")) {
+    throw new Error("专项练习只能包含编程题");
+  }
+  if (conflicts.length > 0) {
+    throw new Error(
+      `以下题目已在该学生的其他未完成任务中：${conflicts
+        .map((problem) => problem.problemTitle)
+        .join("、")}`,
+    );
+  }
+
+  const keptIdSet = new Set(keptIds);
+  const removedRows = currentRows.filter((row) => !keptIdSet.has(row.id));
+  const removedIds = removedRows.map((row) => row.id);
+  const removedProblemIds = removedRows.flatMap((row) =>
+    row.problemId === null ? [] : [row.problemId],
+  );
+  let unlinkedSubmissionCount = 0;
+
+  if (removedProblemIds.length > 0) {
+    const unlinked = await db.submission.updateMany({
+      where: {
+        learningAssignmentId: assignmentId,
+        problemId: { in: removedProblemIds },
+      },
+      data: { learningAssignmentId: null },
+    });
+    unlinkedSubmissionCount = unlinked.count;
+  }
+  if (removedIds.length > 0) {
+    await db.learningAssignmentProblem.deleteMany({
+      where: { assignmentId, id: { in: removedIds } },
+    });
+  }
+
+  const newProblemById = new Map(
+    newProblems.map((problem) => [problem.id, problem]),
+  );
+  for (const [order, item] of items.entries()) {
+    if ("assignmentProblemId" in item) {
+      await db.learningAssignmentProblem.update({
+        where: { id: item.assignmentProblemId },
+        data: { order },
+      });
+      continue;
+    }
+
+    const problem = newProblemById.get(item.problemId)!;
+    await db.learningAssignmentProblem.create({
+      data: {
+        assignmentId,
+        order,
+        problemCategory: problem.category.trim() || "未分类",
+        problemDifficulty: problem.difficulty,
+        problemId: problem.id,
+        problemTitle: problem.title,
+      },
+    });
+  }
+
+  return {
+    addedProblemCount: newProblemIds.length,
+    removedProblemCount: removedRows.length,
+    unlinkedSubmissionCount,
+  };
 }

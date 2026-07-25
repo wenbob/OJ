@@ -292,15 +292,41 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
-  const { countedForLearningAssignment, submission } = await prisma.$transaction(
+  const {
+    countedForLearningAssignment,
+    learningAssignmentDetached,
+    submission,
+  } = await prisma.$transaction(
     async (tx) => {
+      const currentAssignmentProblem =
+        learningAssignmentId !== null && assignmentProblemId !== null
+          ? await tx.learningAssignmentProblem.findFirst({
+              where: {
+                id: assignmentProblemId,
+                problemId,
+                assignment: {
+                  id: learningAssignmentId,
+                  status: "active",
+                  studentId: auth.user.id,
+                },
+              },
+              select: { id: true },
+            })
+          : null;
+      const effectiveAssignmentProblemId =
+        currentAssignmentProblem?.id ?? null;
+      const effectiveLearningAssignmentId =
+        effectiveAssignmentProblemId === null ? null : learningAssignmentId;
+      const detached =
+        learningAssignmentId !== null &&
+        effectiveLearningAssignmentId === null;
       const createdSubmission = await tx.submission.create({
         data: {
           createdAt: receivedAt,
           userId: auth.user.id,
           problemId,
           examId,
-          learningAssignmentId,
+          learningAssignmentId: effectiveLearningAssignmentId,
           submissionType,
           code,
           language: problem.problemType === "objective" ? "Objective" : "C++17",
@@ -326,15 +352,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
         },
       });
       let counted = false;
-      if (result.status === "Accepted" && assignmentProblemId !== null) {
+      if (
+        result.status === "Accepted" &&
+        effectiveAssignmentProblemId !== null
+      ) {
         const updated = await tx.learningAssignmentProblem.updateMany({
-          where: { id: assignmentProblemId, completedAt: null },
+          where: { id: effectiveAssignmentProblemId, completedAt: null },
           data: { completedAt: receivedAt },
         });
         counted = updated.count === 1;
       }
       return {
         countedForLearningAssignment: counted,
+        learningAssignmentDetached: detached,
         submission: createdSubmission,
       };
     },
@@ -359,6 +389,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   return NextResponse.json({
     countedForLearningAssignment,
+    learningAssignmentDetached,
     submission: sanitizeSubmissionForStudent(submission),
     submissionId: submission.id,
   });

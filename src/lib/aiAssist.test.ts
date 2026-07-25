@@ -1,4 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const providerMocks = vi.hoisted(() => ({
+  requestChatCompletion: vi.fn(),
+}));
+
+vi.mock("./aiProvider", async () => {
+  const actual = await vi.importActual<typeof import("./aiProvider")>(
+    "./aiProvider",
+  );
+  return {
+    ...actual,
+    requestAiChatCompletion: providerMocks.requestChatCompletion,
+  };
+});
+
 import {
   AI_ASSIST_MAX_CODE_BYTES,
   AI_ASSIST_MAX_HISTORY_MESSAGES,
@@ -8,10 +23,14 @@ import {
   AI_ASSIST_TIMEOUT_MS,
   buildAiAssistPrompt,
   isAiAssistTimeoutError,
-  requestDeepSeekAdvice,
+  requestAiAdvice,
   sanitizeAiAssistResponse,
   type AiAssistProblemContext,
 } from "./aiAssist";
+import {
+  AiProviderError,
+  type AiProviderRuntimeConfig,
+} from "./aiProvider";
 import {
   boolSetting,
   defaultSystemSettings,
@@ -26,6 +45,20 @@ const context: AiAssistProblemContext = {
   dataRange: "0 <= a,b <= 100",
   samples: [{ input: "1 2", output: "3" }],
 };
+
+const providerConfig: AiProviderRuntimeConfig = {
+  apiKey: "test-key",
+  baseUrl: "https://api.deepseek.com",
+  customThinkingProtocol: "none",
+  legacyFallback: false,
+  model: "deepseek-v4-pro",
+  provider: "deepseek",
+  thinkingMode: "enabled",
+};
+
+beforeEach(() => {
+  providerMocks.requestChatCompletion.mockReset();
+});
 
 describe("AI assist settings", () => {
   it("defaults practice AI to disabled", () => {
@@ -192,112 +225,76 @@ describe("AI assist prompts", () => {
   });
 
   it("does not count a provider request when the API key is missing", async () => {
-    const originalApiKey = process.env.DEEPSEEK_API_KEY;
-    delete process.env.DEEPSEEK_API_KEY;
     const onProviderRequest = vi.fn();
+    providerMocks.requestChatCompletion.mockRejectedValueOnce(
+      new AiProviderError(
+        "missing-credential",
+        "当前 AI 服务商尚未配置服务器密钥",
+      ),
+    );
 
-    try {
-      await expect(
-        requestDeepSeekAdvice("题目", undefined, onProviderRequest),
-      ).rejects.toThrow("暂未配置");
-      expect(onProviderRequest).not.toHaveBeenCalled();
-    } finally {
-      if (originalApiKey === undefined) {
-        delete process.env.DEEPSEEK_API_KEY;
-      } else {
-        process.env.DEEPSEEK_API_KEY = originalApiKey;
-      }
-    }
+    await expect(
+      requestAiAdvice(
+        "题目",
+        { ...providerConfig, apiKey: "" },
+        undefined,
+        onProviderRequest,
+      ),
+    ).rejects.toThrow("暂未配置");
+    expect(onProviderRequest).not.toHaveBeenCalled();
   });
 
   it("reports actual provider attempts and returned token usage", async () => {
-    const originalFetch = global.fetch;
-    const originalApiKey = process.env.DEEPSEEK_API_KEY;
-    process.env.DEEPSEEK_API_KEY = "test-key";
     const onTelemetry = vi.fn();
     const onProviderRequest = vi.fn();
-    global.fetch = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
+    providerMocks.requestChatCompletion.mockImplementationOnce(
+      async ({ onProviderRequest }: { onProviderRequest?: () => void }) => {
+        onProviderRequest?.();
+        return {
+          completionTokens: 30,
+          content: "先读清楚输入，再判断范围。",
+          finishReason: "stop",
           model: "deepseek-v4-pro",
-          usage: {
-            prompt_tokens: 120,
-            completion_tokens: 30,
-            total_tokens: 150,
-          },
-          choices: [{ message: { content: "先读清楚输入，再判断范围。" } }],
-        }),
-        { status: 200 },
-      ),
-    ) as never;
+          promptTokens: 120,
+          reasoningContent: null,
+          totalTokens: 150,
+        };
+      },
+    );
 
-    try {
-      await expect(
-        requestDeepSeekAdvice("题目", onTelemetry, onProviderRequest),
-      ).resolves.toContain("判断范围");
-      expect(onProviderRequest).toHaveBeenCalledTimes(1);
-      expect(onTelemetry).toHaveBeenCalledWith({
-        model: "deepseek-v4-pro",
-        promptTokens: 120,
-        completionTokens: 30,
-        totalTokens: 150,
-      });
-    } finally {
-      global.fetch = originalFetch;
-      if (originalApiKey === undefined) {
-        delete process.env.DEEPSEEK_API_KEY;
-      } else {
-        process.env.DEEPSEEK_API_KEY = originalApiKey;
-      }
-    }
+    await expect(
+      requestAiAdvice(
+        "题目",
+        providerConfig,
+        onTelemetry,
+        onProviderRequest,
+      ),
+    ).resolves.toContain("判断范围");
+    expect(onProviderRequest).toHaveBeenCalledTimes(1);
+    expect(onTelemetry).toHaveBeenCalledWith({
+      model: "deepseek-v4-pro",
+      promptTokens: 120,
+      completionTokens: 30,
+      totalTokens: 150,
+    });
   });
 
   it("does not expose reasoning-only responses as student advice", async () => {
-    const originalFetch = global.fetch;
-    const originalApiKey = process.env.DEEPSEEK_API_KEY;
-    const originalModel = process.env.DEEPSEEK_MODEL;
-    process.env.DEEPSEEK_API_KEY = "test-key";
-    process.env.DEEPSEEK_MODEL = "deepseek-v4-pro";
-    const fetchMock = vi.fn(async () => {
-      return new Response(
-        JSON.stringify({
-          choices: [
-            {
-              finish_reason: "length",
-              message: {
-                content: "",
-                reasoning_content: "内部推理内容不应该直接展示给学生",
-              },
-            },
-          ],
-        }),
-        { status: 200 },
-      );
+    providerMocks.requestChatCompletion.mockResolvedValueOnce({
+      completionTokens: null,
+      content: "",
+      finishReason: "length",
+      model: "deepseek-v4-pro",
+      promptTokens: null,
+      reasoningContent: "内部推理内容不应该直接展示给学生",
+      totalTokens: null,
     });
-    global.fetch = fetchMock as never;
 
-    try {
-      await expect(requestDeepSeekAdvice("题目")).rejects.toThrow("最终思路");
-      const calls = fetchMock.mock.calls as unknown as [
-        RequestInfo | URL,
-        RequestInit?,
-      ][];
-      const init = calls[0]?.[1];
-      if (!init) throw new Error("fetch init was not captured");
-      const body = JSON.parse(String(init.body));
-      expect(body.max_tokens).toBe(AI_ASSIST_MAX_TOKENS);
-    } finally {
-      global.fetch = originalFetch;
-      if (originalApiKey === undefined) {
-        delete process.env.DEEPSEEK_API_KEY;
-      } else {
-        process.env.DEEPSEEK_API_KEY = originalApiKey;
-      }
-      if (originalModel === undefined) {
-        delete process.env.DEEPSEEK_MODEL;
-      } else {
-        process.env.DEEPSEEK_MODEL = originalModel;
-      }
-    }
+    await expect(
+      requestAiAdvice("题目", providerConfig),
+    ).rejects.toThrow("最终思路");
+    expect(providerMocks.requestChatCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({ maxTokens: AI_ASSIST_MAX_TOKENS }),
+    );
   });
 });

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiUser } from "@/lib/auth";
+import {
+  createAiProviderFingerprint,
+  getEffectiveAiProviderConfig,
+} from "@/lib/aiProvider";
 import { isLearningWindow } from "@/lib/learningAnalytics";
 import { prisma } from "@/lib/prisma";
 import {
@@ -15,9 +18,10 @@ import {
   REQUEST_LIMITS,
   readJsonWithLimit,
 } from "@/lib/requestLimits";
+import { requireStaffApiUser } from "@/lib/staffAccess";
 
 export async function POST(request: NextRequest) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
   let body: unknown;
   try {
@@ -43,7 +47,11 @@ export async function POST(request: NextRequest) {
     analytics: detail.analytics,
     username: detail.student.username,
   });
-  const inputHash = hashTeacherInsightInput(input);
+  const aiProviderConfig = await getEffectiveAiProviderConfig();
+  const inputHash = hashTeacherInsightInput(
+    input,
+    createAiProviderFingerprint(aiProviderConfig),
+  );
   const existing = await prisma.learningInsightSnapshot.findUnique({
     where: { studentId_window: { studentId, window } },
   });
@@ -76,6 +84,7 @@ export async function POST(request: NextRequest) {
   try {
     const aiSummary = await requestTeacherLearningInsight(
       buildTeacherInsightPrompt(input),
+      aiProviderConfig,
     );
     const snapshot = await prisma.learningInsightSnapshot.upsert({
       where: { studentId_window: { studentId, window } },

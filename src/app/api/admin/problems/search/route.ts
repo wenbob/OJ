@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { requireApiUser } from "@/lib/auth";
 import { isProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
 import {
@@ -8,9 +7,10 @@ import {
   getProblemOrderBy,
   orderProblemCategories,
 } from "@/lib/problemOrdering";
+import { requireStaffApiUser } from "@/lib/staffAccess";
 
 export async function GET(request: NextRequest) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const keyword = request.nextUrl.searchParams.get("keyword")?.trim() ?? "";

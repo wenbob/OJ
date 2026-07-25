@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createAiProviderFingerprint,
+  type AiProviderRuntimeConfig,
+} from "@/lib/aiProvider";
 import { requireApiUser } from "@/lib/auth";
 import {
   createTeacherInsightInput,
@@ -14,6 +18,16 @@ const mocks = vi.hoisted(() => ({
   requestInsight: vi.fn(),
 }));
 
+const providerConfig: AiProviderRuntimeConfig = {
+  apiKey: "test-key",
+  baseUrl: "https://api.deepseek.com",
+  customThinkingProtocol: "none",
+  legacyFallback: false,
+  model: "deepseek-v4-pro",
+  provider: "deepseek",
+  thinkingMode: "enabled",
+};
+
 vi.mock("@/lib/auth", () => ({
   requireApiUser: vi.fn(async () => ({
     user: { id: 1, username: "admin", role: "admin" },
@@ -24,6 +38,16 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/teacherLearning", () => ({
   getTeacherLearningStudentDetail: mocks.getDetail,
 }));
+
+vi.mock("@/lib/aiProvider", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/aiProvider")>(
+    "@/lib/aiProvider",
+  );
+  return {
+    ...actual,
+    getEffectiveAiProviderConfig: vi.fn(async () => providerConfig),
+  };
+});
 
 vi.mock("@/lib/teacherLearningInsight", async () => {
   const actual = await vi.importActual<typeof import("@/lib/teacherLearningInsight")>(
@@ -96,6 +120,7 @@ describe("POST /api/admin/learning/insight", () => {
     expect(body.cached).toBe(false);
     expect(requestTeacherLearningInsight).toHaveBeenCalledWith(
       expect.not.stringContaining("#include"),
+      providerConfig,
     );
     expect(prisma.learningInsightSnapshot.upsert).toHaveBeenCalled();
   });
@@ -107,7 +132,10 @@ describe("POST /api/admin/learning/insight", () => {
     });
     vi.mocked(prisma.learningInsightSnapshot.findUnique).mockResolvedValueOnce({
       generatedAt: new Date("2026-07-15T08:30:00Z"),
-      inputHash: hashTeacherInsightInput(input),
+      inputHash: hashTeacherInsightInput(
+        input,
+        createAiProviderFingerprint(providerConfig),
+      ),
       summary: "缓存摘要",
     } as never);
     const response = await POST(request({ studentId: 7, window: "30d" }) as never);

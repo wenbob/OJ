@@ -1,9 +1,18 @@
 "use client";
 
-import { Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  Pencil,
+  Plus,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatDate } from "@/lib/format";
+import type { StaffRole } from "@/lib/staffAccess";
 
 type UserItem = {
   aiAccessEnabled?: boolean;
@@ -33,15 +42,58 @@ const blankForm = {
   customTitle: "",
   username: "",
   password: "",
+  passwordConfirm: "",
   role: "student",
 };
 
-export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
+export function UserManager({
+  initialUsers,
+  viewerRole,
+}: {
+  initialUsers: UserItem[];
+  viewerRole: StaffRole;
+}) {
   const [users, setUsers] = useState(initialUsers);
   const [form, setForm] = useState(blankForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [stickyTop, setStickyTop] = useState(16);
+  const formPanelRef = useRef<HTMLFormElement>(null);
+  const usernameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const panel = formPanelRef.current;
+    if (!panel) return;
+    const desktopQuery = window.matchMedia("(min-width: 1024px)");
+
+    const updateStickyTop = () => {
+      if (!desktopQuery.matches) {
+        setStickyTop(16);
+        return;
+      }
+      const viewportHeight =
+        window.visualViewport?.height ?? window.innerHeight;
+      const availableHeight = Math.max(320, viewportHeight - 32);
+      const panelHeight = Math.min(panel.scrollHeight, availableHeight);
+      setStickyTop(Math.max(16, Math.round((viewportHeight - panelHeight) / 2)));
+    };
+
+    const observer = new ResizeObserver(updateStickyTop);
+    observer.observe(panel);
+    desktopQuery.addEventListener("change", updateStickyTop);
+    window.addEventListener("resize", updateStickyTop);
+    window.visualViewport?.addEventListener("resize", updateStickyTop);
+    updateStickyTop();
+
+    return () => {
+      observer.disconnect();
+      desktopQuery.removeEventListener("change", updateStickyTop);
+      window.removeEventListener("resize", updateStickyTop);
+      window.visualViewport?.removeEventListener("resize", updateStickyTop);
+    };
+  }, []);
 
   async function reload() {
     const response = await fetch("/api/admin/users");
@@ -66,14 +118,21 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
       customTitle: user.customTitle ?? "",
       username: user.username,
       password: "",
+      passwordConfirm: "",
       role: user.role,
     });
+    setShowPassword(false);
     setError("");
+    window.requestAnimationFrame(() => {
+      formPanelRef.current?.scrollTo({ top: 0 });
+      usernameInputRef.current?.focus({ preventScroll: true });
+    });
   }
 
   function resetForm() {
     setEditingId(null);
     setForm(blankForm);
+    setShowPassword(false);
     setError("");
   }
 
@@ -87,19 +146,34 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
       setError("新增用户时密码不能为空");
       return;
     }
+    if (form.password && form.password.length < 8) {
+      setError("密码至少需要 8 位");
+      return;
+    }
+    if (form.password !== form.passwordConfirm) {
+      setError("两次输入的密码不一致");
+      return;
+    }
     if (form.customTitle.trim().length > 20) {
       setError("自定义头衔不能超过 20 个字符");
       return;
     }
     setPending(true);
     setError("");
+    const payload = {
+      aiAccessEnabled: form.aiAccessEnabled,
+      customTitle: form.customTitle,
+      password: form.password,
+      role: form.role,
+      username: form.username,
+    };
 
     const response = await fetch(
       editingId ? `/api/admin/users/${editingId}` : "/api/admin/users",
       {
         method: editingId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       },
     );
     const data = await response.json();
@@ -129,7 +203,9 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
       <section className="surface overflow-hidden">
         <div className="border-b border-ink-950/10 p-5">
-          <h1 className="text-2xl font-black">用户管理</h1>
+          <h1 className="text-2xl font-black">
+            {viewerRole === "admin" ? "用户管理" : "学生管理"}
+          </h1>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] border-collapse">
@@ -218,7 +294,12 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
         </div>
       </section>
 
-      <form className="surface p-5" onSubmit={save}>
+      <form
+        className="surface p-5 lg:sticky lg:max-h-[calc(100dvh-2rem)] lg:self-start lg:overflow-y-auto"
+        onSubmit={save}
+        ref={formPanelRef}
+        style={{ top: stickyTop }}
+      >
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl font-black">{editingId ? "编辑用户" : "新增用户"}</h2>
           {editingId ? (
@@ -233,19 +314,61 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
             用户名
             <input
               className="field"
+              ref={usernameInputRef}
               value={form.username}
               onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
             />
           </label>
           <label className="grid gap-2 text-sm font-bold text-ink-800">
-            密码
-            <input
-              className="field"
-              type="password"
-              value={form.password}
-              onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-            />
+            {editingId ? "设置新密码（留空则不修改）" : "密码"}
+            <span className="relative">
+              <input
+                className="field w-full pr-12"
+                minLength={8}
+                placeholder={editingId ? "留空则保持原密码" : "至少 8 位"}
+                type={showPassword ? "text" : "password"}
+                value={form.password}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    password: event.target.value,
+                  }))
+                }
+              />
+              <button
+                aria-label={showPassword ? "隐藏新密码" : "显示新密码"}
+                aria-pressed={showPassword}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-500 hover:text-steel"
+                onClick={() => setShowPassword((current) => !current)}
+                type="button"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </span>
+            {editingId ? (
+              <span className="text-xs font-semibold leading-5 text-ink-600">
+                原密码已安全加密，系统无法查看；留空不会修改密码。
+              </span>
+            ) : null}
           </label>
+          {!editingId || form.password ? (
+            <label className="grid gap-2 text-sm font-bold text-ink-800">
+              确认新密码
+              <input
+                className="field"
+                minLength={8}
+                placeholder="再次输入相同密码"
+                type={showPassword ? "text" : "password"}
+                value={form.passwordConfirm}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    passwordConfirm: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          ) : null}
           <label className="grid gap-2 text-sm font-bold text-ink-800">
             角色
             <select
@@ -254,7 +377,12 @@ export function UserManager({ initialUsers }: { initialUsers: UserItem[] }) {
               onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}
             >
               <option value="student">student</option>
-              <option value="admin">admin</option>
+              {viewerRole === "admin" ? (
+                <>
+                  <option value="teacher">teacher</option>
+                  <option value="admin">admin</option>
+                </>
+              ) : null}
             </select>
           </label>
           <label className="grid gap-2 text-sm font-bold text-ink-800">

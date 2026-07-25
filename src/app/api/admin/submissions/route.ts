@@ -3,20 +3,29 @@ import {
   buildAdminSubmissionWhere,
   readAdminSubmissionFiltersFromUrl,
 } from "@/lib/adminSubmissionFilters";
-import { requireApiUser } from "@/lib/auth";
 import {
   buildPaginationMeta,
   readPaginationFromUrl,
 } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
+import {
+  getStaffSubmissionWhere,
+  requireStaffApiUser,
+} from "@/lib/staffAccess";
 
 export async function GET(request: NextRequest) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const filters = readAdminSubmissionFiltersFromUrl(request.nextUrl.searchParams);
   const { page, pageSize, skip } = readPaginationFromUrl(request.nextUrl.searchParams);
-  const where = { ...buildAdminSubmissionWhere(filters), submissionType: "practice" };
+  const where = {
+    AND: [
+      buildAdminSubmissionWhere(filters),
+      getStaffSubmissionWhere(auth.user),
+    ],
+    submissionType: "practice",
+  };
   const [submissions, total] = await Promise.all([
     prisma.submission.findMany({
       where,

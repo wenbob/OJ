@@ -15,10 +15,20 @@ type ExamListItem = {
   status: string;
   examType: string;
   createdAt: Date | string;
+  createdBy: {
+    role: string;
+    username: string;
+  } | null;
   _count: { problems: number };
 };
 
-export function ExamListClient({ exams }: { exams: ExamListItem[] }) {
+export function ExamListClient({
+  basePath,
+  exams,
+}: {
+  basePath: "/admin" | "/teacher";
+  exams: ExamListItem[];
+}) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [pendingId, setPendingId] = useState<number | null>(null);
@@ -63,7 +73,21 @@ export function ExamListClient({ exams }: { exams: ExamListItem[] }) {
             {exams.map((exam) => (
               <tr className="border-b border-ink-950/10" key={exam.id}>
                 <td className="px-5 py-4">
-                  <p className="font-black">{exam.title}</p>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <p className="font-black">{exam.title}</p>
+                    <span
+                      className="inline-flex max-w-48 border border-clay/25 bg-clay/10 px-2 py-1 text-[10px] font-black text-clay"
+                      title={
+                        exam.createdBy
+                          ? `出卷人：${exam.createdBy.username}`
+                          : "出卷人：未记录"
+                      }
+                    >
+                      <span className="truncate">
+                        出卷人：{exam.createdBy?.username ?? "未记录"}
+                      </span>
+                    </span>
+                  </div>
                   <p className="mt-1 line-clamp-2 text-sm font-semibold text-ink-600">
                     {exam.description || "暂无说明"}
                   </p>
@@ -87,19 +111,19 @@ export function ExamListClient({ exams }: { exams: ExamListItem[] }) {
                   <div className="flex flex-wrap justify-end gap-2">
                     <Link
                       className="btn btn-secondary px-3 py-2 text-sm"
-                      href={`/admin/exams/${exam.id}/practice`}
+                      href={`${basePath}/exams/${exam.id}/practice`}
                     >
                       进入做题
                     </Link>
                     <Link
                       className="btn btn-secondary px-3 py-2 text-sm"
-                      href={`/admin/exams/${exam.id}/edit`}
+                      href={`${basePath}/exams/${exam.id}/edit`}
                     >
                       编辑
                     </Link>
                     <Link
                       className="btn btn-secondary px-3 py-2 text-sm"
-                      href={`/admin/exams/${exam.id}/records`}
+                      href={`${basePath}/exams/${exam.id}/records`}
                     >
                       考试记录
                     </Link>

@@ -42,9 +42,13 @@ type SearchProblem = {
 };
 
 export function ExamEditClient({
+  allowMarkdownImport,
+  basePath,
   categories = [],
   exam,
 }: {
+  allowMarkdownImport: boolean;
+  basePath: "/admin" | "/teacher";
   categories?: string[];
   exam: ExamValue;
 }) {
@@ -287,6 +291,7 @@ export function ExamEditClient({
   return (
     <div className="grid gap-6">
       <ExamFormClient
+        basePath={basePath}
         initialValue={{
           id: exam.id,
           title: exam.title,
@@ -311,12 +316,14 @@ export function ExamEditClient({
               </p>
             </div>
           </div>
-          <Link
-            className="btn btn-primary"
-            href={`/admin/exams/${exam.id}/import`}
-          >
-            通过 Markdown 导入题目到考试
-          </Link>
+          {allowMarkdownImport ? (
+            <Link
+              className="btn btn-primary"
+              href={`/admin/exams/${exam.id}/import`}
+            >
+              通过 Markdown 导入题目到考试
+            </Link>
+          ) : null}
         </div>
 
         {message ? (

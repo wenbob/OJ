@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Code2 } from "lucide-react";
-import { CurrentUser } from "@/lib/auth";
+import { CurrentUser, roleHome } from "@/lib/auth";
 import { LogoutButton } from "@/components/LogoutButton";
 import { RankEmblem } from "@/components/RankEmblem";
 import { ShellNav } from "@/components/ShellNav";
@@ -30,11 +30,20 @@ export async function AppShell({
   const currentRanking = user.role === "student"
     ? await getStudentRankingSummaryForUser(user.id)
     : null;
-  const supplementalItems = user.role === "admin"
+  const supplementalItems = user.role !== "student"
     ? [
-        { href: "/admin/ai-usage", label: "AI 使用" },
-        { href: "/admin/learning", label: "学情看板" },
-        { href: "/admin/leaderboard", label: "天梯榜" },
+        {
+          href: `${user.role === "admin" ? "/admin" : "/teacher"}/ai-usage`,
+          label: "AI 使用",
+        },
+        {
+          href: `${user.role === "admin" ? "/admin" : "/teacher"}/learning`,
+          label: "学情看板",
+        },
+        {
+          href: `${user.role === "admin" ? "/admin" : "/teacher"}/leaderboard`,
+          label: "天梯榜",
+        },
       ]
     : [
         { href: "/student/assignments", label: "专项练习" },
@@ -62,7 +71,7 @@ export async function AppShell({
           ) : (
             <Link
               className="group flex items-center gap-3"
-              href={user.role === "admin" ? "/admin" : "/student"}
+              href={roleHome(user.role)}
             >
               <BrandIdentity siteName={siteName} title={title} />
             </Link>
@@ -91,7 +100,12 @@ export async function AppShell({
               </span>
             ) : (
               <span className="identity-chip px-3 py-2 text-sm font-bold text-ink-800">
-                {user.username} · {user.role === "admin" ? "管理员" : "学生"}
+                {user.username} ·{" "}
+                {user.role === "admin"
+                  ? "管理员"
+                  : user.role === "teacher"
+                    ? "老师"
+                    : "学生"}
               </span>
             )}
             {!locked ? <LogoutButton /> : null}

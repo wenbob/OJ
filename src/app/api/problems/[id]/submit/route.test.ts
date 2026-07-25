@@ -6,6 +6,7 @@ import { POST } from "./route";
 const mocks = vi.hoisted(() => ({
   createSubmission: vi.fn(),
   findAssignment: vi.fn(),
+  findCurrentAssignmentProblem: vi.fn(),
   updateAssignmentProblem: vi.fn(),
 }));
 
@@ -54,7 +55,10 @@ const assignment = {
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     $transaction: vi.fn(async (callback: (client: unknown) => Promise<unknown>) => callback({
-      learningAssignmentProblem: { updateMany: mocks.updateAssignmentProblem },
+      learningAssignmentProblem: {
+        findFirst: mocks.findCurrentAssignmentProblem,
+        updateMany: mocks.updateAssignmentProblem,
+      },
       submission: { create: mocks.createSubmission },
     })),
     learningAssignment: {
@@ -83,6 +87,7 @@ describe("learning assignment submission attribution", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(prisma.learningAssignment.findUnique).mockResolvedValue(assignment as never);
+    mocks.findCurrentAssignmentProblem.mockResolvedValue({ id: 88 });
     mocks.updateAssignmentProblem.mockResolvedValue({ count: 1 });
     mocks.createSubmission.mockResolvedValue({
       caseResults: [],
@@ -122,6 +127,26 @@ describe("learning assignment submission attribution", () => {
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.countedForLearningAssignment).toBe(false);
+    expect(mocks.updateAssignmentProblem).not.toHaveBeenCalled();
+  });
+
+  it("keeps a late judge result but detaches it when the teacher removed the problem", async () => {
+    mocks.findCurrentAssignmentProblem.mockResolvedValueOnce(null);
+
+    const response = await POST(
+      request({ learningAssignmentId: 5 }) as never,
+      { params: Promise.resolve({ id: "12" }) },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.countedForLearningAssignment).toBe(false);
+    expect(body.learningAssignmentDetached).toBe(true);
+    expect(mocks.createSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ learningAssignmentId: null }),
+      }),
+    );
     expect(mocks.updateAssignmentProblem).not.toHaveBeenCalled();
   });
 

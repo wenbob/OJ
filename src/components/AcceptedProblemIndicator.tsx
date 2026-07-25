@@ -2,10 +2,12 @@ import Link from "next/link";
 import type { ProblemType } from "@/lib/objectiveProblem";
 
 export function AcceptedProblemIndicator({
+  detailHrefBase = "/admin/submissions",
   problemTitle,
   problemType,
   submissionId,
 }: {
+  detailHrefBase?: string;
   problemTitle: string;
   problemType: ProblemType;
   submissionId: number;
@@ -21,7 +23,7 @@ export function AcceptedProblemIndicator({
       <Link
         aria-label={`${actionLabel}：${problemTitle}`}
         className="border border-emerald-300 bg-white/80 px-2 py-0.5 text-xs font-black text-emerald-800 hover:border-emerald-500 hover:bg-emerald-50"
-        href={`/admin/submissions/${submissionId}`}
+        href={`${detailHrefBase}/${submissionId}`}
       >
         {actionLabel}
       </Link>

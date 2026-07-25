@@ -83,4 +83,58 @@ describe("PUT /api/admin/settings", () => {
     expect(response.status).toBe(403);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
+
+  it("overrides official-provider Base URLs on the server", async () => {
+    const response = await PUT(
+      request({
+        ...defaultSystemSettings,
+        aiBaseUrl: "https://attacker.invalid/v1",
+        aiModel: "doubao-chat",
+        aiProvider: "doubao",
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(prisma.systemSetting.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: {
+          key: "aiBaseUrl",
+          value: "https://ark.cn-beijing.volces.com/api/v3",
+        },
+      }),
+    );
+  });
+
+  it("rejects private custom Base URLs before persisting settings", async () => {
+    const response = await PUT(
+      request({
+        ...defaultSystemSettings,
+        aiBaseUrl: "https://10.0.0.8/v1",
+        aiModel: "custom-chat",
+        aiProvider: "custom",
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("never includes an environment API key in the response", async () => {
+    const original = process.env.DEEPSEEK_API_KEY;
+    process.env.DEEPSEEK_API_KEY = "server-only-test-secret";
+    try {
+      const response = await PUT(request(defaultSystemSettings) as never);
+      const body = await response.text();
+      expect(response.status).toBe(200);
+      expect(body).not.toContain("server-only-test-secret");
+      expect(body).not.toContain("apiKey");
+      expect(body).toContain("credentialConfigured");
+    } finally {
+      if (original === undefined) {
+        delete process.env.DEEPSEEK_API_KEY;
+      } else {
+        process.env.DEEPSEEK_API_KEY = original;
+      }
+    }
+  });
 });

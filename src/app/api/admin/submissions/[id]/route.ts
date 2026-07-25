@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  getStaffSubmissionWhere,
+  requireStaffApiUser,
+} from "@/lib/staffAccess";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
 export async function GET(request: NextRequest, context: RouteContext) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const { id } = await context.params;
@@ -16,8 +19,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "提交 ID 不合法" }, { status: 400 });
   }
 
-  const submission = await prisma.submission.findUnique({
-    where: { id: submissionId },
+  const submission = await prisma.submission.findFirst({
+    where: {
+      AND: [{ id: submissionId }, getStaffSubmissionWhere(auth.user)],
+    },
     include: {
       user: { select: { id: true, username: true } },
       problem: { select: { id: true, title: true } },

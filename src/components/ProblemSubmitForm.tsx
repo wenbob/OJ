@@ -103,6 +103,8 @@ export function ProblemSubmitForm({
   const [showAcceptedPopup, setShowAcceptedPopup] = useState(false);
   const [countedForLearningAssignment, setCountedForLearningAssignment] =
     useState(false);
+  const [learningAssignmentDetached, setLearningAssignmentDetached] =
+    useState(false);
   const [timeExpired, setTimeExpired] = useState(false);
   const shouldFinishExamAfterObjectiveSubmit =
     objective && examId !== undefined;
@@ -121,6 +123,7 @@ export function ProblemSubmitForm({
       setShowObjectiveExamConfirm(false);
       setShowAcceptedPopup(false);
       setCountedForLearningAssignment(false);
+      setLearningAssignmentDetached(false);
       setCode(initialCode);
 
       if (fromSubmissionId) {
@@ -241,6 +244,7 @@ export function ProblemSubmitForm({
     setShowObjectiveExamConfirm(false);
     setShowAcceptedPopup(false);
     setCountedForLearningAssignment(false);
+    setLearningAssignmentDetached(false);
 
     const response = await fetch(`/api/problems/${problemId}/submit`, {
       method: "POST",
@@ -276,10 +280,15 @@ export function ProblemSubmitForm({
     setPending(false);
     setResult(data.submission);
     setCountedForLearningAssignment(Boolean(data.countedForLearningAssignment));
+    setLearningAssignmentDetached(Boolean(data.learningAssignmentDetached));
     if (data.submission?.status === "Accepted") {
       setShowAcceptedPopup(true);
     }
-    if (refreshOnSuccess || data.countedForLearningAssignment) {
+    if (
+      refreshOnSuccess ||
+      data.countedForLearningAssignment ||
+      data.learningAssignmentDetached
+    ) {
       router.refresh();
     }
   }
@@ -486,6 +495,11 @@ export function ProblemSubmitForm({
           {countedForLearningAssignment ? (
             <p className="mt-3 border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-800">
               已计入专项练习，任务进度已更新。
+            </p>
+          ) : null}
+          {learningAssignmentDetached ? (
+            <p className="mt-3 border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-black text-amber-900">
+              评测期间老师已将此题移出专项练习。本次提交已保留为普通练习，但不会计入任务进度。
             </p>
           ) : null}
         </div>

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiUser } from "@/lib/auth";
 import {
   getObjectiveTotalScore,
   parseObjectiveItems,
@@ -11,13 +10,17 @@ import {
   REQUEST_LIMITS,
   readJsonWithLimit,
 } from "@/lib/requestLimits";
+import {
+  getExamAccessWhere,
+  requireStaffApiUser,
+} from "@/lib/staffAccess";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
 export async function POST(request: NextRequest, context: RouteContext) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const { id } = await context.params;
@@ -59,8 +62,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   const [exam, foundProblems, existingProblems] = await Promise.all([
-    prisma.exam.findUnique({
-      where: { id: examId },
+    prisma.exam.findFirst({
+      where: getExamAccessWhere(auth.user, examId),
       select: { id: true, examType: true },
     }),
     prisma.problem.findMany({

@@ -15,13 +15,15 @@ export function createAiAssistAdviceCacheKey({
   mode,
   problemId,
   prompt,
+  providerFingerprint,
 }: {
   mode: AiAssistMode;
   problemId: number;
   prompt: string;
+  providerFingerprint: string;
 }) {
   const promptHash = createHash("sha256").update(prompt).digest("hex");
-  return `${mode}:${problemId}:${promptHash}`;
+  return `${mode}:${problemId}:${providerFingerprint}:${promptHash}`;
 }
 
 export function getCachedAiAssistAdvice({

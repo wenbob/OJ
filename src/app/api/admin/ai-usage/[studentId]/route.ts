@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAiUsageStudentDetail, readAiUsageFilters } from "@/lib/aiUsage";
-import { requireApiUser } from "@/lib/auth";
 import { readPaginationFromUrl } from "@/lib/pagination";
+import { requireStaffApiUser } from "@/lib/staffAccess";
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ studentId: string }> },
 ) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const studentId = Number((await context.params).studentId);

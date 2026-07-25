@@ -1,25 +1,23 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Plus, Search, Send, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Send, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-
-type ProblemOption = {
-  category: string;
-  difficulty: string;
-  id: number;
-  problemType: string;
-  title: string;
-};
+import { useState } from "react";
+import {
+  AssignmentProblemPicker,
+  type AssignmentProblemOption,
+} from "./assignment-problem-picker";
 
 export function AssignmentBuilder({
   activeProblemIds,
+  categories,
   initialProblems,
   studentId,
   suggestedTitle,
 }: {
   activeProblemIds: number[];
-  initialProblems: ProblemOption[];
+  categories: string[];
+  initialProblems: AssignmentProblemOption[];
   studentId: number;
   suggestedTitle: string;
 }) {
@@ -28,31 +26,9 @@ export function AssignmentBuilder({
   const [title, setTitle] = useState(suggestedTitle);
   const [note, setNote] = useState("");
   const [dueAt, setDueAt] = useState("");
-  const [keyword, setKeyword] = useState("");
-  const [results, setResults] = useState<ProblemOption[]>([]);
   const [pending, setPending] = useState(false);
-  const [searching, setSearching] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const selectedIds = useMemo(() => new Set(selected.map((problem) => problem.id)), [selected]);
-  const activeIds = useMemo(() => new Set(activeProblemIds), [activeProblemIds]);
-
-  async function searchProblems() {
-    setSearching(true);
-    setError("");
-    try {
-      const query = new URLSearchParams({ problemType: "programming" });
-      if (keyword.trim()) query.set("keyword", keyword.trim());
-      const response = await fetch(`/api/admin/problems/search?${query}`);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "题目搜索失败");
-      setResults(data.problems ?? []);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "题目搜索失败");
-    } finally {
-      setSearching(false);
-    }
-  }
 
   function move(index: number, direction: -1 | 1) {
     const nextIndex = index + direction;
@@ -124,25 +100,15 @@ export function AssignmentBuilder({
           </div>
 
           <div className="mt-5">
-            <label className="block text-xs font-black text-ink-700">搜索其他编程题</label>
-            <div className="mt-2 flex gap-2">
-              <input className="field min-w-0 flex-1" onChange={(event) => setKeyword(event.target.value)} placeholder="输入题目名称，可留空查看全部" value={keyword} />
-              <button className="btn btn-secondary" disabled={searching} onClick={searchProblems} type="button"><Search size={15} />{searching ? "搜索中" : "搜索"}</button>
-            </div>
-            {results.length ? (
-              <div className="mt-2 max-h-56 overflow-auto border border-ink-950/10 bg-white">
-                {results.map((problem) => {
-                  const selectedAlready = selectedIds.has(problem.id);
-                  const activeElsewhere = activeIds.has(problem.id);
-                  return (
-                    <div className="flex items-center justify-between gap-3 border-b border-ink-950/10 p-3 last:border-b-0" key={problem.id}>
-                      <span className="min-w-0"><b className="block truncate text-sm">{problem.title}</b><span className="text-[11px] font-bold text-ink-600">{problem.category} · {problem.difficulty}</span></span>
-                      <button className="btn btn-secondary px-3 py-2" disabled={selectedAlready || activeElsewhere || selected.length >= 10} onClick={() => setSelected((current) => [...current, problem])} type="button"><Plus size={14} />{activeElsewhere ? "其他任务中" : selectedAlready ? "已添加" : "添加"}</button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
+            <AssignmentProblemPicker
+              activeProblemIds={activeProblemIds}
+              categories={categories}
+              onAdd={(problem) =>
+                setSelected((current) => [...current, problem])
+              }
+              selectedCount={selected.length}
+              selectedProblemIds={selected.map((problem) => problem.id)}
+            />
           </div>
         </div>
 

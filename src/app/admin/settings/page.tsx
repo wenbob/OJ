@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { requirePageUser } from "@/lib/auth";
+import {
+  applyAiProviderStatusToSettings,
+  getEffectiveAiProviderConfig,
+  toAiProviderAdminStatus,
+} from "@/lib/aiProvider";
 import { getAllSystemSettings } from "@/lib/settings";
 import { SettingsForm } from "./settings-form";
 
@@ -17,7 +22,15 @@ const adminNav = [
 
 export default async function AdminSettingsPage() {
   const user = await requirePageUser("admin");
-  const settings = await getAllSystemSettings();
+  const [storedSettings, config] = await Promise.all([
+    getAllSystemSettings(),
+    getEffectiveAiProviderConfig(),
+  ]);
+  const aiProviderStatus = toAiProviderAdminStatus(config);
+  const settings = applyAiProviderStatusToSettings(
+    storedSettings,
+    aiProviderStatus,
+  );
 
   return (
     <AppShell nav={adminNav} title="管理员端" user={user}>
@@ -28,14 +41,17 @@ export default async function AdminSettingsPage() {
           </p>
           <h1 className="mt-2 text-2xl font-black">系统设置</h1>
           <p className="mt-2 text-sm font-semibold text-ink-600">
-            配置平台名称、浏览器标签、公告、默认代码模板和评测默认限制。
+            配置平台、评测默认值，以及服务端 AI 密钥、模型和思考模式。
           </p>
         </div>
         <Link className="btn btn-secondary" href="/admin">
           返回后台首页
         </Link>
       </div>
-      <SettingsForm initialSettings={settings} />
+      <SettingsForm
+        initialAiProviderStatus={aiProviderStatus}
+        initialSettings={settings}
+      />
     </AppShell>
   );
 }

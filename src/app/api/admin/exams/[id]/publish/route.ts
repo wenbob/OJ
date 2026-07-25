@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiUser } from "@/lib/auth";
 import {
   getObjectiveTotalScore,
   parseObjectiveItems,
   validateObjectiveItems,
 } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import {
+  getExamAccessWhere,
+  requireStaffApiUser,
+} from "@/lib/staffAccess";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
 export async function POST(request: NextRequest, context: RouteContext) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const { id } = await context.params;
@@ -21,8 +24,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "考试 ID 不合法" }, { status: 400 });
   }
 
-  const existingExam = await prisma.exam.findUnique({
-    where: { id: examId },
+  const existingExam = await prisma.exam.findFirst({
+    where: getExamAccessWhere(auth.user, examId),
     include: {
       problems: {
         include: {

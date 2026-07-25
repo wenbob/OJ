@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiUser } from "@/lib/auth";
 import { isProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
 import {
@@ -7,6 +6,10 @@ import {
   REQUEST_LIMITS,
   readJsonWithLimit,
 } from "@/lib/requestLimits";
+import {
+  getExamAccessWhere,
+  requireStaffApiUser,
+} from "@/lib/staffAccess";
 
 function readExamPayload(body: unknown) {
   const record =
@@ -44,12 +47,14 @@ function validateExamPayload(payload: ReturnType<typeof readExamPayload>) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const exams = await prisma.exam.findMany({
+    where: getExamAccessWhere(auth.user),
     orderBy: { createdAt: "desc" },
     include: {
+      createdBy: { select: { id: true, role: true, username: true } },
       _count: { select: { problems: true } },
     },
   });
@@ -58,7 +63,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   let body: unknown;
@@ -88,6 +93,7 @@ export async function POST(request: NextRequest) {
       status: payload.status,
       examType: payload.examType,
       aiEnabled: payload.aiEnabled,
+      createdById: auth.user.id,
     },
   });
 

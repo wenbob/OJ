@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearAiAssistAdviceCache } from "@/lib/aiAssistCache";
 import { clearAiAssistCooldowns } from "@/lib/aiAssistRateLimit";
-import { requestDeepSeekAdvice } from "@/lib/aiAssist";
+import { requestAiAdvice as requestDeepSeekAdvice } from "@/lib/aiAssist";
 import {
   readAiAssistEventStream,
   type AiAssistStreamEvent,
@@ -28,9 +28,10 @@ vi.mock("@/lib/aiAssist", async () => {
   );
   return {
     ...actual,
-    requestDeepSeekAdvice: vi.fn(
+    requestAiAdvice: vi.fn(
       async (
         _prompt: string,
+        _config: unknown,
         _onTelemetry?: unknown,
         onProviderRequest?: () => void,
       ) => {
@@ -165,7 +166,7 @@ describe("POST /api/ai/problem-assist", () => {
 
   it("streams a safe error event when the provider fails", async () => {
     vi.mocked(requestDeepSeekAdvice).mockImplementationOnce(
-      async (_prompt, _onTelemetry, onProviderRequest) => {
+      async (_prompt, _config, _onTelemetry, onProviderRequest) => {
         onProviderRequest?.();
         throw new Error("AI 服务请求失败：429");
       },
@@ -346,7 +347,7 @@ describe("POST /api/ai/problem-assist", () => {
 
   it("does not retry provider rate-limit errors immediately", async () => {
     vi.mocked(requestDeepSeekAdvice).mockImplementationOnce(
-      async (_prompt, _onTelemetry, onProviderRequest) => {
+      async (_prompt, _config, _onTelemetry, onProviderRequest) => {
         onProviderRequest?.();
         throw new Error("AI 服务请求失败：429");
       },

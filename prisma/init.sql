@@ -83,11 +83,14 @@ CREATE TABLE "Exam" (
   "status" TEXT NOT NULL DEFAULT 'draft',
   "examType" TEXT NOT NULL DEFAULT 'programming',
   "aiEnabled" BOOLEAN NOT NULL DEFAULT false,
+  "createdById" INTEGER,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "Exam_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE INDEX "Exam_examType_status_idx" ON "Exam"("examType", "status");
+CREATE INDEX "Exam_createdById_createdAt_idx" ON "Exam"("createdById", "createdAt");
 
 CREATE TABLE "AiConversation" (
   "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,

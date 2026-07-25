@@ -14,7 +14,19 @@ const securityHeaders = [
   },
 ];
 
+const requestedBuildWorkers = Number(
+  process.env.NEXT_PRIVATE_BUILD_WORKER_COUNT,
+);
+const constrainedBuildWorkers =
+  Number.isInteger(requestedBuildWorkers) && requestedBuildWorkers > 0
+    ? requestedBuildWorkers
+    : undefined;
+
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
+  experimental: constrainedBuildWorkers
+    ? { cpus: constrainedBuildWorkers }
+    : undefined,
   async headers() {
     return [
       {

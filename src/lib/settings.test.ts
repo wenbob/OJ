@@ -78,4 +78,32 @@ describe("browser identity system settings", () => {
       }),
     ).toContain("保留时间");
   });
+
+  it("validates non-secret AI provider settings and model limits", () => {
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiProvider: "custom",
+        aiBaseUrl: "",
+      }),
+    ).toContain("Base URL");
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiProvider: "unknown",
+      }),
+    ).toContain("服务商");
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiModel: "model\ninjection",
+      }),
+    ).toContain("控制字符");
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiThinkingMode: "automatic",
+      }),
+    ).toContain("思考模式");
+  });
 });

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiUser } from "@/lib/auth";
 import {
   getObjectiveTotalScore,
   isProblemType,
@@ -12,6 +11,10 @@ import {
   REQUEST_LIMITS,
   readJsonWithLimit,
 } from "@/lib/requestLimits";
+import {
+  getExamAccessWhere,
+  requireStaffApiUser,
+} from "@/lib/staffAccess";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -53,7 +56,7 @@ function validateExamPayload(payload: ReturnType<typeof readExamPayload>) {
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const { id } = await context.params;
@@ -62,8 +65,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "考试 ID 不合法" }, { status: 400 });
   }
 
-  const exam = await prisma.exam.findUnique({
-    where: { id: examId },
+  const exam = await prisma.exam.findFirst({
+    where: getExamAccessWhere(auth.user, examId),
     include: {
       problems: {
         include: {
@@ -87,13 +90,20 @@ export async function GET(request: NextRequest, context: RouteContext) {
 }
 
 export async function PUT(request: NextRequest, context: RouteContext) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const { id } = await context.params;
   const examId = Number(id);
   if (!Number.isInteger(examId)) {
     return NextResponse.json({ error: "考试 ID 不合法" }, { status: 400 });
+  }
+  const accessibleExam = await prisma.exam.findFirst({
+    where: getExamAccessWhere(auth.user, examId),
+    select: { id: true },
+  });
+  if (!accessibleExam) {
+    return NextResponse.json({ error: "考试不存在" }, { status: 404 });
   }
 
   let body: unknown;
@@ -194,13 +204,20 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const { id } = await context.params;
   const examId = Number(id);
   if (!Number.isInteger(examId)) {
     return NextResponse.json({ error: "考试 ID 不合法" }, { status: 400 });
+  }
+  const accessibleExam = await prisma.exam.findFirst({
+    where: getExamAccessWhere(auth.user, examId),
+    select: { id: true },
+  });
+  if (!accessibleExam) {
+    return NextResponse.json({ error: "考试不存在" }, { status: 404 });
   }
 
   await prisma.exam.delete({ where: { id: examId } });

@@ -66,6 +66,9 @@ function routeContext(id: string) {
 
 function createTx() {
   return {
+    exam: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     studentProfile: {
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
       upsert: vi.fn().mockResolvedValue({}),
@@ -139,6 +142,14 @@ describe("admin users API custom title handling", () => {
       ranking,
       username: "alice",
     });
+    expect(JSON.stringify(body)).not.toContain("passwordHash");
+    expect(mocks.prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.not.objectContaining({
+          passwordHash: expect.anything(),
+        }),
+      }),
+    );
   });
 
   it("creates a student with a custom title", async () => {
@@ -297,6 +308,101 @@ describe("admin users API custom title handling", () => {
     expect(tx.studentProfile.upsert).not.toHaveBeenCalled();
   });
 
+  it("allows administrators to create teacher accounts", async () => {
+    mocks.prisma.user.create.mockResolvedValue({
+      createdAt: new Date("2026-07-25T00:00:00.000Z"),
+      id: 4,
+      role: "teacher",
+      studentProfile: null,
+      username: "coach",
+    });
+
+    const response = await POST(
+      jsonRequest({
+        password: "secret123",
+        role: "teacher",
+        username: "coach",
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          role: "teacher",
+          username: "coach",
+        }),
+      }),
+    );
+  });
+
+  it("shows teachers only student accounts", async () => {
+    mocks.requireApiUser.mockResolvedValueOnce({
+      response: null,
+      user: { id: 4, role: "teacher", username: "coach" },
+    });
+    mocks.prisma.user.findMany.mockResolvedValue([]);
+    mocks.getStudentRankings.mockResolvedValue([]);
+
+    const response = await GET(emptyRequest());
+
+    expect(response.status).toBe(200);
+    expect(mocks.prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { role: "student" },
+      }),
+    );
+  });
+
+  it("forces teacher-created accounts to the student role", async () => {
+    mocks.requireApiUser.mockResolvedValueOnce({
+      response: null,
+      user: { id: 4, role: "teacher", username: "coach" },
+    });
+    mocks.prisma.user.create.mockResolvedValue({
+      createdAt: new Date("2026-07-25T00:00:00.000Z"),
+      id: 5,
+      role: "student",
+      studentProfile: null,
+      username: "bob",
+    });
+
+    const response = await POST(
+      jsonRequest({
+        password: "secret123",
+        username: "bob",
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          role: "student",
+          username: "bob",
+        }),
+      }),
+    );
+  });
+
+  it("rejects a teacher attempting to create another teacher", async () => {
+    mocks.requireApiUser.mockResolvedValueOnce({
+      response: null,
+      user: { id: 4, role: "teacher", username: "coach" },
+    });
+
+    const response = await POST(
+      jsonRequest({
+        password: "secret123",
+        role: "teacher",
+        username: "other-coach",
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.prisma.user.create).not.toHaveBeenCalled();
+  });
+
   it("revokes existing sessions when the password changes", async () => {
     const tx = createTx();
     mocks.prisma.$transaction.mockImplementation(async (callback) => callback(tx));
@@ -348,6 +454,59 @@ describe("admin users API custom title handling", () => {
     expect(tx.studentProfile.deleteMany).toHaveBeenCalledWith({
       where: { userId: 2 },
     });
+  });
+
+  it("clears exam ownership and revokes sessions when demoting a teacher", async () => {
+    const tx = createTx();
+    tx.user.findUnique.mockResolvedValueOnce({ role: "teacher" });
+    mocks.prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+
+    const response = await PUT(
+      jsonRequest({
+        customTitle: "",
+        password: "",
+        role: "student",
+        username: "former-coach",
+      }),
+      routeContext("4"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(tx.exam.updateMany).toHaveBeenCalledWith({
+      data: { createdById: null },
+      where: { createdById: 4 },
+    });
+    expect(tx.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          role: "student",
+          sessionVersion: { increment: 1 },
+        }),
+      }),
+    );
+  });
+
+  it("rejects a teacher attempting to modify a non-student account", async () => {
+    mocks.requireApiUser.mockResolvedValueOnce({
+      response: null,
+      user: { id: 4, role: "teacher", username: "coach" },
+    });
+    const tx = createTx();
+    tx.user.findUnique.mockResolvedValueOnce({ role: "teacher" });
+    mocks.prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+
+    const response = await PUT(
+      jsonRequest({
+        customTitle: "",
+        password: "",
+        role: "student",
+        username: "other-coach",
+      }),
+      routeContext("5"),
+    );
+
+    expect(response.status).toBe(403);
+    expect(tx.user.update).not.toHaveBeenCalled();
   });
 
   it("blocks non-admin callers before mutating data", async () => {

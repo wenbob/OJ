@@ -13,7 +13,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth", () => ({
   attachSessionResponse: mocks.attachSessionResponse,
-  roleHome: (role: string) => (role === "admin" ? "/admin" : "/student"),
+  roleHome: (role: string) =>
+    role === "admin" ? "/admin" : role === "teacher" ? "/teacher" : "/student",
 }));
 vi.mock("@/lib/examScoring", () => ({
   finishExamRecord: mocks.finishExamRecord,
@@ -116,6 +117,28 @@ describe("login session rotation", () => {
     expect(mocks.attachSessionResponse).toHaveBeenCalledWith(
       response,
       expect.objectContaining({ role: "admin", sessionVersion: 2 }),
+    );
+  });
+
+  it("keeps teacher sessions multi-device and redirects to the teacher portal", async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: 4,
+      passwordHash: "hash",
+      role: "teacher",
+      sessionVersion: 3,
+      username: "coach",
+    });
+
+    const response = await POST(request());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.redirectTo).toBe("/teacher");
+    expect(mocks.examRecordFindMany).not.toHaveBeenCalled();
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+    expect(mocks.attachSessionResponse).toHaveBeenCalledWith(
+      response,
+      expect.objectContaining({ role: "teacher", sessionVersion: 3 }),
     );
   });
 });

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiUser } from "@/lib/auth";
 import { hashPassword, validateAccountPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import {
@@ -12,9 +11,12 @@ import {
   REQUEST_LIMITS,
   readJsonWithLimit,
 } from "@/lib/requestLimits";
+import { requireStaffApiUser } from "@/lib/staffAccess";
 
 function readRole(value: unknown) {
-  if (value === "admin" || value === "student") return value;
+  if (value === "admin" || value === "teacher" || value === "student") {
+    return value;
+  }
   return null;
 }
 
@@ -23,11 +25,12 @@ function readAiAccessEnabled(value: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const [users, rankings] = await Promise.all([
     prisma.user.findMany({
+      where: auth.user.role === "teacher" ? { role: "student" } : undefined,
       select: {
         id: true,
         username: true,
@@ -58,7 +61,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   let body: unknown;
@@ -75,7 +78,18 @@ export async function POST(request: NextRequest) {
   const username =
     typeof record.username === "string" ? record.username.trim() : "";
   const password = typeof record.password === "string" ? record.password : "";
-  const role = readRole(record.role);
+  const requestedRole = readRole(record.role);
+  if (
+    auth.user.role === "teacher" &&
+    requestedRole !== null &&
+    requestedRole !== "student"
+  ) {
+    return NextResponse.json(
+      { error: "老师只能创建学生账号" },
+      { status: 403 },
+    );
+  }
+  const role = auth.user.role === "teacher" ? "student" : requestedRole;
   const aiAccessEnabled = readAiAccessEnabled(record.aiAccessEnabled);
   const customTitle = normalizeCustomTitle(record.customTitle);
   const customTitleError = validateCustomTitle(customTitle);

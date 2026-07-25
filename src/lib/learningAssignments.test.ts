@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   createLearningAssignment,
   getAssignmentProgress,
+  replaceLearningAssignmentProblems,
   validateLearningAssignmentDraft,
+  validateLearningAssignmentProblemItems,
 } from "./learningAssignments";
 import { vi } from "vitest";
 
@@ -43,6 +45,147 @@ describe("learning assignment progress", () => {
     expect(getAssignmentProgress([{ completedAt: new Date() }, { completedAt: null }]))
       .toEqual({ completed: false, completedCount: 1, percent: 50, problemCount: 2 });
     expect(getAssignmentProgress([{ completedAt: new Date() }]).completed).toBe(true);
+  });
+});
+
+describe("learning assignment published problem validation", () => {
+  it("accepts a mixed ordered list of existing and new problems", () => {
+    expect(
+      validateLearningAssignmentProblemItems([
+        { assignmentProblemId: 8 },
+        { problemId: 21 },
+      ]),
+    ).toEqual({
+      data: [{ assignmentProblemId: 8 }, { problemId: 21 }],
+      error: null,
+    });
+  });
+
+  it("rejects empty, duplicate and ambiguous problem items", () => {
+    expect(validateLearningAssignmentProblemItems([]).error).toContain(
+      "1 至 10",
+    );
+    expect(
+      validateLearningAssignmentProblemItems([
+        { assignmentProblemId: 8 },
+        { assignmentProblemId: 8 },
+      ]).error,
+    ).toContain("重复");
+    expect(
+      validateLearningAssignmentProblemItems([
+        { assignmentProblemId: 8, problemId: 21 },
+      ]).error,
+    ).toContain("只能指定");
+  });
+});
+
+describe("learning assignment published problem replacement", () => {
+  function replacementDatabase({
+    conflicts = [] as Array<{ problemId: number; problemTitle: string }>,
+  } = {}) {
+    return {
+      learningAssignmentProblem: {
+        create: vi.fn().mockResolvedValue({}),
+        deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              assignmentId: 5,
+              completedAt: new Date("2026-07-20T00:00:00.000Z"),
+              id: 11,
+              order: 0,
+              problemCategory: "循环",
+              problemDifficulty: "入门",
+              problemId: 1,
+              problemTitle: "保留题",
+            },
+            {
+              assignmentId: 5,
+              completedAt: null,
+              id: 12,
+              order: 1,
+              problemCategory: "数组",
+              problemDifficulty: "入门",
+              problemId: 2,
+              problemTitle: "移除题",
+            },
+          ])
+          .mockResolvedValueOnce(conflicts),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      problem: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            category: "字符串",
+            difficulty: "普及-",
+            id: 3,
+            problemType: "programming",
+            title: "新增题",
+          },
+        ]),
+      },
+      submission: {
+        updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+      },
+    };
+  }
+
+  it("preserves kept progress, unlinks removed submissions and writes the new order", async () => {
+    const db = replacementDatabase();
+
+    const result = await replaceLearningAssignmentProblems({
+      assignmentId: 5,
+      db: db as never,
+      items: [{ assignmentProblemId: 11 }, { problemId: 3 }],
+      studentId: 9,
+    });
+
+    expect(db.submission.updateMany).toHaveBeenCalledWith({
+      data: { learningAssignmentId: null },
+      where: {
+        learningAssignmentId: 5,
+        problemId: { in: [2] },
+      },
+    });
+    expect(db.learningAssignmentProblem.deleteMany).toHaveBeenCalledWith({
+      where: { assignmentId: 5, id: { in: [12] } },
+    });
+    expect(db.learningAssignmentProblem.update).toHaveBeenCalledWith({
+      data: { order: 0 },
+      where: { id: 11 },
+    });
+    expect(db.learningAssignmentProblem.create).toHaveBeenCalledWith({
+      data: {
+        assignmentId: 5,
+        order: 1,
+        problemCategory: "字符串",
+        problemDifficulty: "普及-",
+        problemId: 3,
+        problemTitle: "新增题",
+      },
+    });
+    expect(result).toEqual({
+      addedProblemCount: 1,
+      removedProblemCount: 1,
+      unlinkedSubmissionCount: 2,
+    });
+  });
+
+  it("rejects new problems that conflict with another active task", async () => {
+    const db = replacementDatabase({
+      conflicts: [{ problemId: 3, problemTitle: "新增题" }],
+    });
+
+    await expect(
+      replaceLearningAssignmentProblems({
+        assignmentId: 5,
+        db: db as never,
+        items: [{ assignmentProblemId: 11 }, { problemId: 3 }],
+        studentId: 9,
+      }),
+    ).rejects.toThrow("其他未完成任务");
+    expect(db.submission.updateMany).not.toHaveBeenCalled();
   });
 });
 

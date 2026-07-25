@@ -43,11 +43,20 @@ describe("teacher learning insight", () => {
   });
 
   it("reuses a stable hash for identical aggregate input", () => {
-    expect(hashTeacherInsightInput(input)).toBe(
-      hashTeacherInsightInput({ ...input, issueLabels: [...input.issueLabels] }),
+    expect(hashTeacherInsightInput(input, "provider-a")).toBe(
+      hashTeacherInsightInput(
+        { ...input, issueLabels: [...input.issueLabels] },
+        "provider-a",
+      ),
     );
-    expect(hashTeacherInsightInput(input)).not.toBe(
-      hashTeacherInsightInput({ ...input, statusCounts: {} }),
+    expect(hashTeacherInsightInput(input, "provider-a")).not.toBe(
+      hashTeacherInsightInput(
+        { ...input, statusCounts: {} },
+        "provider-a",
+      ),
+    );
+    expect(hashTeacherInsightInput(input, "provider-a")).not.toBe(
+      hashTeacherInsightInput(input, "provider-b"),
     );
   });
 });

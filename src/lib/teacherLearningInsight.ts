@@ -4,6 +4,11 @@ import {
   AI_ASSIST_TIMEOUT_MS,
   isAiAssistTimeoutError,
 } from "./aiAssist";
+import {
+  AiProviderError,
+  requestAiChatCompletion,
+  type AiProviderRuntimeConfig,
+} from "./aiProvider";
 import type { LearningAnalytics, LearningWindow } from "./learningAnalytics";
 
 export type TeacherInsightInput = {
@@ -49,8 +54,14 @@ export function createTeacherInsightInput({
   };
 }
 
-export function hashTeacherInsightInput(input: TeacherInsightInput) {
-  return crypto.createHash("sha256").update(JSON.stringify(input)).digest("hex");
+export function hashTeacherInsightInput(
+  input: TeacherInsightInput,
+  providerFingerprint: string,
+) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify({ input, providerFingerprint }))
+    .digest("hex");
 }
 
 export function buildTeacherInsightPrompt(input: TeacherInsightInput) {
@@ -106,57 +117,58 @@ function sanitizeTeacherInsight(content: string) {
     .trim();
 }
 
-export async function requestTeacherLearningInsight(prompt: string) {
-  const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
-  if (!apiKey) throw new Error("AI 服务暂未配置，规则诊断仍可正常使用。");
-  const baseUrl = process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com";
-  const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-v4-pro";
-  let response: Response;
+export async function requestTeacherLearningInsight(
+  prompt: string,
+  config: AiProviderRuntimeConfig,
+) {
+  let result;
   try {
-    response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      signal: AbortSignal.timeout(AI_ASSIST_TIMEOUT_MS),
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: "system",
-            content:
-              "你是教师学情分析助手。只根据聚合统计写教学摘要，不接收或索取学生代码、隐藏测试数据和答案。",
-          },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.2,
-        max_tokens: AI_ASSIST_MAX_TOKENS,
-      }),
+    result = await requestAiChatCompletion({
+      config,
+      maxTokens: AI_ASSIST_MAX_TOKENS,
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是教师学情分析助手。只根据聚合统计写教学摘要，不接收或索取学生代码、隐藏测试数据和答案。",
+        },
+        { role: "user", content: prompt },
+      ],
+      timeoutMs: AI_ASSIST_TIMEOUT_MS,
     });
   } catch (error) {
-    if (isAiAssistTimeoutError(error)) throw new Error("AI 摘要生成超时，请稍后重试。");
+    if (
+      isAiAssistTimeoutError(error) ||
+      (error instanceof AiProviderError && error.kind === "timeout")
+    ) {
+      throw new Error("AI 摘要生成超时，请稍后重试。");
+    }
+    if (
+      error instanceof AiProviderError &&
+      error.kind === "missing-credential"
+    ) {
+      throw new Error("AI 服务暂未配置，规则诊断仍可正常使用。");
+    }
+    if (
+      error instanceof AiProviderError &&
+      error.kind === "invalid-response"
+    ) {
+      throw new Error("AI 摘要服务返回格式异常，请稍后重试。");
+    }
+    if (
+      error instanceof AiProviderError &&
+      error.kind === "upstream" &&
+      error.upstreamStatus
+    ) {
+      throw new Error(`AI 摘要服务请求失败：${error.upstreamStatus}`);
+    }
     throw new Error("AI 摘要服务请求失败，请稍后重试。");
   }
-  if (!response.ok) throw new Error(`AI 摘要服务请求失败：${response.status}`);
-  let data: {
-    choices?: Array<{
-      finish_reason?: unknown;
-      message?: { content?: unknown; reasoning_content?: unknown };
-    }>;
-  };
-  try {
-    data = await response.json();
-  } catch (error) {
-    if (isAiAssistTimeoutError(error)) throw new Error("AI 摘要生成超时，请稍后重试。");
-    throw new Error("AI 摘要服务返回格式异常，请稍后重试。");
-  }
-  const choice = data.choices?.[0];
-  const content = choice?.message?.content;
+  const content = result.content;
   if (typeof content !== "string" || !content.trim()) {
     if (
-      choice?.finish_reason === "length" ||
-      typeof choice?.message?.reasoning_content === "string"
+      result.finishReason === "length" ||
+      typeof result.reasoningContent === "string"
     ) {
       throw new Error("AI 仍在整理学情，这次未形成最终摘要，请稍后重试。");
     }

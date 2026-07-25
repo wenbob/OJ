@@ -44,4 +44,23 @@ describe("session tokens", () => {
       username: "bob",
     });
   });
+
+  it("uses the dedicated teacher home and preserves the teacher role in sessions", async () => {
+    process.env.SESSION_SECRET = "test-secret-that-is-long-enough-for-session-tests";
+    const { createSessionToken, readSessionToken, roleHome } = await import("./auth");
+    const token = createSessionToken({
+      id: 9,
+      role: "teacher",
+      sessionVersion: 3,
+      username: "coach",
+    });
+
+    expect(roleHome("teacher")).toBe("/teacher");
+    expect(readSessionToken(token)).toMatchObject({
+      id: 9,
+      role: "teacher",
+      sessionVersion: 3,
+      username: "coach",
+    });
+  });
 });

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiUser } from "@/lib/auth";
 import {
   createLearningAssignment,
   validateLearningAssignmentDraft,
@@ -10,9 +9,10 @@ import {
   REQUEST_LIMITS,
   readJsonWithLimit,
 } from "@/lib/requestLimits";
+import { requireStaffApiUser } from "@/lib/staffAccess";
 
 export async function POST(request: NextRequest) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   let body: unknown;

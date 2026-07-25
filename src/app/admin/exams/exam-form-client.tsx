@@ -15,6 +15,7 @@ type ExamFormValue = {
 };
 
 export function ExamFormClient({
+  basePath,
   initialValue = {
     title: "",
     description: "",
@@ -26,6 +27,7 @@ export function ExamFormClient({
   lockExamType = false,
   mode,
 }: {
+  basePath: "/admin" | "/teacher";
   initialValue?: ExamFormValue;
   lockExamType?: boolean;
   mode: "create" | "edit";
@@ -75,7 +77,11 @@ export function ExamFormClient({
     }
 
     const examId = data.exam?.id ?? form.id;
-    router.push(mode === "create" ? `/admin/exams/${examId}/edit` : "/admin/exams");
+    router.push(
+      mode === "create"
+        ? `${basePath}/exams/${examId}/edit`
+        : `${basePath}/exams`,
+    );
     router.refresh();
   }
 

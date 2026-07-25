@@ -64,7 +64,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "用户名或密码错误" }, { status: 401 });
   }
 
-  if (user.role !== "student" && user.role !== "admin") {
+  if (
+    user.role !== "student" &&
+    user.role !== "teacher" &&
+    user.role !== "admin"
+  ) {
     return NextResponse.json({ error: "账号角色异常" }, { status: 403 });
   }
 
@@ -104,7 +108,7 @@ export async function POST(request: NextRequest) {
   const safeUser = {
     id: sessionUser.id,
     username: sessionUser.username,
-    role: sessionUser.role as "student" | "admin",
+    role: sessionUser.role as "student" | "teacher" | "admin",
   };
   const response = NextResponse.json({
     user: safeUser,

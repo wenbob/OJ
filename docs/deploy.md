@@ -67,11 +67,13 @@ JUDGE_COMPILE_TIMEOUT_MS=45000
 DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-pro
+ARK_API_KEY=
+AI_CUSTOM_API_KEY=
 ```
 
 不要把 `.env` 提交到 Git，也不要把真实密码或真实 secret 写进文档。
 
-`DEEPSEEK_API_KEY` 只在管理员开启 AI 助手并需要真实调用 DeepSeek 时配置。AI 开关关闭时，缺少该 key 不影响 OJ 启动。
+AI 密钥按服务商分别放在 `DEEPSEEK_API_KEY`、`ARK_API_KEY`、`AI_CUSTOM_API_KEY`。缺少未使用服务商的密钥不会影响 OJ 启动；管理员页面只显示当前密钥槽是否已配置。
 
 生产环境使用 SQLite 时，`DATABASE_URL` 必须使用绝对路径。不要写 `file:./prod.db`；standalone 运行时会把相对路径解析到 `.next/standalone/node_modules/.prisma/client/` 附近，可能连到空数据库，导致登录接口报 `main.User does not exist`。
 
@@ -128,24 +130,29 @@ pm2 startup
 pm2 save
 ```
 
-### DeepSeek AI 助手配置
+### AI 服务商与模型配置
 
-如果要在生产环境启用 AI 思路，需要在 `/www/oj/.env` 中配置：
+如果要在生产环境启用 AI，需要在 `/www/oj/.env` 中为将使用的服务商配置对应密钥：
 
 ```env
-DEEPSEEK_API_KEY=...
+DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-pro
+ARK_API_KEY=
+AI_CUSTOM_API_KEY=
 ```
 
 注意：
 
-- API key 只能放在服务器 `.env`，不要提交到 Git 或写入前端代码。
-- 所有 AI 请求必须经过 `/api/ai/problem-assist`，浏览器不能直接调用 DeepSeek。
+- API Key 只能放在服务器 `.env`，不要提交到 Git、数据库、管理页面或前端代码。修改密钥后使用 `pm2 restart oj --update-env` 重新加载。
+- 管理员在 `/admin/settings` 选择 DeepSeek、豆包/火山方舟或自定义 OpenAI-compatible 服务，再获取/手工填写模型并保存思考模式。该配置同时作用于学生助手和教师学情摘要。
+- DeepSeek 固定访问 `https://api.deepseek.com`，豆包固定访问 `https://ark.cn-beijing.volces.com/api/v3`。自定义 Base URL 在生产环境必须是公共 HTTPS，且不能带 URL 凭据、查询参数或片段。
+- 自定义上游请求会固定 DNS 解析地址并禁止重定向；本机、内网、链路本地、保留网络和云元数据地址都会被拒绝。开发环境只额外允许 HTTP loopback 调试。
+- 所有学生 AI 请求必须经过 `/api/ai/problem-assist`，浏览器不能直接调用上游服务；模型发现只能由管理员接口调用。
 - AI 使用“双重开关”：学生个人 AI 权限与日常练习/当前考试 AI 开关必须同时开启；任一关闭时学生端隐藏整个 AI 面板，服务端也会拒绝请求。
 - 选择判断题不开放 AI 助手，避免泄露答案。
 - 服务端统一执行 20 秒冷却；只有不含个人代码和对话的“理解题目”使用同题 5 分钟缓存。
-- DeepSeek 请求超时为 240 秒，输出预算为 4096 tokens；对推理未完成或输出不合格的结果返回友好错误，不把内部推理内容交给学生。
+- AI 请求超时为 240 秒，输出预算为 4096 tokens；对推理未完成或输出不合格的结果返回友好错误，不把内部推理内容交给学生。
 - 新学生端使用 SSE 接收思考心跳和安全回复片段，旧客户端 JSON 响应继续兼容；回复必须先通过完整安全清洗，不能直接透传上游原始 token。
 - AI 请求进入实际处理后会写入 `AiConversation` / `AiConversationTurn`，供管理员查看使用量和学生可见问答；缓存命中不会虚增模型调用或 Token。
 - 审计记录不保存代码、完整 Prompt、客户端历史、隐藏测试点、内部推理、API Key 或请求头；默认保留 180 天，可在系统设置改为 30、90、365 天或永久。

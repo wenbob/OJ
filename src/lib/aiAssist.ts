@@ -1,3 +1,9 @@
+import {
+  AiProviderError,
+  requestAiChatCompletion,
+  type AiProviderRuntimeConfig,
+} from "@/lib/aiProvider";
+
 export type AiAssistMode =
   | "overview"
   | "next_step"
@@ -230,90 +236,71 @@ export function sanitizeAiAssistResponse(content: string) {
   return cleaned;
 }
 
-export async function requestDeepSeekAdvice(
+export async function requestAiAdvice(
   prompt: string,
+  config: AiProviderRuntimeConfig,
   onTelemetry?: (telemetry: AiAssistProviderTelemetry) => void,
   onProviderRequest?: () => void,
 ) {
-  const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error("AI 服务暂未配置，请联系老师。");
-  }
-
-  const baseUrl =
-    process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com";
-  const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-v4-pro";
-
-  let response: Response;
+  let result;
   try {
-    onProviderRequest?.();
-    response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      signal: AbortSignal.timeout(AI_ASSIST_TIMEOUT_MS),
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: "system",
-            content:
-              "你是小学编程助教。只能辅导当前题目，只用简单中文讲解，不输出任何代码或可直接提交的答案，不使用 Markdown。",
-          },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.2,
-        max_tokens: AI_ASSIST_MAX_TOKENS,
-      }),
+    result = await requestAiChatCompletion({
+      config,
+      maxTokens: AI_ASSIST_MAX_TOKENS,
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是小学编程助教。只能辅导当前题目，只用简单中文讲解，不输出任何代码或可直接提交的答案，不使用 Markdown。",
+        },
+        { role: "user", content: prompt },
+      ],
+      onProviderRequest,
+      timeoutMs: AI_ASSIST_TIMEOUT_MS,
     });
   } catch (error) {
-    if (isAiAssistTimeoutError(error)) {
+    if (
+      isAiAssistTimeoutError(error) ||
+      (error instanceof AiProviderError && error.kind === "timeout")
+    ) {
       throw new Error("AI 服务响应超时，请稍后再试。");
+    }
+    if (
+      error instanceof AiProviderError &&
+      error.kind === "missing-credential"
+    ) {
+      throw new Error("AI 服务暂未配置，请联系老师。");
+    }
+    if (
+      error instanceof AiProviderError &&
+      error.kind === "invalid-response"
+    ) {
+      throw new Error("AI 服务返回格式异常");
+    }
+    if (
+      error instanceof AiProviderError &&
+      error.kind === "upstream" &&
+      error.upstreamStatus
+    ) {
+      throw new Error(`AI 服务请求失败：${error.upstreamStatus}`);
     }
     throw new Error("AI 服务请求失败，请稍后再试。");
   }
 
-  if (!response.ok) {
-    throw new Error(`AI 服务请求失败：${response.status}`);
-  }
-
-  let data: {
-    model?: unknown;
-    usage?: {
-      prompt_tokens?: unknown;
-      completion_tokens?: unknown;
-      total_tokens?: unknown;
-    };
-    choices?: {
-      finish_reason?: unknown;
-      message?: { content?: unknown; reasoning_content?: unknown };
-    }[];
-  };
-  try {
-    data = await response.json();
-  } catch (error) {
-    if (isAiAssistTimeoutError(error)) {
-      throw new Error("AI 服务响应超时，请稍后再试。");
-    }
-    throw new Error("AI 服务返回格式异常");
-  }
   onTelemetry?.({
-    model: typeof data.model === "string" ? data.model : model,
-    promptTokens: readOptionalTokenCount(data.usage?.prompt_tokens),
-    completionTokens: readOptionalTokenCount(data.usage?.completion_tokens),
-    totalTokens: readOptionalTokenCount(data.usage?.total_tokens),
+    model: result.model,
+    promptTokens: result.promptTokens,
+    completionTokens: result.completionTokens,
+    totalTokens: result.totalTokens,
   });
-  const choice = data?.choices?.[0];
-  const content = choice?.message?.content;
+  const content = result.content;
   if (typeof content !== "string") {
     throw new Error("AI 服务返回格式异常");
   }
   if (
     !content.trim() &&
-    (choice?.finish_reason === "length" ||
-      typeof choice?.message?.reasoning_content === "string")
+    (result.finishReason === "length" ||
+      typeof result.reasoningContent === "string")
   ) {
     throw new Error("AI 思考时间较长，这次还没写出最终思路，请稍后再试。");
   }
@@ -324,10 +311,4 @@ export async function requestDeepSeekAdvice(
   }
 
   return sanitized;
-}
-
-function readOptionalTokenCount(value: unknown) {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0
-    ? value
-    : null;
 }

@@ -22,6 +22,11 @@ export const defaultSystemSettings = {
   allowStudentRegister: "false",
   aiPracticeEnabled: "false",
   aiConversationRetentionDays: "180",
+  aiProvider: "deepseek",
+  aiBaseUrl: "https://api.deepseek.com",
+  aiModel: "deepseek-v4-pro",
+  aiThinkingMode: "enabled",
+  aiCustomThinkingProtocol: "none",
 };
 
 export type SystemSettingKey = keyof typeof defaultSystemSettings;
@@ -143,6 +148,33 @@ export function validateSystemSettings(settings: SystemSettings) {
   if (!settings.defaultCppTemplate.trim()) return "默认 C++ 代码模板不能为空";
   if (!["0", "30", "90", "180", "365"].includes(settings.aiConversationRetentionDays)) {
     return "AI 对话保留时间不合法";
+  }
+  if (!["deepseek", "doubao", "custom"].includes(settings.aiProvider)) {
+    return "AI 服务商不合法";
+  }
+  if (settings.aiBaseUrl.length > 300) {
+    return "AI Base URL 不能超过 300 个字符";
+  }
+  if (/[\u0000-\u001f\u007f]/.test(settings.aiBaseUrl)) {
+    return "AI Base URL 不能包含控制字符";
+  }
+  if (!settings.aiModel.trim()) {
+    return "AI 模型 ID 不能为空";
+  }
+  if (settings.aiModel.length > 200) {
+    return "AI 模型 ID 不能超过 200 个字符";
+  }
+  if (/[\u0000-\u001f\u007f]/.test(settings.aiModel)) {
+    return "AI 模型 ID 不能包含控制字符";
+  }
+  if (!["enabled", "disabled"].includes(settings.aiThinkingMode)) {
+    return "AI 思考模式不合法";
+  }
+  if (!["thinking-object", "none"].includes(settings.aiCustomThinkingProtocol)) {
+    return "自定义 AI 思考协议不合法";
+  }
+  if (settings.aiProvider === "custom" && !settings.aiBaseUrl.trim()) {
+    return "自定义 AI 服务必须填写 Base URL";
   }
   return "";
 }

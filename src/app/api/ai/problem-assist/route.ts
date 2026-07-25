@@ -7,11 +7,16 @@ import {
   AI_ASSIST_MAX_USER_MESSAGE_CHARS,
   buildAiAssistPrompt,
   isAiAssistTimeoutError,
-  requestDeepSeekAdvice,
+  requestAiAdvice,
   type AiAssistProviderTelemetry,
   type AiAssistHistoryMessage,
   type AiAssistMode,
 } from "@/lib/aiAssist";
+import {
+  createAiProviderFingerprint,
+  getEffectiveAiProviderConfig,
+  type AiProviderRuntimeConfig,
+} from "@/lib/aiProvider";
 import {
   AiUsageAuditError,
   completeAiUsageTurn,
@@ -105,7 +110,10 @@ class AiAssistExecutionError extends Error {
   }
 }
 
-async function requestValidAiAdvice(prompt: string) {
+async function requestValidAiAdvice(
+  prompt: string,
+  config: AiProviderRuntimeConfig,
+) {
   const maxAttempts = 2;
   let lastError: unknown;
   let providerCallCount = 0;
@@ -122,7 +130,7 @@ async function requestValidAiAdvice(prompt: string) {
 
 重新回答要求：${retryInstruction}`;
       const advice = (
-        await requestDeepSeekAdvice(attemptPrompt, (value) => {
+        await requestAiAdvice(attemptPrompt, config, (value) => {
           telemetry = mergeAiProviderTelemetry(telemetry, value);
         }, () => {
           providerCallCount += 1;
@@ -195,11 +203,13 @@ class AiAssistResponseError extends Error {
 
 async function executeLoggedAiAssist({
   cacheKey,
+  config,
   prompt,
   requestId,
   startedAt,
 }: {
   cacheKey: string | null;
+  config: AiProviderRuntimeConfig;
   prompt: string;
   requestId: string;
   startedAt: number;
@@ -229,7 +239,7 @@ async function executeLoggedAiAssist({
 
   let result: Awaited<ReturnType<typeof requestValidAiAdvice>>;
   try {
-    result = await requestValidAiAdvice(prompt);
+    result = await requestValidAiAdvice(prompt, config);
   } catch (error) {
     const safeError = safeAiAssistErrorMessage(error);
     try {
@@ -591,10 +601,18 @@ export async function POST(request: NextRequest) {
     },
     question: mode === "question" ? question : "",
   });
+  const aiProviderConfig = await getEffectiveAiProviderConfig();
+  const providerFingerprint =
+    createAiProviderFingerprint(aiProviderConfig);
 
   const cacheKey =
     mode === "overview"
-      ? createAiAssistAdviceCacheKey({ mode, problemId, prompt })
+      ? createAiAssistAdviceCacheKey({
+          mode,
+          problemId,
+          prompt,
+          providerFingerprint,
+        })
       : null;
 
   let existingTurn: Awaited<ReturnType<typeof findExistingAiUsageTurn>>;
@@ -716,7 +734,13 @@ export async function POST(request: NextRequest) {
 
   const startedAt = Date.now();
   const execute = () =>
-    executeLoggedAiAssist({ cacheKey, prompt, requestId, startedAt });
+    executeLoggedAiAssist({
+      cacheKey,
+      config: aiProviderConfig,
+      prompt,
+      requestId,
+      startedAt,
+    });
 
   if (wantsStream) {
     return createAiAssistStreamResponse({

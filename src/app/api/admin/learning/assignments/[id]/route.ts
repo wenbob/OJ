@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { requireApiUser } from "@/lib/auth";
+import {
+  replaceLearningAssignmentProblems,
+  validateLearningAssignmentProblemItems,
+} from "@/lib/learningAssignments";
 import { prisma } from "@/lib/prisma";
 import {
   PayloadTooLargeError,
   REQUEST_LIMITS,
   readJsonWithLimit,
 } from "@/lib/requestLimits";
+import {
+  canManageOwnedResource,
+  requireStaffApiUser,
+} from "@/lib/staffAccess";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -21,7 +28,7 @@ function optionalText(value: unknown, max: number, label: string) {
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
   const assignmentId = Number((await context.params).id);
   if (!Number.isInteger(assignmentId)) {
@@ -43,6 +50,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const title = optionalText(record.title, 60, "专项练习标题");
     const note = optionalText(record.note, 300, "教师说明");
     const data: Prisma.LearningAssignmentUpdateInput = {};
+    const updatesProblems = record.problemItems !== undefined;
+    const problemItemsValidation = updatesProblems
+      ? validateLearningAssignmentProblemItems(record.problemItems)
+      : null;
+    if (problemItemsValidation?.error) {
+      throw new Error(problemItemsValidation.error);
+    }
     if (title.present) {
       if (!title.value) throw new Error("专项练习标题不能为空");
       data.title = title.value;
@@ -58,25 +72,76 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       data.dueAt = dueAt;
     }
     if (record.archive === true) {
+      if (updatesProblems) {
+        throw new Error("归档任务时不能同时调整题目集合");
+      }
       data.status = "archived";
       data.archivedAt = new Date();
     }
-    if (Object.keys(data).length === 0) throw new Error("没有可更新的内容");
-
-    const existing = await prisma.learningAssignment.findUnique({
-      where: { id: assignmentId },
-      select: { id: true },
-    });
-    if (!existing) {
-      return NextResponse.json({ error: "专项练习不存在" }, { status: 404 });
+    if (Object.keys(data).length === 0 && !updatesProblems) {
+      throw new Error("没有可更新的内容");
     }
-    const assignment = await prisma.learningAssignment.update({
-      where: { id: assignmentId },
-      data,
-      include: { problems: { orderBy: { order: "asc" } } },
+
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.learningAssignment.findUnique({
+        where: { id: assignmentId },
+        select: {
+          createdById: true,
+          id: true,
+          status: true,
+          studentId: true,
+        },
+      });
+      if (
+        !existing ||
+        !canManageOwnedResource(auth.user, existing.createdById)
+      ) {
+        throw new LearningAssignmentNotFoundError();
+      }
+      if (updatesProblems && existing.status !== "active") {
+        throw new LearningAssignmentConflictError(
+          "已归档的专项练习不能调整题目集合",
+        );
+      }
+
+      const problemUpdate = problemItemsValidation?.data
+        ? await replaceLearningAssignmentProblems({
+            assignmentId,
+            db: tx,
+            items: problemItemsValidation.data,
+            studentId: existing.studentId,
+          })
+        : {
+            addedProblemCount: 0,
+            removedProblemCount: 0,
+            unlinkedSubmissionCount: 0,
+          };
+
+      if (Object.keys(data).length > 0) {
+        await tx.learningAssignment.update({
+          where: { id: assignmentId },
+          data,
+        });
+      }
+      const assignment = await tx.learningAssignment.findUniqueOrThrow({
+        where: { id: assignmentId },
+        include: {
+          problems: { orderBy: [{ order: "asc" }, { id: "asc" }] },
+        },
+      });
+      return { assignment, ...problemUpdate };
     });
-    return NextResponse.json({ assignment });
+    return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof LearningAssignmentNotFoundError) {
+      return NextResponse.json(
+        { error: "专项练习不存在" },
+        { status: 404 },
+      );
+    }
+    if (error instanceof LearningAssignmentConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "专项练习更新失败" },
       { status: 400 },
@@ -85,7 +150,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
   const assignmentId = Number((await context.params).id);
   if (!Number.isInteger(assignmentId)) {
@@ -94,9 +159,12 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
   const existing = await prisma.learningAssignment.findUnique({
     where: { id: assignmentId },
-    select: { id: true, status: true },
+    select: { createdById: true, id: true, status: true },
   });
   if (!existing) {
+    return NextResponse.json({ error: "专项练习不存在" }, { status: 404 });
+  }
+  if (!canManageOwnedResource(auth.user, existing.createdById)) {
     return NextResponse.json({ error: "专项练习不存在" }, { status: 404 });
   }
   if (existing.status !== "archived") {
@@ -109,3 +177,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   await prisma.learningAssignment.delete({ where: { id: assignmentId } });
   return NextResponse.json({ ok: true });
 }
+
+class LearningAssignmentNotFoundError extends Error {}
+
+class LearningAssignmentConflictError extends Error {}

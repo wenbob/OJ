@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 export type AdminSubmissionFilters = {
   examId?: number;
   username?: string;
-  role?: "student" | "admin";
+  role?: "student" | "teacher" | "admin";
   problemId?: number;
   status?: string;
   startDate?: string;
@@ -30,7 +30,9 @@ function parseExamId(value: string | null | undefined) {
 }
 
 function parseRole(value: string | null | undefined) {
-  return value === "student" || value === "admin" ? value : undefined;
+  return value === "student" || value === "teacher" || value === "admin"
+    ? value
+    : undefined;
 }
 
 function safeDate(value: string | undefined, endOfDay = false) {

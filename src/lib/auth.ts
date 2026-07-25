@@ -8,7 +8,7 @@ import {
   sameOriginMutationErrorResponse,
 } from "@/lib/requestSecurity";
 
-export type Role = "student" | "admin";
+export type Role = "student" | "teacher" | "admin";
 
 export type CurrentUser = {
   id: number;
@@ -49,7 +49,23 @@ function signBody(body: string) {
 }
 
 export function roleHome(role: string) {
-  return role === "admin" ? "/admin" : "/student";
+  if (role === "admin") return "/admin";
+  if (role === "teacher") return "/teacher";
+  return "/student";
+}
+
+function isRole(value: unknown): value is Role {
+  return value === "student" || value === "teacher" || value === "admin";
+}
+
+function matchesRequiredRole(
+  actualRole: Role,
+  requiredRole?: Role | readonly Role[],
+) {
+  if (!requiredRole) return true;
+  return Array.isArray(requiredRole)
+    ? requiredRole.includes(actualRole)
+    : actualRole === requiredRole;
 }
 
 export function createSessionToken(user: SessionUser) {
@@ -87,7 +103,7 @@ export function readSessionToken(token?: string): SessionClaims | null {
     if (
       typeof payload.id !== "number" ||
       typeof payload.username !== "string" ||
-      (payload.role !== "student" && payload.role !== "admin") ||
+      !isRole(payload.role) ||
       typeof payload.iat !== "number"
     ) {
       return null;
@@ -117,7 +133,7 @@ async function hydrateSession(
   });
   if (
     !user ||
-    (user.role !== "student" && user.role !== "admin") ||
+    !isRole(user.role) ||
     user.role !== session.role
   ) {
     return { reason: "session_invalid", user: null };
@@ -171,7 +187,7 @@ export async function getSessionStateFromRequest(request: NextRequest) {
   );
 }
 
-export async function requirePageUser(role?: Role) {
+export async function requirePageUser(role?: Role | readonly Role[]) {
   const state = await getCurrentSessionState();
   const user = state.user;
   if (!user) {
@@ -183,11 +199,14 @@ export async function requirePageUser(role?: Role) {
     }
     redirect("/login");
   }
-  if (role && user.role !== role) redirect(roleHome(user.role));
+  if (!matchesRequiredRole(user.role, role)) redirect(roleHome(user.role));
   return user;
 }
 
-export async function requireApiUser(request: NextRequest, role?: Role) {
+export async function requireApiUser(
+  request: NextRequest,
+  role?: Role | readonly Role[],
+) {
   if (!isSameOriginMutationRequest(request)) {
     return {
       user: null,
@@ -214,7 +233,7 @@ export async function requireApiUser(request: NextRequest, role?: Role) {
       ),
     };
   }
-  if (role && user.role !== role) {
+  if (!matchesRequiredRole(user.role, role)) {
     return {
       user: null,
       response: NextResponse.json({ error: "权限不足" }, { status: 403 }),

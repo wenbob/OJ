@@ -1,21 +1,122 @@
 "use client";
 
 import Image from "next/image";
-import { ImagePlus, RotateCcw, Save } from "lucide-react";
+import { ImagePlus, RefreshCw, RotateCcw, Save } from "lucide-react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useState } from "react";
 import { notifyBrowserIdentityUpdated } from "@/components/BrowserIdentity";
+import type {
+  AiModelOption,
+  AiProviderAdminStatus,
+  AiProviderId,
+} from "@/lib/aiProvider";
 import { MAX_BROWSER_ICON_BYTES, resolveBrowserTitle } from "@/lib/browserIdentity";
 import type { SystemSettings } from "@/lib/settings";
 
-export function SettingsForm({ initialSettings }: { initialSettings: SystemSettings }) {
+const providerBaseUrls: Record<Exclude<AiProviderId, "custom">, string> = {
+  deepseek: "https://api.deepseek.com",
+  doubao: "https://ark.cn-beijing.volces.com/api/v3",
+};
+
+const providerLabels: Record<AiProviderId, string> = {
+  deepseek: "DeepSeek",
+  doubao: "豆包 / 火山方舟",
+  custom: "自定义 OpenAI-compatible",
+};
+
+const providerCredentialSlots: Record<AiProviderId, string> = {
+  deepseek: "DEEPSEEK_API_KEY",
+  doubao: "ARK_API_KEY",
+  custom: "AI_CUSTOM_API_KEY",
+};
+
+export function SettingsForm({
+  initialAiProviderStatus,
+  initialSettings,
+}: {
+  initialAiProviderStatus: AiProviderAdminStatus;
+  initialSettings: SystemSettings;
+}) {
   const [settings, setSettings] = useState(initialSettings);
+  const [aiProviderStatus, setAiProviderStatus] = useState(
+    initialAiProviderStatus,
+  );
+  const [availableModels, setAvailableModels] = useState<AiModelOption[]>([]);
+  const [customBaseUrl, setCustomBaseUrl] = useState(
+    initialSettings.aiProvider === "custom" ? initialSettings.aiBaseUrl : "",
+  );
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [modelMessage, setModelMessage] = useState("");
+  const [modelPending, setModelPending] = useState(false);
   const [pending, setPending] = useState(false);
 
   function update(key: keyof SystemSettings, value: string) {
     setSettings((current) => ({ ...current, [key]: value }));
+  }
+
+  function changeAiProvider(provider: AiProviderId) {
+    setAvailableModels([]);
+    setModelMessage("");
+    setError("");
+    if (settings.aiProvider === "custom") {
+      setCustomBaseUrl(settings.aiBaseUrl);
+    }
+    setSettings((current) => {
+      return {
+        ...current,
+        aiBaseUrl:
+          provider === "custom" ? customBaseUrl : providerBaseUrls[provider],
+        aiModel: "",
+        aiProvider: provider,
+        aiCustomThinkingProtocol:
+          provider === "custom" ? current.aiCustomThinkingProtocol : "none",
+      };
+    });
+  }
+
+  function changeAiBaseUrl(value: string) {
+    setCustomBaseUrl(value);
+    update("aiBaseUrl", value);
+    setAvailableModels([]);
+    setModelMessage("");
+  }
+
+  async function refreshModels() {
+    setError("");
+    setModelMessage("");
+    if (settings.aiProvider === "custom" && !settings.aiBaseUrl.trim()) {
+      setError("请先填写自定义 AI Base URL");
+      return;
+    }
+
+    setModelPending(true);
+    try {
+      const response = await fetch("/api/admin/ai-provider/models", {
+        body: JSON.stringify({
+          baseUrl: settings.aiBaseUrl,
+          provider: settings.aiProvider,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error ?? "获取模型列表失败");
+        return;
+      }
+      const models = Array.isArray(data.models)
+        ? (data.models as AiModelOption[])
+        : [];
+      setAvailableModels(models);
+      setModelMessage(
+        `已获取 ${models.length} 个模型；列表中可能包含非对话模型，请按服务商说明选择。`,
+      );
+    } catch {
+      setError("获取模型列表失败，请检查本地服务和网络");
+    } finally {
+      setModelPending(false);
+    }
   }
 
   function uploadBrowserIcon(event: ChangeEvent<HTMLInputElement>) {
@@ -67,25 +168,41 @@ export function SettingsForm({ initialSettings }: { initialSettings: SystemSetti
       setError("默认评测内存限制必须大于 0");
       return;
     }
-
-    setPending(true);
-    const response = await fetch("/api/admin/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(settings),
-    });
-    const data = await response.json().catch(() => ({}));
-    setPending(false);
-
-    if (!response.ok) {
-      setError(data.error ?? "保存设置失败");
+    if (!settings.aiModel.trim()) {
+      setError("AI 模型 ID 不能为空");
+      return;
+    }
+    if (settings.aiProvider === "custom" && !settings.aiBaseUrl.trim()) {
+      setError("自定义 AI 服务必须填写 Base URL");
       return;
     }
 
-    const savedSettings = (data.settings ?? settings) as SystemSettings;
-    setSettings(savedSettings);
-    notifyBrowserIdentityUpdated(savedSettings);
-    setMessage("设置已保存");
+    setPending(true);
+    try {
+      const response = await fetch("/api/admin/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setError(data.error ?? "保存设置失败");
+        return;
+      }
+
+      const savedSettings = (data.settings ?? settings) as SystemSettings;
+      setSettings(savedSettings);
+      if (data.aiProviderStatus) {
+        setAiProviderStatus(data.aiProviderStatus as AiProviderAdminStatus);
+      }
+      notifyBrowserIdentityUpdated(savedSettings);
+      setMessage("设置已保存，学生助手和教师学情摘要会统一使用新配置");
+    } catch {
+      setError("保存设置失败，请检查本地服务");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -202,6 +319,178 @@ export function SettingsForm({ initialSettings }: { initialSettings: SystemSetti
 
       <section className="surface p-5">
         <h2 className="text-xl font-black">AI 助手设置</h2>
+        <p className="mt-2 text-sm font-semibold text-ink-600">
+          服务商、模型与思考模式会同时作用于学生 AI 助手和教师学情摘要。API Key
+          只从服务器环境变量读取，不会写入数据库或发送到浏览器。
+        </p>
+
+        <div className="mt-5 border border-steel/20 bg-steel/5 p-4">
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-steel">
+            当前生效配置
+          </p>
+          <div className="mt-3 grid gap-3 text-sm font-bold text-ink-800 md:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <span className="block text-xs text-ink-500">服务商</span>
+              {providerLabels[aiProviderStatus.provider]}
+            </div>
+            <div>
+              <span className="block text-xs text-ink-500">模型</span>
+              <span className="break-all">{aiProviderStatus.model}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-ink-500">思考模式</span>
+              {aiProviderStatus.thinkingMode === "enabled" ? "开启" : "关闭"}
+            </div>
+            <div>
+              <span className="block text-xs text-ink-500">服务器密钥</span>
+              <span
+                className={
+                  aiProviderStatus.credentialConfigured
+                    ? "text-emerald-700"
+                    : "text-rose-700"
+                }
+              >
+                {aiProviderStatus.credentialConfigured
+                  ? "已配置"
+                  : "未配置"}
+              </span>
+            </div>
+          </div>
+          <p className="mt-3 break-all text-xs font-semibold text-ink-500">
+            Base URL：{aiProviderStatus.baseUrl}
+            {aiProviderStatus.legacyFallback
+              ? "（当前来自旧版 DeepSeek 环境配置，保存本页后转为管理员配置）"
+              : ""}
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <label className="grid gap-2 text-sm font-bold text-ink-800">
+            AI 服务商
+            <select
+              className="field"
+              onChange={(event) =>
+                changeAiProvider(event.target.value as AiProviderId)
+              }
+              value={settings.aiProvider}
+            >
+              <option value="deepseek">DeepSeek</option>
+              <option value="doubao">豆包 / 火山方舟</option>
+              <option value="custom">自定义 OpenAI-compatible</option>
+            </select>
+          </label>
+          <label className="grid gap-2 text-sm font-bold text-ink-800">
+            Base URL
+            <input
+              className="field"
+              maxLength={300}
+              onChange={(event) => changeAiBaseUrl(event.target.value)}
+              readOnly={settings.aiProvider !== "custom"}
+              value={settings.aiBaseUrl}
+            />
+          </label>
+        </div>
+        <p className="mt-2 text-xs font-semibold text-ink-500">
+          当前草稿使用服务器密钥槽：
+          <span className="font-black">
+            {providerCredentialSlots[settings.aiProvider as AiProviderId]}
+          </span>
+          。如需新增或更换密钥，请修改本地/服务器 .env 后重启服务。
+        </p>
+
+        <div className="mt-5 flex flex-wrap items-end gap-3">
+          <button
+            className="btn btn-secondary"
+            disabled={modelPending || pending}
+            onClick={refreshModels}
+            type="button"
+          >
+            <RefreshCw
+              className={modelPending ? "animate-spin" : ""}
+              size={16}
+            />
+            {modelPending ? "获取模型中..." : "获取可用模型"}
+          </button>
+          {modelMessage ? (
+            <p className="text-xs font-semibold text-emerald-700">
+              {modelMessage}
+            </p>
+          ) : null}
+        </div>
+
+        {availableModels.length ? (
+          <label className="mt-4 grid max-w-2xl gap-2 text-sm font-bold text-ink-800">
+            从服务商列表选择
+            <select
+              className="field"
+              onChange={(event) => {
+                if (event.target.value) update("aiModel", event.target.value);
+              }}
+              value={
+                availableModels.some((item) => item.id === settings.aiModel)
+                  ? settings.aiModel
+                  : ""
+              }
+            >
+              <option value="">请选择模型</option>
+              {availableModels.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.id}
+                  {item.ownedBy ? ` · ${item.ownedBy}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <TextInput
+            label="模型 ID（可手工填写）"
+            maxLength={200}
+            placeholder="例如服务商提供的 Chat 模型 ID"
+            value={settings.aiModel}
+            onChange={(value) => update("aiModel", value)}
+          />
+          <label className="grid gap-2 text-sm font-bold text-ink-800">
+            思考模式
+            <select
+              className="field"
+              onChange={(event) =>
+                update("aiThinkingMode", event.target.value)
+              }
+              value={settings.aiThinkingMode}
+            >
+              <option value="enabled">开启思考</option>
+              <option value="disabled">关闭思考</option>
+            </select>
+          </label>
+        </div>
+
+        {settings.aiProvider === "custom" ? (
+          <div className="mt-4 border border-amber-300 bg-amber-50 p-4">
+            <label className="grid max-w-2xl gap-2 text-sm font-bold text-ink-800">
+              自定义服务的思考参数协议
+              <select
+                className="field"
+                onChange={(event) =>
+                  update("aiCustomThinkingProtocol", event.target.value)
+                }
+                value={settings.aiCustomThinkingProtocol}
+              >
+                <option value="none">不发送 thinking 参数（推荐兼容模式）</option>
+                <option value="thinking-object">
+                  发送 thinking: {"{"} type {"}"}
+                </option>
+              </select>
+            </label>
+            <p className="mt-2 text-xs font-semibold text-amber-800">
+              选择“不发送”时，思考行为由模型本身决定；确认上游兼容后再开启
+              thinking 参数。
+            </p>
+          </div>
+        ) : null}
+
+        <div className="mt-6 border-t border-ink-950/10 pt-5">
         <label className="mt-5 inline-flex items-center gap-3 text-sm font-bold text-ink-800">
           <input
             checked={settings.aiPracticeEnabled === "true"}
@@ -232,6 +521,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: SystemSetti
         <p className="mt-2 text-sm font-semibold text-ink-600">
           只保存学生可见的问答和调用统计，不保存学生代码、完整 Prompt 或模型推理内容。
         </p>
+        </div>
       </section>
 
       <section className="surface p-5">

@@ -157,7 +157,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (examId !== null) {
     if (auth.user.role !== "student") {
       return NextResponse.json(
-        { error: "管理员考试练习不使用正式考试 ID" },
+        { error: "后台考试练习不使用正式考试 ID" },
         { status: 403 },
       );
     }

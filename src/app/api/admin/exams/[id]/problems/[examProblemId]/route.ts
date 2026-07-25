@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiUser } from "@/lib/auth";
 import {
   getObjectiveTotalScore,
   parseObjectiveItems,
@@ -10,6 +9,10 @@ import {
   REQUEST_LIMITS,
   readJsonWithLimit,
 } from "@/lib/requestLimits";
+import {
+  getExamAccessWhere,
+  requireStaffApiUser,
+} from "@/lib/staffAccess";
 
 type RouteContext = {
   params: Promise<{ id: string; examProblemId: string }>;
@@ -24,7 +27,7 @@ function readUpdatePayload(body: unknown) {
 }
 
 export async function PUT(request: NextRequest, context: RouteContext) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const { id, examProblemId: examProblemIdValue } = await context.params;
@@ -43,6 +46,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
   if (!Number.isInteger(examId) || !Number.isInteger(examProblemId)) {
     return NextResponse.json({ error: "考试题目 ID 不合法" }, { status: 400 });
+  }
+  const exam = await prisma.exam.findFirst({
+    where: getExamAccessWhere(auth.user, examId),
+    select: { id: true },
+  });
+  if (!exam) {
+    return NextResponse.json({ error: "考试不存在" }, { status: 404 });
   }
   if (payload.order !== null && (!Number.isInteger(payload.order) || payload.order < 0)) {
     return NextResponse.json({ error: "排序值不合法" }, { status: 400 });
@@ -107,7 +117,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const { id, examProblemId: examProblemIdValue } = await context.params;
@@ -115,6 +125,13 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const examProblemId = Number(examProblemIdValue);
   if (!Number.isInteger(examId) || !Number.isInteger(examProblemId)) {
     return NextResponse.json({ error: "考试题目 ID 不合法" }, { status: 400 });
+  }
+  const exam = await prisma.exam.findFirst({
+    where: getExamAccessWhere(auth.user, examId),
+    select: { id: true },
+  });
+  if (!exam) {
+    return NextResponse.json({ error: "考试不存在" }, { status: 404 });
   }
 
   await prisma.examProblem.deleteMany({ where: { id: examProblemId, examId } });

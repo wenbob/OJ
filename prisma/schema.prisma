@@ -19,6 +19,7 @@ model User {
   studentProfile             StudentProfile?
   learningAssignments        LearningAssignment[]      @relation("LearningAssignmentStudent")
   createdLearningAssignments LearningAssignment[]      @relation("LearningAssignmentCreator")
+  createdExams               Exam[]                    @relation("ExamCreator")
   learningInsightSnapshots   LearningInsightSnapshot[]
   aiConversations            AiConversation[]
 }
@@ -47,7 +48,7 @@ model Problem {
   problemType                String                      @default("programming")
   sortOrder                  Int                         @default(0)
   objectiveItems             String?
-  archivedAt                DateTime?
+  archivedAt                 DateTime?
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
   testCases                  TestCase[]
@@ -181,21 +182,24 @@ model SubmissionCaseResult {
 }
 
 model Exam {
-  id          Int           @id @default(autoincrement())
-  title       String
-  description String?
-  durationMin Int?
-  status      String        @default("draft")
-  examType    String        @default("programming")
-  aiEnabled   Boolean       @default(false)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  problems    ExamProblem[]
-  submissions Submission[]
-  records     ExamRecord[]
+  id              Int              @id @default(autoincrement())
+  title           String
+  description     String?
+  durationMin     Int?
+  status          String           @default("draft")
+  examType        String           @default("programming")
+  aiEnabled       Boolean          @default(false)
+  createdById     Int?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  createdBy       User?            @relation("ExamCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  problems        ExamProblem[]
+  submissions     Submission[]
+  records         ExamRecord[]
   aiConversations AiConversation[]
 
   @@index([examType, status])
+  @@index([createdById, createdAt])
 }
 
 model ExamRecord {

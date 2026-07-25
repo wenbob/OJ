@@ -32,24 +32,7 @@
 - 不要为了 OJ 清理去删除其它站点目录、股票系统目录，或 `stock-fund-advisor*` Docker 容器/镜像。
 - `docker system df` 只读可用；`docker system prune`、`docker builder prune` 属于全局清理，可能影响股票系统构建缓存，除非用户明确确认，否则不要执行。
 
-只有无法本地生成 Linux standalone 产物时，才在服务器停 PM2 后使用单 worker 低内存构建：
-
-```bash
-cd /www/oj
-mkdir -p /www/backups
-cp /www/oj/prisma/prod.db /www/backups/prod-$(date +%Y%m%d-%H%M%S).db
-pm2 stop oj
-NEXT_TELEMETRY_DISABLED=1 NEXT_PRIVATE_BUILD_WORKER_COUNT=1 NODE_OPTIONS='--max-old-space-size=768' npm run build
-pm2 restart oj --update-env
-curl http://127.0.0.1:3000/api/health
-```
-
-构建日志应包含：
-
-```text
-Collecting page data using 1 worker
-Generating static pages using 1 worker
-```
+只有无法本地生成 Linux standalone 时，才按 `docs/deploy.md` 在服务器备份数据库、停 PM2，并用 `NEXT_PRIVATE_BUILD_WORKER_COUNT=1`、`NODE_OPTIONS='--max-old-space-size=768'` 构建；重启后必须检查 `/api/health`。
 
 ## 编辑器策略
 
@@ -58,8 +41,7 @@ Generating static pages using 1 worker
 
 ## 提交反馈策略
 
-- AC 透明动效弹窗集中在 `src/components/ProblemSubmitForm.tsx` 和 `public/ac-success.png`。图片必须保持真实 alpha 透明背景，不要替换成带棋盘格像素的伪透明图。
-- AC 遮罩必须通过 portal 挂到 `document.body`。页面入场动画会让 `.app-stage` 等祖先保留 `transform`，若把 `position: fixed` 遮罩留在题目内容树内，它会改为相对该祖先定位，并在提交结果自动滚动后偏离当前视口中心。
+- AC 透明动效集中在 `ProblemSubmitForm.tsx` 和真实 alpha 图片 `public/ac-success.png`；遮罩必须 portal 到 `document.body`，否则祖先残留的 `transform` 会让 `position: fixed` 在自动滚动后偏离视口中心。
 
 ## 试运行规则
 
@@ -72,55 +54,64 @@ Generating static pages using 1 worker
 
 ## 浏览器标签设置
 
-- 浏览器标签名称和图标保存在 `SystemSetting.browserTitle`、`SystemSetting.browserIcon`；标题留空时回退到 `siteName`。
-- 标签图标只允许经过服务端校验的 PNG、ICO Data URL，原文件最大 256KB；不要改成发布目录内的可变上传文件，否则目录切换会丢失。
-- 全站标签同步集中在 `src/components/BrowserIdentity.tsx`，管理员保存后通过同一组件即时应用，不要在单个页面重复修改 `document.title` 或 favicon。
+- 标签名称与图标保存在 `SystemSetting.browserTitle`、`browserIcon`，空标题回退 `siteName`；图标仅接受服务端校验的 256KB 内 PNG/ICO Data URL。全站只通过 `BrowserIdentity.tsx` 同步，禁止单页重复修改标题、favicon 或改用随发布目录丢失的上传文件。
 
 ## 头衔与天梯规则
 
 - 学生段位积分实时从 `Submission` 计算，不要新增积分缓存表；规则为唯一 Accepted 题数 × 10。
 - 同一用户同一题多次 `Accepted` 只计入 1 道唯一 AC 题；日常刷题和考试提交都计入统计。
-- 管理员自定义头衔和学生个人 AI 权限分别保存在 `StudentProfile.customTitle`、`StudentProfile.aiAccessEnabled`；头衔只覆盖展示文案，不影响积分、自动段位和排名。
+- 管理员或老师设置的自定义头衔和学生个人 AI 权限分别保存在 `StudentProfile.customTitle`、`StudentProfile.aiAccessEnabled`；头衔只覆盖展示文案，不影响积分、自动段位和排名。
 - 天梯排序固定为：积分降序 → 唯一 AC 题数降序 → AC 总次数降序 → 用户名升序 → 用户 ID 升序。
 - 管理员移除题目必须写入 `Problem.archivedAt` 做下架，禁止物理删除 `Problem`；下架题目不再出现在题库、组卷、专项推荐、提交、试运行或 AI 入口，但历史 `Submission` 必须保留用于积分和排名。
 
+## 老师端权限边界
+
+- `User.role` 只允许 `student`、`teacher`、`admin`；老师登录后进入独立 `/teacher`，直接访问 `/admin` 页面应重定向到老师首页。
+- 管理员可以管理全部角色；老师用户接口只能枚举、创建、改密、调整头衔和 AI 权限或删除学生，禁止读取和维护老师或管理员。
+- 用户密码只能保存不可逆哈希，任何用户查询不得返回 `passwordHash`。编辑账号时不能展示原密码；新建或重置密码必须在前端二次确认且至少 8 位，确认值不得发送到接口或数据库。
+- 老师不能访问系统设置、AI 服务商与模型配置、题目管理、题目导入、上下架、题序或分类排序；隐藏菜单不能替代 API 的管理员鉴权。
+- `Exam.createdById` 保存考试创建者。管理员可管理全部考试；老师的考试列表、详情、编辑、组卷、发布、练习、记录和删除必须同时校验 `createdById`，他人考试统一返回 404。
+- 历史 `createdById = null` 的考试仅管理员可管理；删除老师或把老师改成学生时清空其考试归属并保留考试。
+- 管理员和老师考试列表必须显示创建人/归属账号标签；`createdById = null` 或账号已删除时显示“出卷人：未记录”，不要误称为最后发布人。
+- 老师可以查看全部学生学情，但只能修改、归档和删除自己创建的 `LearningAssignment`；其他老师任务仅查看，写接口统一返回 404。
+- 老师可以查看全部学生提交和自己的校题提交；不得泄露其他老师或管理员的校题代码。
+- 老师和管理员允许多设备登录；修改密码或角色仍须递增 `sessionVersion` 废除旧会话。
+
 ## AI 助手规则
 
-- DeepSeek API Key 只能保存在本地或生产 `.env`，不得进入前端、Git、日志、测试快照或文档示例。
-- AI 请求必须走服务端 API；浏览器不得直接调用 DeepSeek。
-- 学生 AI 使用频率必须由服务端强制限制，当前为每次使用后至少等待 20 秒。
-- AI 提示不得返回完整可提交代码；服务端要保留输出拦截。
-- AI 只对编程题开放；选择判断题默认不显示 AI，避免泄露答案。
-- AI 采用双重权限：`StudentProfile.aiAccessEnabled` 必须开启，并且日常练习的 `SystemSetting.aiPracticeEnabled` 或当前考试的 `Exam.aiEnabled` 也必须开启；个人权限默认关闭。
-- 学生端仍只在浏览器 `localStorage` 保留最近 20 条消息，请求只带最近 12 条；服务端通过 `AiConversation`、`AiConversationTurn` 保存学生实际可见的提问、清洗后回复和调用统计，供管理员审阅。
-- AI 审计记录严禁保存学生代码快照、客户端历史副本、完整 Prompt、隐藏测试点、完整错误日志、`reasoning_content`、API Key 或请求头；学生清空本地面板不得删除教师端历史。
-- AI 审计默认保留 180 天，管理员只能选择 30、90、180、365 天或永久；同一 `requestId` 必须幂等，缓存命中计学生使用但模型调用和 Token 为 0。
-- 同一学生在所有题目、考试和 AI 模式中共用服务端 20 秒冷却；只有不含个人代码和对话的 `overview` 可使用同题 5 分钟缓存，缓存命中也不能绕过冷却。
-- AI 输出不得包含完整代码、可复制代码语句、最终答案或隐藏测试点；代码检查最多指出三个问题及所在行。
-- 学生端 AI 使用 SSE：等待期间每 2 秒发送思考状态，最终回复必须先完整通过输出清洗，再按安全文本片段流式展示；禁止直接转发未经检查的 DeepSeek 原始 token。旧客户端 JSON 响应必须继续兼容。
+- AI 密钥分别使用 `DEEPSEEK_API_KEY`、`ARK_API_KEY`、`AI_CUSTOM_API_KEY`，只能保存在本地或生产 `.env`；不得进入 `SystemSetting`、前端、Git、日志、测试快照或文档示例。
+- 管理员只在系统设置中保存非敏感的服务商、Base URL、模型和思考模式；学生助手与教师学情摘要统一跟随，学生端不得出现调整入口。
+- DeepSeek 与豆包使用固定官方 Base URL；自定义 OpenAI-compatible 服务在生产环境只允许公共 HTTPS，必须执行 DNS 全量校验和固定、阻止私网/保留网络与重定向，模型列表响应上限 1MB、超时 15 秒。
+- AI 请求必须走服务端 API；浏览器不得直接调用任何上游模型服务。管理员模型发现接口同样不得返回密钥、请求头或上游响应正文。
+- AI 只对编程题开放，并采用个人权限加日常/考试总开关的双重校验；服务端统一执行 20 秒冷却，选择判断题不得显示入口。
+- 学生端仅在 `localStorage` 保留最近 20 条消息，请求最多携带 12 条；服务端只审计学生实际可见问答、清洗后回复和调用统计，严禁保存代码快照、完整 Prompt、隐藏测试点、完整错误、内部推理、密钥或请求头。
+- AI 审计默认保留 180 天，可配置为 30、90、180、365 天或永久；`requestId` 必须幂等，缓存命中计使用次数但模型调用和 Token 为 0。
+- 同一学生在所有题目、考试和 AI 模式中共用服务端 20 秒冷却；只有不含个人代码和对话的 `overview` 可使用同题 5 分钟缓存，缓存键必须包含非敏感服务商配置指纹，缓存命中也不能绕过冷却。
+- AI 输出不得包含完整代码、可复制代码语句、最终答案或隐藏测试点；代码检查最多指出三个问题及所在行。SSE 只能在完整清洗后分片展示安全文本，禁止透传上游 token，并保留旧 JSON 客户端兼容。
 
 ## 学情看板与专项练习规则
 
 - 学情诊断只分析编程题提交，日常和考试都纳入；分析周期为 `7d`、`30d`、`all`。
-- DeepSeek 教师摘要只能接收聚合统计，不得发送学生源码、AI 对话、隐藏测试点或完整错误日志；AI 失败不得阻断规则诊断和任务下发。
+- 教师 AI 摘要只能接收聚合统计，不得发送学生源码、AI 对话、隐藏测试点或完整错误日志；AI 失败不得阻断规则诊断和任务下发。服务商配置指纹必须进入摘要缓存哈希，切换模型或思考模式后旧摘要自动过期。
 - 教师学情详情页只展示主要问题、持续卡题、最近失败、AI 摘要和推荐练习题；不要恢复分类掌握率、错误状态分布或题库缺口模块，除非用户重新明确要求。
-- 专项练习每份 1–10 道编程题；下发后题目集合不可修改，只能调整标题、说明、截止日期或归档。进行中任务禁止硬删除，归档后才可由管理员永久删除。
+- 专项练习每份 1–10 道编程题；未归档任务可由管理员或任务创建老师统一保存题目增删、顺序、标题、说明和截止日期。保留的任务题必须保留快照与 `completedAt`，新增题创建新快照且不得继承历史 AC。
+- 移除已完成题必须强提醒，只清空相关提交的 `learningAssignmentId` 并重新计算进度，禁止删除历史提交或代码。进行中任务禁止硬删除，归档后才可由管理员或任务创建老师永久删除。
 - 同一道题不能同时存在于同一学生两份未完成任务中。
-- 只有携带合法 `learningAssignmentId` 的日常 `Accepted` 才更新 `completedAt`；普通日常、考试和历史 AC 均不计入专项进度。
+- 只有携带合法 `learningAssignmentId` 的日常 `Accepted` 才更新 `completedAt`；普通日常、考试和历史 AC 均不计入专项进度。Judge 完成写库前必须重新确认任务题仍有效；若评测期间被移除，本次提交保存为普通练习并向页面返回明确说明。
 
 ## 题型与考试规则
 
-- 学生账号使用 `User.sessionVersion` 保证只保留最后一次登录会话；管理员允许多设备登录。修改密码或角色必须递增会话版本。
+- 学生账号使用 `User.sessionVersion` 保证只保留最后一次登录会话；老师和管理员允许多设备登录。修改密码或角色必须递增会话版本。
 - 学生新设备登录前必须先结算该学生所有 `in_progress` 考试；旧设备 API 返回 401，并在页面聚焦或每 30 秒检查时退出。
 - 学生考试答题页必须使用锁定布局；离开考试路由、后退、刷新、关闭页面或退出账号调用现有幂等交卷接口，同场切题和切换浏览器标签不交卷。
 - 日常题库的“已通过”实时读取该学生全部历史 `Accepted`，日常和考试、编程和客观题都计入；不得因后续失败取消标记。
-- 题库自定义题序保存在 `Problem.sortOrder`，分类标签顺序保存在 `ProblemCategoryOrder`；只有管理员题目管理页可以拖动或上下调整顺序。标题/时间查看排序默认只预览，但管理员可以把当前题型或分类的全部结果保存为一次性自定义题序快照；学生题库、管理员练习和组卷搜索只读跟随保存后的顺序，不得向学生开放排序入口。
+- 题库自定义题序保存在 `Problem.sortOrder`，分类标签顺序保存在 `ProblemCategoryOrder`；只有管理员题目管理页可以拖动或上下调整顺序。标题/时间查看排序默认只预览，但管理员可以把当前题型或分类的全部结果保存为一次性自定义题序快照；学生题库、管理员与老师练习、组卷搜索只读跟随保存后的顺序，不得向学生或老师开放排序入口。
 
 - `Problem.problemType` 和 `Exam.examType` 只允许 `programming`、`objective`。
 - 一场考试只能包含与 `Exam.examType` 相同的题目，题目搜索、Markdown 导入、添加题目和发布接口都必须校验。
 - 客观题标准答案保存在 `Problem.objectiveItems`，学生题目接口和考试答题接口不得返回 `answer` 字段。
-- 管理员题目练习页和管理员考试练习页用于校题，可以展示客观题标准答案；学生端不得展示。
-- 管理员校题的“已通过”按当前管理员账号全部历史 `Accepted` 实时计算，后续失败不得取消；题目练习列表、题目详情和管理员考试练习题单必须统一显示，并链接到该管理员最近一次 Accepted 的提交详情。
+- 管理员和老师的题目练习页、考试练习页用于校题，可以展示客观题标准答案；学生端不得展示。
+- 后台校题的“已通过”按当前管理员或老师账号全部历史 `Accepted` 实时计算，后续失败不得取消；题目练习列表、题目详情和考试练习题单必须统一显示，并链接到当前账号最近一次 Accepted 的提交详情。
 - 客观题提交不进入 Docker Judge；每行对应一道小题，逐题结果写入 `SubmissionCaseResult`，考试分数取单次提交的最高小题分值合计。
 - 客观题小题分值必须是正整数，`ExamProblem.score` 使用小题分值总和。
 - 客观题 Markdown 导入选项必须是单行 `A. 选项内容`；题干可用代码块，选项内代码或输出用行内代码，不要支持或生成 `A.` 后接代码块的格式。
@@ -137,27 +128,4 @@ npm run lint
 npm run build
 ```
 
-## 深入文档
-
-| 文档 | 用途 |
-| --- | --- |
-| `README.md` | 功能概览、本地开发和上线检查清单 |
-| `docs/deploy.md` | 线上部署、更新、备份和容量建议 |
-| `docs/admin-guide.md` | 管理员使用和运维手册 |
-| `docs/student-guide.md` | 学生使用说明 |
-| `docs/ops-review-2026-05-29.md` | 低内存构建事故和后续发布记录 |
-| `docs/ops-review-2026-05-31.md` | 学生复制题面和管理员考试练习模式发布记录 |
-| `docs/ops-review-2026-06-07.md` | Monaco 代码提示关闭发布记录 |
-| `docs/ops-review-2026-06-13.md` | 编辑器字号调节和 AC 透明弹窗发布记录 |
-| `docs/ops-review-2026-06-28.md` | 选择判断题型和本地 Linux standalone 发布记录 |
-| `docs/ops-review-2026-06-29.md` | OJ 旧版本目录磁盘清理记录 |
-| `docs/ops-review-2026-07-01.md` | 头衔天梯与安全加固上线记录 |
-| `docs/ops-review-2026-07-02.md` | AI 思路上线与低内存发布事故修正记录 |
-| `docs/ops-review-2026-07-10.md` | 生产运行时、Nginx、Judge 和权限加固记录 |
-| `docs/ops-review-2026-07-11.md` | 竞技学院视觉与天梯升级记录 |
-| `docs/ops-review-2026-07-12.md` | 天梯前一名与第一名积分差上线记录 |
-| `docs/ops-review-2026-07-15.md` | AI 分层辅导、学情看板、专项练习及浏览器标签配置上线记录 |
-| `docs/ops-review-2026-07-16.md` | 运行样例、自定义输入与共享 Judge 队列上线记录 |
-| `docs/ops-review-2026-07-21.md` | 多文档题目导入、题型分类稳定性和选择判断公式渲染上线记录 |
-| `docs/ops-review-2026-07-22.md` | 管理员题目与分类自定义排序、拖动保存和迁移上线记录 |
-| `docs/ops-review-2026-07-24.md` | 管理员历史通过状态、快捷查看通过代码及生产发布记录 |
+深入说明与当前操作手册索引见 `README.md`。

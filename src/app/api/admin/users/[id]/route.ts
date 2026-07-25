@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiUser } from "@/lib/auth";
 import { hashPassword, validateAccountPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import {
@@ -11,13 +10,16 @@ import {
   REQUEST_LIMITS,
   readJsonWithLimit,
 } from "@/lib/requestLimits";
+import { requireStaffApiUser } from "@/lib/staffAccess";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
 function readRole(value: unknown) {
-  if (value === "admin" || value === "student") return value;
+  if (value === "admin" || value === "teacher" || value === "student") {
+    return value;
+  }
   return null;
 }
 
@@ -26,7 +28,7 @@ function readAiAccessEnabled(value: unknown) {
 }
 
 export async function PUT(request: NextRequest, context: RouteContext) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const { id } = await context.params;
@@ -49,7 +51,18 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const username =
     typeof record.username === "string" ? record.username.trim() : "";
   const password = typeof record.password === "string" ? record.password : "";
-  const role = readRole(record.role);
+  const requestedRole = readRole(record.role);
+  if (
+    auth.user.role === "teacher" &&
+    requestedRole !== null &&
+    requestedRole !== "student"
+  ) {
+    return NextResponse.json(
+      { error: "老师只能维护学生账号" },
+      { status: 403 },
+    );
+  }
+  const role = auth.user.role === "teacher" ? "student" : requestedRole;
   const aiAccessEnabled = readAiAccessEnabled(record.aiAccessEnabled);
   const customTitle = normalizeCustomTitle(record.customTitle);
   const customTitleError = validateCustomTitle(customTitle);
@@ -77,6 +90,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         select: { role: true },
       });
       if (!existingUser) throw new Error("用户不存在");
+      if (auth.user.role === "teacher" && existingUser.role !== "student") {
+        throw new StaffUserAccessError();
+      }
       const shouldRevokeSessions = Boolean(password) || existingUser.role !== role;
 
       await tx.user.update({
@@ -93,6 +109,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       });
 
       if (role === "student") {
+        if (existingUser.role !== "student") {
+          await tx.exam.updateMany({
+            where: { createdById: userId },
+            data: { createdById: null },
+          });
+        }
         if (customTitle || aiAccessEnabled) {
           await tx.studentProfile.upsert({
             where: { userId },
@@ -120,13 +142,19 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       });
     });
     return NextResponse.json({ user });
-  } catch {
+  } catch (error) {
+    if (error instanceof StaffUserAccessError) {
+      return NextResponse.json(
+        { error: "老师只能维护学生账号" },
+        { status: 403 },
+      );
+    }
     return NextResponse.json({ error: "更新用户失败，可能用户名已存在" }, { status: 400 });
   }
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  const auth = await requireApiUser(request, "admin");
+  const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
   const { id } = await context.params;
@@ -138,6 +166,21 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "不能删除当前登录账号" }, { status: 400 });
   }
 
+  if (auth.user.role === "teacher") {
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (!target || target.role !== "student") {
+      return NextResponse.json(
+        { error: "老师只能删除学生账号" },
+        { status: 403 },
+      );
+    }
+  }
+
   await prisma.user.delete({ where: { id: userId } });
   return NextResponse.json({ ok: true });
 }
+
+class StaffUserAccessError extends Error {}
