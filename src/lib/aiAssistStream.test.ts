@@ -26,6 +26,7 @@ describe("AI assist stream protocol", () => {
         event: "done",
         data: {
           cached: false,
+          cooldownSeconds: 20,
           conversationId: "conversation_123456",
           requestId: "request_12345678",
         },

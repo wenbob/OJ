@@ -28,6 +28,16 @@ export const defaultSystemSettings = {
   aiModel: "deepseek-v4-pro",
   aiThinkingMode: "enabled",
   aiCustomThinkingProtocol: "none",
+  aiObjectiveProvider: "deepseek",
+  aiObjectiveBaseUrl: "https://api.deepseek.com",
+  aiObjectiveModel: "deepseek-v4-pro",
+  aiObjectiveThinkingMode: "enabled",
+  aiObjectiveCustomThinkingProtocol: "none",
+  aiProgrammingStudentCooldownSeconds: "20",
+  aiProgrammingTeacherCooldownSeconds: "30",
+  aiProgrammingAdminCooldownSeconds: "30",
+  aiObjectiveTeacherCooldownSeconds: "30",
+  aiObjectiveAdminCooldownSeconds: "30",
 };
 
 export type SystemSettingKey = keyof typeof defaultSystemSettings;
@@ -35,6 +45,22 @@ export type SystemSettingKey = keyof typeof defaultSystemSettings;
 export type SystemSettings = typeof defaultSystemSettings;
 
 const settingKeys = Object.keys(defaultSystemSettings) as SystemSettingKey[];
+
+export const AI_COOLDOWN_MIN_SECONDS = 5;
+export const AI_COOLDOWN_MAX_SECONDS = 600;
+
+const backwardCompatibleAiSettingKeys = new Set<SystemSettingKey>([
+  "aiObjectiveProvider",
+  "aiObjectiveBaseUrl",
+  "aiObjectiveModel",
+  "aiObjectiveThinkingMode",
+  "aiObjectiveCustomThinkingProtocol",
+  "aiProgrammingStudentCooldownSeconds",
+  "aiProgrammingTeacherCooldownSeconds",
+  "aiProgrammingAdminCooldownSeconds",
+  "aiObjectiveTeacherCooldownSeconds",
+  "aiObjectiveAdminCooldownSeconds",
+]);
 
 function positiveInt(value: string | undefined, fallback: number) {
   const parsed = Number(value);
@@ -124,6 +150,9 @@ export function normalizeSystemSettingsPayload(body: unknown): SystemSettings {
   const settings = { ...defaultSystemSettings };
   for (const key of settingKeys) {
     const value = record[key];
+    if (value === undefined && backwardCompatibleAiSettingKeys.has(key)) {
+      continue;
+    }
     if (
       key === "allowStudentRegister" ||
       key === "aiPracticeEnabled" ||
@@ -133,6 +162,22 @@ export function normalizeSystemSettingsPayload(body: unknown): SystemSettings {
     } else {
       settings[key] = typeof value === "string" ? value : "";
     }
+  }
+  if (record.aiObjectiveProvider === undefined) {
+    settings.aiObjectiveProvider = settings.aiProvider;
+  }
+  if (record.aiObjectiveBaseUrl === undefined) {
+    settings.aiObjectiveBaseUrl = settings.aiBaseUrl;
+  }
+  if (record.aiObjectiveModel === undefined) {
+    settings.aiObjectiveModel = settings.aiModel;
+  }
+  if (record.aiObjectiveThinkingMode === undefined) {
+    settings.aiObjectiveThinkingMode = settings.aiThinkingMode;
+  }
+  if (record.aiObjectiveCustomThinkingProtocol === undefined) {
+    settings.aiObjectiveCustomThinkingProtocol =
+      settings.aiCustomThinkingProtocol;
   }
   return settings;
 }
@@ -154,34 +199,94 @@ export function validateSystemSettings(settings: SystemSettings) {
   if (!["0", "30", "90", "180", "365"].includes(settings.aiConversationRetentionDays)) {
     return "AI 对话保留时间不合法";
   }
-  if (!["deepseek", "doubao", "custom"].includes(settings.aiProvider)) {
-    return "AI 服务商不合法";
-  }
-  if (settings.aiBaseUrl.length > 300) {
-    return "AI Base URL 不能超过 300 个字符";
-  }
-  if (/[\u0000-\u001f\u007f]/.test(settings.aiBaseUrl)) {
-    return "AI Base URL 不能包含控制字符";
-  }
-  if (!settings.aiModel.trim()) {
-    return "AI 模型 ID 不能为空";
-  }
-  if (settings.aiModel.length > 200) {
-    return "AI 模型 ID 不能超过 200 个字符";
-  }
-  if (/[\u0000-\u001f\u007f]/.test(settings.aiModel)) {
-    return "AI 模型 ID 不能包含控制字符";
-  }
-  if (!["enabled", "disabled"].includes(settings.aiThinkingMode)) {
-    return "AI 思考模式不合法";
-  }
-  if (!["thinking-object", "none"].includes(settings.aiCustomThinkingProtocol)) {
-    return "自定义 AI 思考协议不合法";
-  }
-  if (settings.aiProvider === "custom" && !settings.aiBaseUrl.trim()) {
-    return "自定义 AI 服务必须填写 Base URL";
+  const programmingProfileError = validateAiProfileSettings({
+    baseUrl: settings.aiBaseUrl,
+    customThinkingProtocol: settings.aiCustomThinkingProtocol,
+    label: "编程题",
+    model: settings.aiModel,
+    provider: settings.aiProvider,
+    thinkingMode: settings.aiThinkingMode,
+  });
+  if (programmingProfileError) return programmingProfileError;
+  const objectiveProfileError = validateAiProfileSettings({
+    baseUrl: settings.aiObjectiveBaseUrl,
+    customThinkingProtocol: settings.aiObjectiveCustomThinkingProtocol,
+    label: "选择判断题",
+    model: settings.aiObjectiveModel,
+    provider: settings.aiObjectiveProvider,
+    thinkingMode: settings.aiObjectiveThinkingMode,
+  });
+  if (objectiveProfileError) return objectiveProfileError;
+  for (const [label, value] of [
+    ["学生编程助手", settings.aiProgrammingStudentCooldownSeconds],
+    ["老师学情摘要", settings.aiProgrammingTeacherCooldownSeconds],
+    ["管理员学情摘要", settings.aiProgrammingAdminCooldownSeconds],
+    ["老师选择判断解析", settings.aiObjectiveTeacherCooldownSeconds],
+    ["管理员选择判断解析", settings.aiObjectiveAdminCooldownSeconds],
+  ] as const) {
+    if (!isValidAiCooldownSeconds(value)) {
+      return `${label}触发间隔必须是 ${AI_COOLDOWN_MIN_SECONDS}–${AI_COOLDOWN_MAX_SECONDS} 秒的整数`;
+    }
   }
   return "";
+}
+
+function validateAiProfileSettings({
+  baseUrl,
+  customThinkingProtocol,
+  label,
+  model,
+  provider,
+  thinkingMode,
+}: {
+  baseUrl: string;
+  customThinkingProtocol: string;
+  label: string;
+  model: string;
+  provider: string;
+  thinkingMode: string;
+}) {
+  if (!["deepseek", "doubao", "custom"].includes(provider)) {
+    return `${label} AI 服务商不合法`;
+  }
+  if (baseUrl.length > 300) {
+    return `${label} AI Base URL 不能超过 300 个字符`;
+  }
+  if (/[\u0000-\u001f\u007f]/.test(baseUrl)) {
+    return `${label} AI Base URL 不能包含控制字符`;
+  }
+  if (!model.trim()) {
+    return `${label} AI 模型 ID 不能为空`;
+  }
+  if (model.length > 200) {
+    return `${label} AI 模型 ID 不能超过 200 个字符`;
+  }
+  if (/[\u0000-\u001f\u007f]/.test(model)) {
+    return `${label} AI 模型 ID 不能包含控制字符`;
+  }
+  if (!["enabled", "disabled"].includes(thinkingMode)) {
+    return `${label} AI 思考模式不合法`;
+  }
+  if (!["thinking-object", "none"].includes(customThinkingProtocol)) {
+    return `${label}自定义 AI 思考协议不合法`;
+  }
+  if (provider === "custom" && !baseUrl.trim()) {
+    return `${label}自定义 AI 服务必须填写 Base URL`;
+  }
+  return "";
+}
+
+export function isValidAiCooldownSeconds(value: string) {
+  const parsed = Number(value);
+  return (
+    Number.isInteger(parsed) &&
+    parsed >= AI_COOLDOWN_MIN_SECONDS &&
+    parsed <= AI_COOLDOWN_MAX_SECONDS
+  );
+}
+
+export function normalizeAiCooldownSeconds(value: string, fallback: number) {
+  return isValidAiCooldownSeconds(value) ? Number(value) : fallback;
 }
 
 export function validateBrowserIcon(value: string) {

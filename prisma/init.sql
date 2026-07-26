@@ -313,6 +313,51 @@ INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
 VALUES ('aiObjectiveExplanationEnabled', 'false', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiProvider', 'deepseek', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiBaseUrl', 'https://api.deepseek.com', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiModel', 'deepseek-v4-pro', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiThinkingMode', 'enabled', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiCustomThinkingProtocol', 'none', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiObjectiveProvider', 'deepseek', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiObjectiveBaseUrl', 'https://api.deepseek.com', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiObjectiveModel', 'deepseek-v4-pro', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiObjectiveThinkingMode', 'enabled', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiObjectiveCustomThinkingProtocol', 'none', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiProgrammingStudentCooldownSeconds', '20', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiProgrammingTeacherCooldownSeconds', '30', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiProgrammingAdminCooldownSeconds', '30', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiObjectiveTeacherCooldownSeconds', '30', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('aiObjectiveAdminCooldownSeconds', '30', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
 VALUES ('browserTitle', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")

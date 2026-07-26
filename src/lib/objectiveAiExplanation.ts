@@ -319,10 +319,12 @@ function mapProviderError(error: unknown) {
 export async function generateObjectiveAiExplanation({
   config,
   item,
+  onProviderRequest,
   prompt,
 }: {
   config: AiProviderRuntimeConfig;
   item: ObjectiveItem;
+  onProviderRequest?: () => void;
   prompt: string;
 }): Promise<GeneratedObjectiveAiExplanation> {
   const expectedLabels = item.options.map((option) =>
@@ -347,6 +349,7 @@ export async function generateObjectiveAiExplanation({
             content: `${prompt}${validationHint}`,
           },
         ],
+        onProviderRequest,
         timeoutMs: AI_ASSIST_TIMEOUT_MS,
       });
     } catch (error) {

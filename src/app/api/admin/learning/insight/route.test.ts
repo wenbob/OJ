@@ -14,6 +14,7 @@ import { prisma } from "@/lib/prisma";
 import { POST } from "./route";
 
 const mocks = vi.hoisted(() => ({
+  getCooldown: vi.fn(),
   getDetail: vi.fn(),
   requestInsight: vi.fn(),
 }));
@@ -37,6 +38,10 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/teacherLearning", () => ({
   getTeacherLearningStudentDetail: mocks.getDetail,
+}));
+
+vi.mock("@/lib/aiRuntimeSettings", () => ({
+  getAiCooldownSeconds: mocks.getCooldown,
 }));
 
 vi.mock("@/lib/aiProvider", async () => {
@@ -105,8 +110,18 @@ describe("POST /api/admin/learning/insight", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearTeacherInsightRateLimits();
+    mocks.getCooldown.mockResolvedValue(13);
     mocks.getDetail.mockResolvedValue(detail);
-    mocks.requestInsight.mockResolvedValue("主要问题：逻辑判断需要加强。\n数据依据：Wrong Answer 2 次。\n教学建议：先练条件判断。\n专项练习重点：循环。 ");
+    mocks.requestInsight.mockImplementation(
+      async (
+        _prompt: string,
+        _config: AiProviderRuntimeConfig,
+        onProviderRequest?: () => void,
+      ) => {
+        onProviderRequest?.();
+        return "主要问题：逻辑判断需要加强。\n数据依据：Wrong Answer 2 次。\n教学建议：先练条件判断。\n专项练习重点：循环。 ";
+      },
+    );
     vi.mocked(prisma.learningInsightSnapshot.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.learningInsightSnapshot.upsert).mockResolvedValue({
       generatedAt: new Date("2026-07-15T09:00:00Z"),
@@ -118,9 +133,12 @@ describe("POST /api/admin/learning/insight", () => {
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.cached).toBe(false);
+    expect(body.cooldownSeconds).toBe(13);
+    expect(mocks.getCooldown).toHaveBeenCalledWith("programming", "admin");
     expect(requestTeacherLearningInsight).toHaveBeenCalledWith(
       expect.not.stringContaining("#include"),
       providerConfig,
+      expect.any(Function),
     );
     expect(prisma.learningInsightSnapshot.upsert).toHaveBeenCalled();
   });
@@ -142,6 +160,7 @@ describe("POST /api/admin/learning/insight", () => {
     const body = await response.json();
     expect(body.cached).toBe(true);
     expect(body.aiSummary).toBe("缓存摘要");
+    expect(mocks.getCooldown).not.toHaveBeenCalled();
     expect(requestTeacherLearningInsight).not.toHaveBeenCalled();
   });
 
@@ -152,6 +171,36 @@ describe("POST /api/admin/learning/insight", () => {
     expect(response.status).toBe(502);
     expect(body.error).toContain("AI 服务异常");
     expect(body.rules.summary.submissionCount).toBe(3);
+  });
+
+  it("applies the configured cooldown after an upstream failure", async () => {
+    mocks.requestInsight.mockImplementationOnce(
+      async (
+        _prompt: string,
+        _config: AiProviderRuntimeConfig,
+        onProviderRequest?: () => void,
+      ) => {
+        onProviderRequest?.();
+        throw new Error("AI 服务异常");
+      },
+    );
+
+    const failed = await POST(
+      request({ studentId: 7, window: "30d" }) as never,
+    );
+    const failedBody = await failed.json();
+    const limited = await POST(
+      request({ studentId: 8, window: "30d" }) as never,
+    );
+    const limitedBody = await limited.json();
+
+    expect(failed.status).toBe(502);
+    expect(failedBody.cooldownSeconds).toBe(13);
+    expect(limited.status).toBe(429);
+    expect(limitedBody.retryAfterSeconds).toBeGreaterThan(0);
+    expect(limited.headers.get("Retry-After")).toBe(
+      String(limitedBody.retryAfterSeconds),
+    );
   });
 
   it("rejects non-admin callers", async () => {

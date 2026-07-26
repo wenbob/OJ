@@ -70,7 +70,14 @@ vi.mock("@/lib/prisma", () => ({
       })),
     },
     systemSetting: {
-      findUnique: vi.fn(async () => ({ value: "true" })),
+      findUnique: vi.fn(
+        async ({ where }: { where: { key: string } }) => ({
+          value:
+            where.key === "aiProgrammingStudentCooldownSeconds"
+              ? "7"
+              : "true",
+        }),
+      ),
     },
     exam: {
       findUnique: vi.fn(async () => null),
@@ -115,6 +122,7 @@ describe("POST /api/ai/problem-assist", () => {
 
     expect(response.status).toBe(200);
     expect(body.advice).toContain("边界");
+    expect(body.cooldownSeconds).toBe(7);
     expect(body.conversationId).toBeTruthy();
     expect(body.requestId).toBeTruthy();
     expect(createPendingAiUsageTurn).toHaveBeenCalledWith(
@@ -157,7 +165,7 @@ describe("POST /api/ai/problem-assist", () => {
     ).toBe("先考虑边界，再处理输入输出。");
     expect(events.at(-1)).toMatchObject({
       event: "done",
-      data: { cached: false },
+      data: { cached: false, cooldownSeconds: 7 },
     });
     expect(completeAiUsageTurn).toHaveBeenCalledWith(
       expect.objectContaining({ cached: false, providerCallCount: 1 }),
@@ -183,6 +191,7 @@ describe("POST /api/ai/problem-assist", () => {
     expect(events.at(-1)).toMatchObject({
       event: "error",
       data: {
+        cooldownSeconds: 7,
         error: "AI 服务正忙，请稍后再试。",
         status: 502,
       },
@@ -276,7 +285,7 @@ describe("POST /api/ai/problem-assist", () => {
     expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
   });
 
-  it("enforces cooldown before returning cached advice", async () => {
+  it("returns valid cached advice without consuming or waiting for cooldown", async () => {
     vi.mocked(requestDeepSeekAdvice).mockResolvedValueOnce(
       "题目分析：先看清输入。\n解题步骤：第一步，读入数字。",
     );
@@ -290,19 +299,12 @@ describe("POST /api/ai/problem-assist", () => {
     );
     const secondBody = await second.json();
 
-    clearAiAssistCooldowns();
-    const third = await POST(
-      request({ problemId: 10, mode: "hint", code: "" }) as never,
-    );
-    const thirdBody = await third.json();
-
     expect(first.status).toBe(200);
     expect(firstBody.cached).toBe(false);
-    expect(second.status).toBe(429);
-    expect(secondBody.retryAfterSeconds).toBeGreaterThan(0);
-    expect(third.status).toBe(200);
-    expect(thirdBody.cached).toBe(true);
-    expect(thirdBody.advice).toBe(firstBody.advice);
+    expect(second.status).toBe(200);
+    expect(secondBody.cached).toBe(true);
+    expect(secondBody.cooldownSeconds).toBe(0);
+    expect(secondBody.advice).toBe(firstBody.advice);
     expect(requestDeepSeekAdvice).toHaveBeenCalledTimes(1);
   });
 
@@ -316,6 +318,10 @@ describe("POST /api/ai/problem-assist", () => {
 
     expect(response.status).toBe(429);
     expect(body.retryAfterSeconds).toBeGreaterThan(0);
+    expect(body.retryAfterSeconds).toBeLessThanOrEqual(7);
+    expect(response.headers.get("Retry-After")).toBe(
+      String(body.retryAfterSeconds),
+    );
   });
 
   it("retries empty AI advice once and only caches the valid retry", async () => {

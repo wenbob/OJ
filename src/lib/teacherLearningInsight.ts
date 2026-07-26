@@ -120,6 +120,7 @@ function sanitizeTeacherInsight(content: string) {
 export async function requestTeacherLearningInsight(
   prompt: string,
   config: AiProviderRuntimeConfig,
+  onProviderRequest?: () => void,
 ) {
   let result;
   try {
@@ -134,6 +135,7 @@ export async function requestTeacherLearningInsight(
         },
         { role: "user", content: prompt },
       ],
+      onProviderRequest,
       timeoutMs: AI_ASSIST_TIMEOUT_MS,
     });
   } catch (error) {

@@ -258,7 +258,7 @@ export function ObjectiveAiExplanationPanel() {
           <div className="flex h-full min-h-56 flex-col items-center justify-center border border-dashed border-steel/30 bg-steel/5 p-6 text-center">
             <Sparkles className="text-steel" size={28} />
             <p className="mt-4 font-black text-ink-900">
-              点击题目答案旁的“AI 解析”
+              点击任意小题旁的“AI 解析”
             </p>
             <p className="mt-2 max-w-xs text-sm font-semibold leading-6 text-ink-600">
               解析会说明正确选项的依据，并逐项指出错误选项的问题。

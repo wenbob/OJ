@@ -39,9 +39,9 @@ import {
   type AiAssistStreamEvent,
 } from "@/lib/aiAssistStream";
 import {
-  consumeAiAssistCooldown,
   reserveAiAssistRequest,
 } from "@/lib/aiAssistRateLimit";
+import { getAiCooldownSeconds } from "@/lib/aiRuntimeSettings";
 import { requireApiUser } from "@/lib/auth";
 import { normalizeProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
@@ -113,6 +113,7 @@ class AiAssistExecutionError extends Error {
 async function requestValidAiAdvice(
   prompt: string,
   config: AiProviderRuntimeConfig,
+  onProviderRequest: () => void,
 ) {
   const maxAttempts = 2;
   let lastError: unknown;
@@ -133,6 +134,7 @@ async function requestValidAiAdvice(
         await requestAiAdvice(attemptPrompt, config, (value) => {
           telemetry = mergeAiProviderTelemetry(telemetry, value);
         }, () => {
+          onProviderRequest();
           providerCallCount += 1;
         })
       ).trim();
@@ -196,6 +198,7 @@ class AiAssistResponseError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly cooldownSeconds = 0,
   ) {
     super(message);
   }
@@ -203,43 +206,46 @@ class AiAssistResponseError extends Error {
 
 async function executeLoggedAiAssist({
   cacheKey,
+  cachedAdvice,
   config,
+  cooldownSeconds,
+  onProviderRequest,
   prompt,
   requestId,
   startedAt,
 }: {
   cacheKey: string | null;
+  cachedAdvice: string | null;
   config: AiProviderRuntimeConfig;
+  cooldownSeconds: number;
+  onProviderRequest: () => void;
   prompt: string;
   requestId: string;
   startedAt: number;
 }) {
-  if (cacheKey) {
-    const cachedAdvice = getCachedAiAssistAdvice({ key: cacheKey });
-    if (cachedAdvice) {
-      try {
-        await completeAiUsageTurn({
-          advice: cachedAdvice,
-          cached: true,
-          completedAt: new Date(),
-          providerCallCount: 0,
-          requestId,
-          startedAt,
-          telemetry: emptyAiProviderTelemetry,
-        });
-      } catch {
-        throw new AiAssistResponseError(
-          "AI 使用记录暂时无法保存，请稍后再试。",
-          503,
-        );
-      }
-      return { advice: cachedAdvice, cached: true };
+  if (cachedAdvice) {
+    try {
+      await completeAiUsageTurn({
+        advice: cachedAdvice,
+        cached: true,
+        completedAt: new Date(),
+        providerCallCount: 0,
+        requestId,
+        startedAt,
+        telemetry: emptyAiProviderTelemetry,
+      });
+    } catch {
+      throw new AiAssistResponseError(
+        "AI 使用记录暂时无法保存，请稍后再试。",
+        503,
+      );
     }
+    return { advice: cachedAdvice, cached: true, cooldownSeconds: 0 };
   }
 
   let result: Awaited<ReturnType<typeof requestValidAiAdvice>>;
   try {
-    result = await requestValidAiAdvice(prompt, config);
+    result = await requestValidAiAdvice(prompt, config, onProviderRequest);
   } catch (error) {
     const safeError = safeAiAssistErrorMessage(error);
     try {
@@ -258,7 +264,13 @@ async function executeLoggedAiAssist({
     } catch {
       // Stale pending rows are marked interrupted by the next maintenance pass.
     }
-    throw new AiAssistResponseError(safeError, 502);
+    throw new AiAssistResponseError(
+      safeError,
+      502,
+      error instanceof AiAssistExecutionError && error.providerCallCount > 0
+        ? cooldownSeconds
+        : 0,
+    );
   }
 
   try {
@@ -285,13 +297,17 @@ async function executeLoggedAiAssist({
     } catch {
       // Maintenance later converts an unrecoverable pending row to interrupted.
     }
-    throw new AiAssistResponseError(storageError, 503);
+    throw new AiAssistResponseError(storageError, 503, cooldownSeconds);
   }
 
   if (cacheKey) {
     setCachedAiAssistAdvice({ advice: result.advice, key: cacheKey });
   }
-  return { advice: result.advice, cached: false };
+  return {
+    advice: result.advice,
+    cached: false,
+    cooldownSeconds,
+  };
 }
 
 function createAiAssistStreamResponse({
@@ -301,7 +317,11 @@ function createAiAssistStreamResponse({
   requestId,
 }: {
   conversationId: string;
-  execute: () => Promise<{ advice: string; cached: boolean }>;
+  execute: () => Promise<{
+    advice: string;
+    cached: boolean;
+    cooldownSeconds: number;
+  }>;
   release: () => void;
   requestId: string;
 }) {
@@ -358,6 +378,7 @@ function createAiAssistStreamResponse({
             event: "done",
             data: {
               cached: result.cached,
+              cooldownSeconds: result.cooldownSeconds,
               conversationId,
               requestId,
             },
@@ -372,6 +393,10 @@ function createAiAssistStreamResponse({
                   ? error.message
                   : "AI 服务异常，请稍后再试。",
               conversationId,
+              cooldownSeconds:
+                error instanceof AiAssistResponseError
+                  ? error.cooldownSeconds
+                  : 0,
               requestId,
               status: error instanceof AiAssistResponseError ? error.status : 502,
             },
@@ -601,7 +626,7 @@ export async function POST(request: NextRequest) {
     },
     question: mode === "question" ? question : "",
   });
-  const aiProviderConfig = await getEffectiveAiProviderConfig();
+  const aiProviderConfig = await getEffectiveAiProviderConfig("programming");
   const providerFingerprint =
     createAiProviderFingerprint(aiProviderConfig);
 
@@ -644,6 +669,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       advice: existingTurn.advice,
       cached: existingTurn.cached,
+      cooldownSeconds: 0,
       conversationId: existingTurn.conversationId,
       replayed: true,
       requestId: existingTurn.requestId,
@@ -653,6 +679,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: existingTurn.error,
+        cooldownSeconds: 0,
         conversationId: existingTurn.conversationId,
         replayed: true,
         requestId: existingTurn.requestId,
@@ -661,42 +688,39 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const reservation = reserveAiAssistRequest({ userId: auth.user.id });
-  if (!reservation.allowed) {
-    const error =
-      reservation.reason === "user_busy"
-        ? "AI 正在思考你刚才的问题，请等待本次结束后再试"
-        : "AI 正在帮助其他同学，请稍后再试";
-    return NextResponse.json(
-      {
-        error,
-        retryAfterSeconds: reservation.retryAfterSeconds,
-      },
-      {
-        headers: { "Retry-After": String(reservation.retryAfterSeconds) },
-        status: 429,
-      },
-    );
-  }
+  const cachedAdvice = cacheKey
+    ? getCachedAiAssistAdvice({ key: cacheKey })
+    : null;
+  const configuredCooldownSeconds =
+    (await getAiCooldownSeconds("programming", "student")) ?? 20;
+  let release = () => {};
+  let onProviderRequest = () => {};
 
-  const cooldown = consumeAiAssistCooldown({
-    userId: auth.user.id,
-    problemId,
-    examId,
-    mode,
-  });
-  if (!cooldown.allowed) {
-    reservation.release();
-    return NextResponse.json(
-      {
-        error: `AI 使用过于频繁，请 ${cooldown.retryAfterSeconds} 秒后再试`,
-        retryAfterSeconds: cooldown.retryAfterSeconds,
-      },
-      {
-        headers: { "Retry-After": String(cooldown.retryAfterSeconds) },
-        status: 429,
-      },
-    );
+  if (!cachedAdvice) {
+    const reservation = reserveAiAssistRequest({
+      cooldownSeconds: configuredCooldownSeconds,
+      userId: auth.user.id,
+    });
+    if (!reservation.allowed) {
+      const error =
+        reservation.reason === "cooldown"
+          ? `AI 使用过于频繁，请 ${reservation.retryAfterSeconds} 秒后再试`
+          : reservation.reason === "user_busy"
+            ? "AI 正在思考你刚才的问题，请等待本次结束后再试"
+            : "AI 正在帮助其他同学，请稍后再试";
+      return NextResponse.json(
+        {
+          error,
+          retryAfterSeconds: reservation.retryAfterSeconds,
+        },
+        {
+          headers: { "Retry-After": String(reservation.retryAfterSeconds) },
+          status: 429,
+        },
+      );
+    }
+    release = reservation.release;
+    onProviderRequest = reservation.markProviderRequest;
   }
 
   try {
@@ -720,7 +744,7 @@ export async function POST(request: NextRequest) {
               : "请帮我检查当前代码哪里有问题",
     });
   } catch (error) {
-    reservation.release();
+    release();
     return NextResponse.json(
       {
         error:
@@ -736,7 +760,10 @@ export async function POST(request: NextRequest) {
   const execute = () =>
     executeLoggedAiAssist({
       cacheKey,
+      cachedAdvice,
       config: aiProviderConfig,
+      cooldownSeconds: configuredCooldownSeconds,
+      onProviderRequest,
       prompt,
       requestId,
       startedAt,
@@ -746,7 +773,7 @@ export async function POST(request: NextRequest) {
     return createAiAssistStreamResponse({
       conversationId,
       execute,
-      release: reservation.release,
+      release,
       requestId,
     });
   }
@@ -756,6 +783,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       advice: result.advice,
       cached: result.cached,
+      cooldownSeconds: result.cooldownSeconds,
       conversationId,
       requestId,
     });
@@ -766,12 +794,16 @@ export async function POST(request: NextRequest) {
           error instanceof AiAssistResponseError
             ? error.message
             : "AI 服务异常，请稍后再试。",
+        cooldownSeconds:
+          error instanceof AiAssistResponseError
+            ? error.cooldownSeconds
+            : 0,
         conversationId,
         requestId,
       },
       { status: error instanceof AiAssistResponseError ? error.status : 502 },
     );
   } finally {
-    reservation.release();
+    release();
   }
 }

@@ -12,6 +12,7 @@ import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AppShell } from "@/components/AppShell";
 import { requirePageUser } from "@/lib/auth";
+import { getAiCooldownSeconds } from "@/lib/aiRuntimeSettings";
 import { expireExamRecordIfNeeded, getExamEndAt } from "@/lib/examScoring";
 import { formatDate } from "@/lib/format";
 import {
@@ -95,7 +96,7 @@ export default async function StudentExamTakePage({
     null;
 
   const problemIds = exam.problems.map((item) => item.problemId);
-  const [latestSubmissions, defaultCodeTemplate] = await Promise.all([
+  const [latestSubmissions, defaultCodeTemplate, aiCooldownSeconds] = await Promise.all([
     prisma.submission.findMany({
       where: {
         examId,
@@ -115,6 +116,7 @@ export default async function StudentExamTakePage({
       },
     }),
     getDefaultCppTemplate(),
+    getAiCooldownSeconds("programming", "student"),
   ]);
 
   const latestByProblem = new Map<number, (typeof latestSubmissions)[number]>();
@@ -294,6 +296,7 @@ export default async function StudentExamTakePage({
                 </section>
               ) : null}
               <ProblemSubmitForm
+                aiCooldownSeconds={aiCooldownSeconds ?? undefined}
                 aiEnabled={
                   selectedProblemType === "programming" &&
                   exam.aiEnabled &&

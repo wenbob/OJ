@@ -3,6 +3,7 @@ import {
   createAiProviderFingerprint,
   getEffectiveAiProviderConfig,
 } from "@/lib/aiProvider";
+import { getAiCooldownSeconds } from "@/lib/aiRuntimeSettings";
 import { isLearningWindow } from "@/lib/learningAnalytics";
 import { prisma } from "@/lib/prisma";
 import {
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     analytics: detail.analytics,
     username: detail.student.username,
   });
-  const aiProviderConfig = await getEffectiveAiProviderConfig();
+  const aiProviderConfig = await getEffectiveAiProviderConfig("programming");
   const inputHash = hashTeacherInsightInput(
     input,
     createAiProviderFingerprint(aiProviderConfig),
@@ -64,10 +65,16 @@ export async function POST(request: NextRequest) {
       stale: false,
     });
   }
+  const cooldownSeconds =
+    (await getAiCooldownSeconds(
+      "programming",
+      auth.user.role === "admin" ? "admin" : "teacher",
+    )) ?? 30;
   const reservation = reserveTeacherInsight({
     adminId: auth.user.id,
-    force,
+    cooldownSeconds,
     studentId,
+    window,
   });
   if (!reservation.allowed) {
     return NextResponse.json(
@@ -78,13 +85,17 @@ export async function POST(request: NextRequest) {
             : "AI 正在生成其他学情摘要，请稍后再试",
         retryAfterSeconds: reservation.retryAfterSeconds,
       },
-      { status: 429 },
+      {
+        headers: { "Retry-After": String(reservation.retryAfterSeconds) },
+        status: 429,
+      },
     );
   }
   try {
     const aiSummary = await requestTeacherLearningInsight(
       buildTeacherInsightPrompt(input),
       aiProviderConfig,
+      reservation.markProviderRequest,
     );
     const snapshot = await prisma.learningInsightSnapshot.upsert({
       where: { studentId_window: { studentId, window } },
@@ -94,6 +105,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       aiSummary,
       cached: false,
+      cooldownSeconds,
       generatedAt: snapshot.generatedAt,
       rules: input,
       stale: false,
@@ -101,6 +113,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       {
+        cooldownSeconds: reservation.providerRequestStarted()
+          ? cooldownSeconds
+          : 0,
         error: error instanceof Error ? error.message.trim() : "AI 学情摘要生成失败",
         rules: input,
         stale: Boolean(existing && existing.inputHash !== inputHash),

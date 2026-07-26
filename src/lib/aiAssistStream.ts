@@ -12,6 +12,7 @@ export type AiAssistStreamEvent =
       event: "done";
       data: {
         cached: boolean;
+        cooldownSeconds: number;
         conversationId: string;
         requestId: string;
       };
@@ -19,6 +20,7 @@ export type AiAssistStreamEvent =
   | {
       event: "error";
       data: {
+        cooldownSeconds: number;
         error: string;
         conversationId: string;
         requestId: string;

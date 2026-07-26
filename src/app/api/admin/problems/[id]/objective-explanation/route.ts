@@ -13,6 +13,7 @@ import {
   toObjectiveAiExplanationPayload,
 } from "@/lib/objectiveAiExplanation";
 import { reserveObjectiveAiExplanation } from "@/lib/objectiveAiExplanationRateLimit";
+import { getAiCooldownSeconds } from "@/lib/aiRuntimeSettings";
 import {
   normalizeObjectiveAnswer,
   parseObjectiveItems,
@@ -40,6 +41,7 @@ function parseProblemId(value: string) {
 
 function explanationResponse({
   cached,
+  cooldownSeconds = 0,
   core,
   correctAnswer,
   generatedAt,
@@ -47,6 +49,7 @@ function explanationResponse({
   model,
 }: {
   cached: boolean;
+  cooldownSeconds?: number;
   core: NonNullable<ReturnType<typeof parseObjectiveExplanationCore>>;
   correctAnswer: string;
   generatedAt: Date;
@@ -55,6 +58,7 @@ function explanationResponse({
 }) {
   return NextResponse.json({
     cached,
+    cooldownSeconds,
     explanation: toObjectiveAiExplanationPayload({
       core,
       correctAnswer,
@@ -159,7 +163,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   let aiConfig;
   try {
-    aiConfig = await getEffectiveAiProviderConfig();
+    aiConfig = await getEffectiveAiProviderConfig("objective");
   } catch {
     return NextResponse.json(
       { error: "当前 AI 服务配置无效，请先检查系统设置" },
@@ -208,7 +212,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
   }
 
+  const cooldownSeconds =
+    (await getAiCooldownSeconds(
+      "objective",
+      auth.user.role === "admin" ? "admin" : "teacher",
+    )) ?? 30;
   const reservation = reserveObjectiveAiExplanation({
+    cooldownSeconds,
     itemIndex,
     problemId,
     staffId: auth.user.id,
@@ -238,6 +248,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const generated = await generateObjectiveAiExplanation({
       config: aiConfig,
       item,
+      onProviderRequest: reservation.markProviderRequest,
       prompt,
     });
     const generatedAt = new Date();
@@ -272,6 +283,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     });
     return explanationResponse({
       cached: false,
+      cooldownSeconds,
       core: generated.core,
       correctAnswer,
       generatedAt: saved.generatedAt,
@@ -284,6 +296,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const status = known?.kind === "input-too-large" ? 400 : 502;
     return NextResponse.json(
       {
+        cooldownSeconds: reservation.providerRequestStarted()
+          ? cooldownSeconds
+          : 0,
         error: known?.message ?? "AI 解析生成失败，请稍后重试",
       },
       { status },

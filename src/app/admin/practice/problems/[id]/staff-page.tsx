@@ -12,6 +12,10 @@ import {
   ObjectiveAiExplanationPanel,
   ObjectiveAiExplanationProvider,
 } from "@/components/StaffObjectiveAiExplanation";
+import {
+  StaffObjectiveAnswerToggle,
+  StaffObjectiveAnswerVisibilityProvider,
+} from "@/components/StaffObjectiveAnswerVisibility";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatRuntime } from "@/lib/format";
 import { getDisplaySamples } from "@/lib/problemSamples";
@@ -101,11 +105,14 @@ export async function StaffPracticeProblemPage({
 
   return (
     <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
-      <ObjectiveAiExplanationProvider
-        canForceRegenerate={role === "admin"}
-        problemId={problem.id}
+      <StaffObjectiveAnswerVisibilityProvider
+        key={`staff-objective-answers-${problem.id}`}
       >
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
+        <ObjectiveAiExplanationProvider
+          canForceRegenerate={role === "admin"}
+          problemId={problem.id}
+        >
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
           <article className="surface p-6">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-3xl font-black">{problem.title}</h1>
@@ -124,25 +131,30 @@ export async function StaffPracticeProblemPage({
                   submissionId={latestAcceptedSubmissionId}
                 />
               ) : null}
-              <CopyProblemButton
-                category={problem.category}
-                dataRange={problem.dataRange}
-                description={problem.description}
-                difficulty={problem.difficulty}
-                inputDescription={problem.inputDescription}
-                outputDescription={problem.outputDescription}
-                samples={samples}
-                title={problem.title}
-                problemType={problemType}
-                objectiveItems={publicObjectiveItems}
-              />
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                {problemType === "objective" ? (
+                  <StaffObjectiveAnswerToggle />
+                ) : null}
+                <CopyProblemButton
+                  category={problem.category}
+                  dataRange={problem.dataRange}
+                  description={problem.description}
+                  difficulty={problem.difficulty}
+                  inputDescription={problem.inputDescription}
+                  outputDescription={problem.outputDescription}
+                  samples={samples}
+                  title={problem.title}
+                  problemType={problemType}
+                  objectiveItems={publicObjectiveItems}
+                />
+              </div>
             </div>
             <ProblemSection title="题目描述" value={problem.description} />
             {problemType === "objective" ? (
               <ObjectiveProblemContent
                 items={objectiveItems}
                 showAiExplanationActions={objectiveAiEnabled}
-                showAnswers
+                staffAnswerVisibility
               />
             ) : (
               <>
@@ -216,8 +228,9 @@ export async function StaffPracticeProblemPage({
               />
             </aside>
           )}
-        </div>
-      </ObjectiveAiExplanationProvider>
+          </div>
+        </ObjectiveAiExplanationProvider>
+      </StaffObjectiveAnswerVisibilityProvider>
     </AppShell>
   );
 }

@@ -8,6 +8,7 @@ import { ProblemSamples } from "@/components/ProblemSamples";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import { ViewportCenteredStickyPanel } from "@/components/ViewportCenteredStickyPanel";
 import { requirePageUser } from "@/lib/auth";
+import { getAiCooldownSeconds } from "@/lib/aiRuntimeSettings";
 import { getDisplaySamples } from "@/lib/problemSamples";
 import {
   getPublicObjectiveItems,
@@ -58,6 +59,7 @@ export default async function StudentProblemDetailPage({
     problem,
     defaultCodeTemplate,
     aiPracticeEnabled,
+    aiCooldownSeconds,
     studentProfile,
     assignment,
   ] =
@@ -73,6 +75,7 @@ export default async function StudentProblemDetailPage({
       }),
       getDefaultCppTemplate(),
       getSetting("aiPracticeEnabled"),
+      getAiCooldownSeconds("programming", "student"),
       prisma.studentProfile.findUnique({
         where: { userId: user.id },
         select: { aiAccessEnabled: true },
@@ -164,6 +167,7 @@ export default async function StudentProblemDetailPage({
 
         <ViewportCenteredStickyPanel enabled={problemType === "objective"}>
           <SubmitForm
+            aiCooldownSeconds={aiCooldownSeconds ?? undefined}
             aiEnabled={
               problemType === "programming" &&
               boolSetting(aiPracticeEnabled) &&

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
-  applyAiProviderStatusToSettings,
+  applyAiProviderStatusesToSettings,
   getEffectiveAiProviderConfig,
   normalizeAiProviderSettings,
   toAiProviderAdminStatus,
@@ -24,14 +24,19 @@ export async function GET(request: NextRequest) {
   const auth = await requireApiUser(request, "admin");
   if (auth.response) return auth.response;
 
-  const [settings, config] = await Promise.all([
+  const [settings, programmingConfig, objectiveConfig] = await Promise.all([
     getAllSystemSettings(),
-    getEffectiveAiProviderConfig(),
+    getEffectiveAiProviderConfig("programming"),
+    getEffectiveAiProviderConfig("objective"),
   ]);
-  const aiProviderStatus = toAiProviderAdminStatus(config);
+  const aiProviderStatuses = {
+    programming: toAiProviderAdminStatus(programmingConfig),
+    objective: toAiProviderAdminStatus(objectiveConfig),
+  };
   return NextResponse.json({
-    aiProviderStatus,
-    settings: applyAiProviderStatusToSettings(settings, aiProviderStatus),
+    aiProviderStatus: aiProviderStatuses.programming,
+    aiProviderStatuses,
+    settings: applyAiProviderStatusesToSettings(settings, aiProviderStatuses),
   });
 }
 
@@ -59,6 +64,9 @@ export async function PUT(request: NextRequest) {
     if (settings.aiProvider === "custom") {
       await resolveSafeAiProviderTarget(settings.aiBaseUrl);
     }
+    if (settings.aiObjectiveProvider === "custom") {
+      await resolveSafeAiProviderTarget(settings.aiObjectiveBaseUrl);
+    }
   } catch (providerError) {
     return NextResponse.json(
       {
@@ -81,10 +89,17 @@ export async function PUT(request: NextRequest) {
     ),
   );
 
-  const config = await getEffectiveAiProviderConfig();
-  const aiProviderStatus = toAiProviderAdminStatus(config);
+  const [programmingConfig, objectiveConfig] = await Promise.all([
+    getEffectiveAiProviderConfig("programming"),
+    getEffectiveAiProviderConfig("objective"),
+  ]);
+  const aiProviderStatuses = {
+    programming: toAiProviderAdminStatus(programmingConfig),
+    objective: toAiProviderAdminStatus(objectiveConfig),
+  };
   return NextResponse.json({
-    aiProviderStatus,
-    settings: applyAiProviderStatusToSettings(settings, aiProviderStatus),
+    aiProviderStatus: aiProviderStatuses.programming,
+    aiProviderStatuses,
+    settings: applyAiProviderStatusesToSettings(settings, aiProviderStatuses),
   });
 }

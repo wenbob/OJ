@@ -55,7 +55,7 @@ export async function StaffStudentLearningPage({
     analytics: detail.analytics,
     username: detail.student.username,
   });
-  const aiProviderConfig = await getEffectiveAiProviderConfig();
+  const aiProviderConfig = await getEffectiveAiProviderConfig("programming");
   const currentHash = hashTeacherInsightInput(
     insightInput,
     createAiProviderFingerprint(aiProviderConfig),

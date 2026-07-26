@@ -1,5 +1,6 @@
 import type { PublicObjectiveItem } from "@/lib/objectiveProblem";
 import { ObjectiveAiExplanationButton } from "./StaffObjectiveAiExplanation";
+import { StaffObjectiveAnswerBadge } from "./StaffObjectiveAnswerVisibility";
 import { ProblemRichText } from "./ProblemRichText";
 
 type ObjectiveProblemContentItem = PublicObjectiveItem & {
@@ -10,10 +11,12 @@ export function ObjectiveProblemContent({
   items,
   showAiExplanationActions = false,
   showAnswers = false,
+  staffAnswerVisibility = false,
 }: {
   items: ObjectiveProblemContentItem[];
   showAiExplanationActions?: boolean;
   showAnswers?: boolean;
+  staffAnswerVisibility?: boolean;
 }) {
   const totalScore = items.reduce((sum, item) => sum + item.score, 0);
 
@@ -43,6 +46,9 @@ export function ObjectiveProblemContent({
                   <span className="border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">
                     答案 {item.answer}
                   </span>
+                ) : null}
+                {staffAnswerVisibility && item.answer ? (
+                  <StaffObjectiveAnswerBadge answer={item.answer} />
                 ) : null}
                 {showAiExplanationActions && item.answer ? (
                   <ObjectiveAiExplanationButton itemIndex={index + 1} />

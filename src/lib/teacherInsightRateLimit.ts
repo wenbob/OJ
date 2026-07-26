@@ -1,49 +1,30 @@
-import { reserveAiProviderRequest } from "./aiAssistRateLimit";
-
-const cooldowns = new Map<string, number>();
-const COOLDOWN_MS = 30_000;
-
-function key(adminId: number, studentId: number) {
-  return `${adminId}:${studentId}`;
-}
+import {
+  clearAiAssistCooldowns,
+  reserveAiProviderRequest,
+} from "./aiAssistRateLimit";
 
 export function reserveTeacherInsight({
   adminId,
-  force,
-  now = Date.now(),
+  cooldownSeconds,
+  now,
   studentId,
+  window,
 }: {
   adminId: number;
-  force: boolean;
+  cooldownSeconds: number;
   now?: number;
   studentId: number;
+  window: string;
 }) {
-  const requestKey = key(adminId, studentId);
-  const last = cooldowns.get(requestKey);
-  if (force && last !== undefined && now - last < COOLDOWN_MS) {
-    return {
-      allowed: false as const,
-      reason: "cooldown" as const,
-      retryAfterSeconds: Math.ceil((COOLDOWN_MS - (now - last)) / 1000),
-    };
-  }
-  const providerReservation = reserveAiProviderRequest({
-    requestKey: `teacher:${requestKey}`,
+  return reserveAiProviderRequest({
+    accountId: adminId,
+    cooldownSeconds,
+    now,
+    profile: "programming",
+    requestKey: `teacher-insight:${studentId}:${window}`,
   });
-  if (!providerReservation.allowed) {
-    return {
-      allowed: false as const,
-      reason: "busy" as const,
-      retryAfterSeconds: 10,
-    };
-  }
-  cooldowns.set(requestKey, now);
-  return {
-    allowed: true as const,
-    release: providerReservation.release,
-  };
 }
 
 export function clearTeacherInsightRateLimits() {
-  cooldowns.clear();
+  clearAiAssistCooldowns();
 }

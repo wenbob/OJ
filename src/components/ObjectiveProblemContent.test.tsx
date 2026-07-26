@@ -2,6 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ObjectiveProblemContent } from "./ObjectiveProblemContent";
 import { ObjectiveAiExplanationProvider } from "./StaffObjectiveAiExplanation";
+import {
+  StaffObjectiveAnswerToggle,
+  StaffObjectiveAnswerVisibilityProvider,
+} from "./StaffObjectiveAnswerVisibility";
 
 describe("ObjectiveProblemContent", () => {
   it("renders inline powers and subscripts with KaTeX", () => {
@@ -86,5 +90,32 @@ describe("ObjectiveProblemContent", () => {
     );
     expect(plainHtml).not.toContain("AI 解析");
     expect(staffHtml).toContain("AI 解析");
+  });
+
+  it("keeps staff answers hidden by default behind one page-level toggle", () => {
+    const html = renderToStaticMarkup(
+      <StaffObjectiveAnswerVisibilityProvider>
+        <StaffObjectiveAnswerToggle />
+        <ObjectiveProblemContent
+          items={[
+            {
+              answer: "B",
+              kind: "choice",
+              options: [
+                { label: "A", text: "错误选项" },
+                { label: "B", text: "正确选项" },
+              ],
+              score: 2,
+              stem: "请选择正确答案。",
+            },
+          ]}
+          staffAnswerVisibility
+        />
+      </StaffObjectiveAnswerVisibilityProvider>,
+    );
+
+    expect(html).toContain("显示答案");
+    expect(html).toContain('aria-pressed="false"');
+    expect(html).not.toContain("答案 B");
   });
 });

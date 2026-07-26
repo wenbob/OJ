@@ -13,16 +13,21 @@ describe("objective AI explanation rate limit", () => {
 
   it("applies one 30 second cooldown across a staff account", () => {
     const first = reserveObjectiveAiExplanation({
+      cooldownSeconds: 30,
       itemIndex: 1,
       now: 1_000,
       problemId: 10,
       staffId: 5,
     });
     expect(first.allowed).toBe(true);
-    if (first.allowed) first.release();
+    if (first.allowed) {
+      first.markProviderRequest(1_000);
+      first.release();
+    }
 
     expect(
       reserveObjectiveAiExplanation({
+        cooldownSeconds: 30,
         itemIndex: 2,
         now: 2_000,
         problemId: 20,
@@ -37,6 +42,7 @@ describe("objective AI explanation rate limit", () => {
 
   it("locks the same subquestion while generation is active", () => {
     const first = reserveObjectiveAiExplanation({
+      cooldownSeconds: 30,
       itemIndex: 1,
       now: 1_000,
       problemId: 10,
@@ -46,24 +52,30 @@ describe("objective AI explanation rate limit", () => {
 
     expect(
       reserveObjectiveAiExplanation({
+        cooldownSeconds: 30,
         itemIndex: 1,
         now: 1_000,
         problemId: 10,
         staffId: 6,
       }),
-    ).toMatchObject({ allowed: false, reason: "busy" });
+    ).toMatchObject({ allowed: false, reason: "request_busy" });
     if (first.allowed) first.release();
   });
 
   it("allows a staff account again after 30 seconds", () => {
     const first = reserveObjectiveAiExplanation({
+      cooldownSeconds: 30,
       itemIndex: 1,
       now: 1_000,
       problemId: 10,
       staffId: 5,
     });
-    if (first.allowed) first.release();
+    if (first.allowed) {
+      first.markProviderRequest(1_000);
+      first.release();
+    }
     const later = reserveObjectiveAiExplanation({
+      cooldownSeconds: 30,
       itemIndex: 2,
       now: 31_000,
       problemId: 10,

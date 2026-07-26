@@ -45,6 +45,7 @@ type SubmissionResult = {
 };
 
 export function ProblemSubmitForm({
+  aiCooldownSeconds,
   aiEnabled = false,
   aiStudentId,
   defaultCodeTemplate,
@@ -62,6 +63,7 @@ export function ProblemSubmitForm({
   refreshOnSuccess = false,
   sampleCount = 0,
 }: {
+  aiCooldownSeconds?: number;
   aiEnabled?: boolean;
   aiStudentId?: number;
   defaultCodeTemplate?: string;
@@ -355,6 +357,7 @@ export function ProblemSubmitForm({
         <ProblemAiAssist
           code={code}
           examId={examId}
+          initialCooldownSeconds={aiCooldownSeconds}
           problemId={problemId}
           studentId={aiStudentId}
         />

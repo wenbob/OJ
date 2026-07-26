@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearAiAssistCooldowns } from "@/lib/aiAssistRateLimit";
 import {
   createAiProviderFingerprint,
+  getEffectiveAiProviderConfig,
   type AiProviderRuntimeConfig,
 } from "@/lib/aiProvider";
 import {
@@ -136,18 +137,25 @@ describe("POST /api/admin/problems/:id/objective-explanation", () => {
       response: null,
       user: { id: 1, role: "admin", username: "admin" },
     });
-    vi.mocked(getSetting).mockResolvedValue("true");
+    vi.mocked(getSetting).mockImplementation(async (key) =>
+      key === "aiObjectiveExplanationEnabled" ? "true" : "11",
+    );
     vi.mocked(prisma.problem.findFirst).mockResolvedValue(problem as never);
     vi.mocked(
       prisma.objectiveAiExplanation.findUnique,
     ).mockResolvedValue(null);
-    mocks.generate.mockResolvedValue({
-      completionTokens: 20,
-      core,
-      model: "test-model",
-      promptTokens: 40,
-      totalTokens: 60,
-    });
+    mocks.generate.mockImplementation(
+      async (input: { onProviderRequest?: () => void }) => {
+        input.onProviderRequest?.();
+        return {
+          completionTokens: 20,
+          core,
+          model: "test-model",
+          promptTokens: 40,
+          totalTokens: 60,
+        };
+      },
+    );
     vi.mocked(prisma.objectiveAiExplanation.upsert).mockResolvedValue({
       generatedAt: new Date("2026-07-26T08:00:00Z"),
       model: "test-model",
@@ -161,7 +169,9 @@ describe("POST /api/admin/problems/:id/objective-explanation", () => {
     );
     const body = await response.json();
     expect(response.status).toBe(200);
+    expect(body.cooldownSeconds).toBe(11);
     expect(body.explanation.correctAnswer).toBe("B");
+    expect(getEffectiveAiProviderConfig).toHaveBeenCalledWith("objective");
     expect(body.explanation.options.map((option: { isCorrect: boolean }) => option.isCorrect))
       .toEqual([false, true, false]);
     expect(prisma.objectiveAiExplanation.upsert).toHaveBeenCalledWith(
@@ -203,6 +213,7 @@ describe("POST /api/admin/problems/:id/objective-explanation", () => {
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.cached).toBe(true);
+    expect(body.cooldownSeconds).toBe(0);
     expect(generateObjectiveAiExplanation).not.toHaveBeenCalled();
   });
 
@@ -258,5 +269,50 @@ describe("POST /api/admin/problems/:id/objective-explanation", () => {
     );
     expect(response.status).toBe(400);
     expect(prisma.problem.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("starts the configured cooldown after an upstream call fails", async () => {
+    mocks.generate.mockImplementationOnce(
+      async (input: { onProviderRequest?: () => void }) => {
+        input.onProviderRequest?.();
+        throw new Error("upstream failed");
+      },
+    );
+
+    const failed = await POST(
+      request({ itemIndex: 1 }) as never,
+      context(),
+    );
+    const failedBody = await failed.json();
+    const limited = await POST(
+      request({ itemIndex: 1 }) as never,
+      context(),
+    );
+    const limitedBody = await limited.json();
+
+    expect(failed.status).toBe(502);
+    expect(failedBody.cooldownSeconds).toBe(11);
+    expect(limited.status).toBe(429);
+    expect(limitedBody.retryAfterSeconds).toBeGreaterThan(0);
+    expect(limited.headers.get("Retry-After")).toBe(
+      String(limitedBody.retryAfterSeconds),
+    );
+  });
+
+  it("does not start cooldown when generation fails before an upstream call", async () => {
+    mocks.generate.mockRejectedValueOnce(new Error("local validation failed"));
+
+    const failed = await POST(
+      request({ itemIndex: 1 }) as never,
+      context(),
+    );
+    const retry = await POST(
+      request({ itemIndex: 1 }) as never,
+      context(),
+    );
+
+    expect(failed.status).toBe(502);
+    expect(retry.status).toBe(200);
+    expect(mocks.generate).toHaveBeenCalledTimes(2);
   });
 });

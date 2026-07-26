@@ -116,4 +116,63 @@ describe("browser identity system settings", () => {
       }),
     ).toContain("思考模式");
   });
+
+  it("inherits the programming profile for legacy settings payloads", () => {
+    const settings = normalizeSystemSettingsPayload({
+      ...defaultSystemSettings,
+      aiBaseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+      aiModel: "doubao-programming",
+      aiProvider: "doubao",
+      aiThinkingMode: "disabled",
+      aiObjectiveBaseUrl: undefined,
+      aiObjectiveCustomThinkingProtocol: undefined,
+      aiObjectiveModel: undefined,
+      aiObjectiveProvider: undefined,
+      aiObjectiveThinkingMode: undefined,
+    });
+
+    expect(settings).toMatchObject({
+      aiObjectiveBaseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+      aiObjectiveCustomThinkingProtocol: "none",
+      aiObjectiveModel: "doubao-programming",
+      aiObjectiveProvider: "doubao",
+      aiObjectiveThinkingMode: "disabled",
+    });
+  });
+
+  it("validates objective profile fields and role cooldown boundaries", () => {
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiObjectiveBaseUrl: "",
+        aiObjectiveModel: "objective-model",
+        aiObjectiveProvider: "custom",
+      }),
+    ).toContain("选择判断题");
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiObjectiveTeacherCooldownSeconds: "4",
+      }),
+    ).toContain("5");
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiProgrammingAdminCooldownSeconds: "601",
+      }),
+    ).toContain("600");
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiProgrammingStudentCooldownSeconds: "20.5",
+      }),
+    ).toContain("整数");
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiObjectiveAdminCooldownSeconds: "600",
+        aiProgrammingStudentCooldownSeconds: "5",
+      }),
+    ).toBe("");
+  });
 });

@@ -105,6 +105,33 @@ describe("PUT /api/admin/settings", () => {
     );
   });
 
+  it("normalizes and persists the objective profile independently", async () => {
+    const response = await PUT(
+      request({
+        ...defaultSystemSettings,
+        aiObjectiveBaseUrl: "https://attacker.invalid/v1",
+        aiObjectiveModel: "objective-chat",
+        aiObjectiveProvider: "doubao",
+        aiObjectiveThinkingMode: "disabled",
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(prisma.systemSetting.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: {
+          key: "aiObjectiveBaseUrl",
+          value: "https://ark.cn-beijing.volces.com/api/v3",
+        },
+      }),
+    );
+    expect(prisma.systemSetting.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: { key: "aiObjectiveModel", value: "objective-chat" },
+      }),
+    );
+  });
+
   it("rejects private custom Base URLs before persisting settings", async () => {
     const response = await PUT(
       request({
@@ -112,6 +139,20 @@ describe("PUT /api/admin/settings", () => {
         aiBaseUrl: "https://10.0.0.8/v1",
         aiModel: "custom-chat",
         aiProvider: "custom",
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unsafe objective custom URL atomically", async () => {
+    const response = await PUT(
+      request({
+        ...defaultSystemSettings,
+        aiObjectiveBaseUrl: "https://10.0.0.9/v1",
+        aiObjectiveModel: "objective-chat",
+        aiObjectiveProvider: "custom",
       }) as never,
     );
 

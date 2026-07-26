@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { requirePageUser } from "@/lib/auth";
 import {
-  applyAiProviderStatusToSettings,
+  applyAiProviderStatusesToSettings,
   getEffectiveAiProviderConfig,
   toAiProviderAdminStatus,
 } from "@/lib/aiProvider";
@@ -22,14 +22,18 @@ const adminNav = [
 
 export default async function AdminSettingsPage() {
   const user = await requirePageUser("admin");
-  const [storedSettings, config] = await Promise.all([
+  const [storedSettings, programmingConfig, objectiveConfig] = await Promise.all([
     getAllSystemSettings(),
-    getEffectiveAiProviderConfig(),
+    getEffectiveAiProviderConfig("programming"),
+    getEffectiveAiProviderConfig("objective"),
   ]);
-  const aiProviderStatus = toAiProviderAdminStatus(config);
-  const settings = applyAiProviderStatusToSettings(
+  const aiProviderStatuses = {
+    programming: toAiProviderAdminStatus(programmingConfig),
+    objective: toAiProviderAdminStatus(objectiveConfig),
+  };
+  const settings = applyAiProviderStatusesToSettings(
     storedSettings,
-    aiProviderStatus,
+    aiProviderStatuses,
   );
 
   return (
@@ -49,7 +53,7 @@ export default async function AdminSettingsPage() {
         </Link>
       </div>
       <SettingsForm
-        initialAiProviderStatus={aiProviderStatus}
+        initialAiProviderStatuses={aiProviderStatuses}
         initialSettings={settings}
       />
     </AppShell>

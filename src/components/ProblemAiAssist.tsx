@@ -23,17 +23,18 @@ import { readAiAssistEventStream } from "@/lib/aiAssistStream";
 
 type AiChatMode = "overview" | "next_step" | "code_review" | "question";
 
-const AI_CHAT_COOLDOWN_MS = 20_000;
 const AI_CHAT_MAX_QUESTION_CHARS = 300;
 
 export function ProblemAiAssist({
   code,
   examId,
+  initialCooldownSeconds,
   problemId,
   studentId,
 }: {
   code: string;
   examId?: number;
+  initialCooldownSeconds?: number;
   problemId: number;
   studentId?: number;
 }) {
@@ -48,6 +49,9 @@ export function ProblemAiAssist({
   const [streamingAdvice, setStreamingAdvice] = useState("");
   const [streamStatus, setStreamStatus] = useState("");
   const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [configuredCooldownSeconds, setConfiguredCooldownSeconds] = useState(
+    initialCooldownSeconds ?? 0,
+  );
   const [now, setNow] = useState(() => Date.now());
   const messageEndRef = useRef<HTMLDivElement>(null);
 
@@ -106,10 +110,11 @@ export function ProblemAiAssist({
     return () => window.cancelAnimationFrame(frame);
   }, [messages, pending, streamingAdvice, streamStatus]);
 
-  function startCooldown(durationMs = AI_CHAT_COOLDOWN_MS) {
+  function startCooldown(durationSeconds: number) {
+    if (!Number.isInteger(durationSeconds) || durationSeconds <= 0) return;
     const startedAt = Date.now();
     setNow(startedAt);
-    setCooldownUntil(startedAt + durationMs);
+    setCooldownUntil(startedAt + durationSeconds * 1_000);
   }
 
   async function ask(mode: AiChatMode) {
@@ -153,10 +158,18 @@ export function ProblemAiAssist({
           setConversationId(data.conversationId);
         }
         const retryAfterSeconds = Number(data?.retryAfterSeconds);
-        if (Number.isInteger(retryAfterSeconds) && retryAfterSeconds > 0) {
-          startCooldown(retryAfterSeconds * 1000);
-        } else if (response.status === 502 || response.status === 504) {
-          startCooldown();
+        const responseCooldownSeconds = Number(data?.cooldownSeconds);
+        if (
+          Number.isInteger(responseCooldownSeconds) &&
+          responseCooldownSeconds > 0
+        ) {
+          setConfiguredCooldownSeconds(responseCooldownSeconds);
+          startCooldown(responseCooldownSeconds);
+        } else if (
+          Number.isInteger(retryAfterSeconds) &&
+          retryAfterSeconds > 0
+        ) {
+          startCooldown(retryAfterSeconds);
         }
         const fallbackMessage =
           response.status === 504
@@ -174,8 +187,13 @@ export function ProblemAiAssist({
 
       let advice = "";
       let cached = false;
+      let responseCooldownSeconds = 0;
       let streamCompleted = false;
-      let streamError: { error: string; status: number } | null = null;
+      let streamError: {
+        cooldownSeconds: number;
+        error: string;
+        status: number;
+      } | null = null;
       const contentType = response.headers.get("content-type") || "";
 
       if (contentType.includes("text/event-stream") && response.body) {
@@ -187,10 +205,12 @@ export function ProblemAiAssist({
             setStreamingAdvice(advice);
           } else if (event.event === "done") {
             cached = event.data.cached;
+            responseCooldownSeconds = event.data.cooldownSeconds;
             streamCompleted = true;
             setConversationId(event.data.conversationId);
           } else if (event.event === "error") {
             streamError = {
+              cooldownSeconds: event.data.cooldownSeconds,
               error: event.data.error,
               status: event.data.status,
             };
@@ -199,6 +219,7 @@ export function ProblemAiAssist({
         });
         if (!streamCompleted && !streamError) {
           streamError = {
+            cooldownSeconds: 0,
             error: "AI 回复连接中断，请稍后再试。",
             status: 502,
           };
@@ -207,15 +228,17 @@ export function ProblemAiAssist({
         const data = await response.json().catch(() => null);
         advice = typeof data?.advice === "string" ? data.advice : "";
         cached = Boolean(data?.cached);
+        responseCooldownSeconds = Number(data?.cooldownSeconds) || 0;
         if (typeof data?.conversationId === "string" && data.conversationId) {
           setConversationId(data.conversationId);
         }
       }
 
       if (streamError) {
-        const failure = streamError as { error: string; status: number };
-        if (failure.status === 502 || failure.status === 504) {
-          startCooldown();
+        const failure = streamError as NonNullable<typeof streamError>;
+        if (failure.cooldownSeconds > 0) {
+          setConfiguredCooldownSeconds(failure.cooldownSeconds);
+          startCooldown(failure.cooldownSeconds);
         }
         setError(failure.error || "AI 请求失败，请稍后再试。");
         return;
@@ -224,7 +247,6 @@ export function ProblemAiAssist({
       advice = advice.trim();
       if (!advice) {
         setError("AI 这次没有返回清楚的提示，请稍后再试。");
-        startCooldown();
         return;
       }
 
@@ -247,10 +269,12 @@ export function ProblemAiAssist({
         ),
       );
       if (mode === "question") setQuestion("");
-      if (!cached) startCooldown();
+      if (!cached && responseCooldownSeconds > 0) {
+        setConfiguredCooldownSeconds(responseCooldownSeconds);
+        startCooldown(responseCooldownSeconds);
+      }
     } catch {
       setError("AI 请求失败，请稍后再试。");
-      startCooldown();
     } finally {
       setPending(false);
       setPendingPrompt("");
@@ -410,7 +434,11 @@ export function ProblemAiAssist({
         {remainingSeconds > 0 ? (
           <span aria-live="polite">请 {remainingSeconds} 秒后再使用 AI</span>
         ) : (
-          <span>每次使用间隔 20 秒</span>
+          <span>
+            {configuredCooldownSeconds > 0
+              ? `每次使用间隔 ${configuredCooldownSeconds} 秒`
+              : "使用间隔由管理员设置"}
+          </span>
         )}
       </div>
 

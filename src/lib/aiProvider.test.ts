@@ -147,6 +147,61 @@ describe("effective AI provider configuration", () => {
     });
   });
 
+  it("inherits the programming profile when objective settings are not stored", async () => {
+    process.env.DEEPSEEK_API_KEY = "shared-secret";
+    mocks.findMany.mockResolvedValueOnce(
+      rows({
+        aiProvider: "deepseek",
+        aiBaseUrl: "https://api.deepseek.com",
+        aiModel: "programming-model",
+        aiThinkingMode: "disabled",
+        aiCustomThinkingProtocol: "none",
+      }),
+    );
+
+    await expect(
+      getEffectiveAiProviderConfig("objective"),
+    ).resolves.toMatchObject({
+      apiKey: "shared-secret",
+      model: "programming-model",
+      provider: "deepseek",
+      thinkingMode: "disabled",
+    });
+  });
+
+  it("loads an independent objective provider without changing programming", async () => {
+    process.env.ARK_API_KEY = "objective-secret";
+    const stored = rows({
+      aiProvider: "deepseek",
+      aiBaseUrl: "https://api.deepseek.com",
+      aiModel: "programming-model",
+      aiThinkingMode: "enabled",
+      aiCustomThinkingProtocol: "none",
+      aiObjectiveProvider: "doubao",
+      aiObjectiveBaseUrl: "https://ignored.invalid",
+      aiObjectiveModel: "objective-model",
+      aiObjectiveThinkingMode: "disabled",
+      aiObjectiveCustomThinkingProtocol: "none",
+    });
+    mocks.findMany.mockResolvedValueOnce(stored).mockResolvedValueOnce(stored);
+
+    const programming = await getEffectiveAiProviderConfig("programming");
+    const objective = await getEffectiveAiProviderConfig("objective");
+
+    expect(programming).toMatchObject({
+      model: "programming-model",
+      provider: "deepseek",
+      thinkingMode: "enabled",
+    });
+    expect(objective).toMatchObject({
+      apiKey: "objective-secret",
+      baseUrl: AI_PROVIDER_PRESETS.doubao.baseUrl,
+      model: "objective-model",
+      provider: "doubao",
+      thinkingMode: "disabled",
+    });
+  });
+
   it("creates a stable non-secret fingerprint that changes with every behavior field", () => {
     const base = config();
     const fingerprint = createAiProviderFingerprint(base);

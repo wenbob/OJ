@@ -13,6 +13,7 @@ import {
 export type AiProviderId = "deepseek" | "doubao" | "custom";
 export type AiThinkingMode = "enabled" | "disabled";
 export type AiCustomThinkingProtocol = "thinking-object" | "none";
+export type AiModelProfile = "programming" | "objective";
 
 export const AI_PROVIDER_PRESETS = {
   deepseek: {
@@ -29,12 +30,26 @@ export const AI_PROVIDER_PRESETS = {
   },
 } as const;
 
+const aiProfileSettingKeys = {
+  programming: {
+    baseUrl: "aiBaseUrl",
+    customThinkingProtocol: "aiCustomThinkingProtocol",
+    model: "aiModel",
+    provider: "aiProvider",
+    thinkingMode: "aiThinkingMode",
+  },
+  objective: {
+    baseUrl: "aiObjectiveBaseUrl",
+    customThinkingProtocol: "aiObjectiveCustomThinkingProtocol",
+    model: "aiObjectiveModel",
+    provider: "aiObjectiveProvider",
+    thinkingMode: "aiObjectiveThinkingMode",
+  },
+} as const;
+
 const aiSettingKeys = [
-  "aiProvider",
-  "aiBaseUrl",
-  "aiModel",
-  "aiThinkingMode",
-  "aiCustomThinkingProtocol",
+  ...Object.values(aiProfileSettingKeys.programming),
+  ...Object.values(aiProfileSettingKeys.objective),
 ] as const;
 
 export type AiProviderRuntimeConfig = {
@@ -50,6 +65,11 @@ export type AiProviderRuntimeConfig = {
 export type AiProviderAdminStatus = Omit<AiProviderRuntimeConfig, "apiKey"> & {
   credentialConfigured: boolean;
 };
+
+export type AiProviderAdminStatuses = Record<
+  AiModelProfile,
+  AiProviderAdminStatus
+>;
 
 export type AiModelOption = {
   id: string;
@@ -162,31 +182,69 @@ function createLegacyDeepSeekConfig(): AiProviderRuntimeConfig {
 export function normalizeAiProviderSettings(
   settings: SystemSettings,
 ): SystemSettings {
-  const provider = isProvider(settings.aiProvider)
-    ? settings.aiProvider
-    : "deepseek";
-  const baseUrl =
-    provider === "custom"
-      ? normalizeAiProviderBaseUrl(settings.aiBaseUrl)
-      : AI_PROVIDER_PRESETS[provider].baseUrl;
+  const programming = normalizeAiProviderProfile({
+    baseUrl: settings.aiBaseUrl,
+    customThinkingProtocol: settings.aiCustomThinkingProtocol,
+    model: settings.aiModel,
+    provider: settings.aiProvider,
+    thinkingMode: settings.aiThinkingMode,
+  });
+  const objective = normalizeAiProviderProfile({
+    baseUrl: settings.aiObjectiveBaseUrl,
+    customThinkingProtocol: settings.aiObjectiveCustomThinkingProtocol,
+    model: settings.aiObjectiveModel,
+    provider: settings.aiObjectiveProvider,
+    thinkingMode: settings.aiObjectiveThinkingMode,
+  });
 
   return {
     ...settings,
-    aiProvider: provider,
-    aiBaseUrl: baseUrl,
-    aiModel: settings.aiModel.trim(),
-    aiThinkingMode: isThinkingMode(settings.aiThinkingMode)
-      ? settings.aiThinkingMode
-      : "enabled",
-    aiCustomThinkingProtocol: isCustomThinkingProtocol(
-      settings.aiCustomThinkingProtocol,
-    )
-      ? settings.aiCustomThinkingProtocol
-      : "none",
+    aiProvider: programming.provider,
+    aiBaseUrl: programming.baseUrl,
+    aiModel: programming.model,
+    aiThinkingMode: programming.thinkingMode,
+    aiCustomThinkingProtocol: programming.customThinkingProtocol,
+    aiObjectiveProvider: objective.provider,
+    aiObjectiveBaseUrl: objective.baseUrl,
+    aiObjectiveModel: objective.model,
+    aiObjectiveThinkingMode: objective.thinkingMode,
+    aiObjectiveCustomThinkingProtocol: objective.customThinkingProtocol,
   };
 }
 
-export async function getEffectiveAiProviderConfig(): Promise<AiProviderRuntimeConfig> {
+function normalizeAiProviderProfile({
+  baseUrl,
+  customThinkingProtocol,
+  model,
+  provider: providerValue,
+  thinkingMode,
+}: {
+  baseUrl: string;
+  customThinkingProtocol: string;
+  model: string;
+  provider: string;
+  thinkingMode: string;
+}) {
+  const provider = isProvider(providerValue) ? providerValue : "deepseek";
+  return {
+    baseUrl:
+      provider === "custom"
+        ? normalizeAiProviderBaseUrl(baseUrl)
+        : AI_PROVIDER_PRESETS[provider].baseUrl,
+    customThinkingProtocol: isCustomThinkingProtocol(customThinkingProtocol)
+      ? customThinkingProtocol
+      : ("none" as const),
+    model: model.trim(),
+    provider,
+    thinkingMode: isThinkingMode(thinkingMode)
+      ? thinkingMode
+      : ("enabled" as const),
+  };
+}
+
+export async function getEffectiveAiProviderConfig(
+  profile: AiModelProfile = "programming",
+): Promise<AiProviderRuntimeConfig> {
   let rows: Array<{ key: string; value: string }>;
   try {
     rows = await prisma.systemSetting.findMany({
@@ -198,19 +256,62 @@ export async function getEffectiveAiProviderConfig(): Promise<AiProviderRuntimeC
   }
 
   const values = new Map(rows.map((row) => [row.key, row.value]));
-  if (!values.has("aiProvider")) {
-    return createLegacyDeepSeekConfig();
-  }
+  const programmingConfig = createStoredProgrammingConfig(values);
+  if (profile === "programming") return programmingConfig;
 
-  const providerValue = values.get("aiProvider") ?? "";
-  const provider = isProvider(providerValue) ? providerValue : "deepseek";
-  const configuredBaseUrl = values.get("aiBaseUrl")?.trim() ?? "";
+  const keys = aiProfileSettingKeys.objective;
+  const hasObjectiveSettings = Object.values(keys).some((key) =>
+    values.has(key),
+  );
+  if (!hasObjectiveSettings) return programmingConfig;
+
+  const providerValue =
+    values.get(keys.provider) ?? programmingConfig.provider;
+  const provider = isProvider(providerValue)
+    ? providerValue
+    : programmingConfig.provider;
+  const configuredBaseUrl =
+    values.get(keys.baseUrl)?.trim() ??
+    (provider === programmingConfig.provider ? programmingConfig.baseUrl : "");
   const baseUrl =
     provider === "custom"
       ? normalizeRuntimeBaseUrl(configuredBaseUrl)
       : AI_PROVIDER_PRESETS[provider].baseUrl;
-  const thinkingValue = values.get("aiThinkingMode") ?? "";
-  const protocolValue = values.get("aiCustomThinkingProtocol") ?? "";
+  const thinkingValue =
+    values.get(keys.thinkingMode) ?? programmingConfig.thinkingMode;
+  const protocolValue =
+    values.get(keys.customThinkingProtocol) ??
+    programmingConfig.customThinkingProtocol;
+
+  return toRuntimeConfig({
+    baseUrl,
+    customThinkingProtocol: isCustomThinkingProtocol(protocolValue)
+      ? protocolValue
+      : "none",
+    legacyFallback: false,
+    model: values.get(keys.model)?.trim() || programmingConfig.model,
+    provider,
+    thinkingMode: isThinkingMode(thinkingValue)
+      ? thinkingValue
+      : "enabled",
+  });
+}
+
+function createStoredProgrammingConfig(values: Map<string, string>) {
+  const keys = aiProfileSettingKeys.programming;
+  if (!values.has(keys.provider)) {
+    return createLegacyDeepSeekConfig();
+  }
+
+  const providerValue = values.get(keys.provider) ?? "";
+  const provider = isProvider(providerValue) ? providerValue : "deepseek";
+  const configuredBaseUrl = values.get(keys.baseUrl)?.trim() ?? "";
+  const baseUrl =
+    provider === "custom"
+      ? normalizeRuntimeBaseUrl(configuredBaseUrl)
+      : AI_PROVIDER_PRESETS[provider].baseUrl;
+  const thinkingValue = values.get(keys.thinkingMode) ?? "";
+  const protocolValue = values.get(keys.customThinkingProtocol) ?? "";
 
   return toRuntimeConfig({
     baseUrl,
@@ -219,7 +320,7 @@ export async function getEffectiveAiProviderConfig(): Promise<AiProviderRuntimeC
       : "none",
     legacyFallback: false,
     model:
-      values.get("aiModel")?.trim() ||
+      values.get(keys.model)?.trim() ||
       defaultSystemSettings.aiModel,
     provider,
     thinkingMode: isThinkingMode(thinkingValue)
@@ -265,7 +366,18 @@ export function toAiProviderAdminStatus(
 export function applyAiProviderStatusToSettings(
   settings: SystemSettings,
   status: AiProviderAdminStatus,
+  profile: AiModelProfile = "programming",
 ): SystemSettings {
+  if (profile === "objective") {
+    return {
+      ...settings,
+      aiObjectiveProvider: status.provider,
+      aiObjectiveBaseUrl: status.baseUrl,
+      aiObjectiveModel: status.model,
+      aiObjectiveThinkingMode: status.thinkingMode,
+      aiObjectiveCustomThinkingProtocol: status.customThinkingProtocol,
+    };
+  }
   return {
     ...settings,
     aiProvider: status.provider,
@@ -274,6 +386,21 @@ export function applyAiProviderStatusToSettings(
     aiThinkingMode: status.thinkingMode,
     aiCustomThinkingProtocol: status.customThinkingProtocol,
   };
+}
+
+export function applyAiProviderStatusesToSettings(
+  settings: SystemSettings,
+  statuses: AiProviderAdminStatuses,
+) {
+  return applyAiProviderStatusToSettings(
+    applyAiProviderStatusToSettings(
+      settings,
+      statuses.programming,
+      "programming",
+    ),
+    statuses.objective,
+    "objective",
+  );
 }
 
 export function createAiProviderFingerprint(

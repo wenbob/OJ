@@ -1,134 +1,171 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearAiAssistCooldowns,
-  consumeAiAssistCooldown,
-  reserveAiProviderRequest,
   reserveAiAssistRequest,
+  reserveAiProviderRequest,
 } from "./aiAssistRateLimit";
 
-describe("AI assist rate limit", () => {
-  it("allows the first request and blocks repeated requests within 20 seconds", () => {
+describe("AI provider rate limit", () => {
+  beforeEach(() => {
     clearAiAssistCooldowns();
+  });
 
-    const first = consumeAiAssistCooldown({
-      userId: 1,
-      problemId: 2,
-      examId: null,
-      mode: "hint",
+  it("does not start cooldown until an upstream request actually begins", () => {
+    const first = reserveAiAssistRequest({
+      cooldownSeconds: 20,
       now: 1_000,
-    });
-    const second = consumeAiAssistCooldown({
       userId: 1,
-      problemId: 2,
-      examId: null,
-      mode: "hint",
-      now: 10_000,
     });
-
     expect(first.allowed).toBe(true);
-    expect(second.allowed).toBe(false);
-    expect(second.retryAfterSeconds).toBe(11);
+    if (first.allowed) first.release();
+
+    expect(
+      reserveAiAssistRequest({
+        cooldownSeconds: 20,
+        now: 2_000,
+        userId: 1,
+      }).allowed,
+    ).toBe(true);
   });
 
-  it("does not let students bypass cooldown by switching problems", () => {
-    clearAiAssistCooldowns();
-    consumeAiAssistCooldown({
-      userId: 1,
-      problemId: 2,
-      examId: null,
-      mode: "hint",
+  it("uses the current configured interval after an upstream request starts", () => {
+    const first = reserveAiAssistRequest({
+      cooldownSeconds: 20,
       now: 1_000,
-    });
-
-    const otherProblem = consumeAiAssistCooldown({
       userId: 1,
-      problemId: 3,
-      examId: null,
-      mode: "hint",
-      now: 2_000,
     });
+    expect(first.allowed).toBe(true);
+    if (first.allowed) {
+      first.markProviderRequest(1_000);
+      first.release();
+    }
 
-    expect(otherProblem.allowed).toBe(false);
+    expect(
+      reserveAiAssistRequest({
+        cooldownSeconds: 20,
+        now: 10_000,
+        userId: 1,
+      }),
+    ).toMatchObject({
+      allowed: false,
+      reason: "cooldown",
+      retryAfterSeconds: 11,
+    });
+    expect(
+      reserveAiAssistRequest({
+        cooldownSeconds: 5,
+        now: 10_000,
+        userId: 1,
+      }).allowed,
+    ).toBe(true);
   });
 
-  it("does not let students bypass cooldown by moving from practice to an exam", () => {
-    clearAiAssistCooldowns();
-    consumeAiAssistCooldown({
-      userId: 1,
-      problemId: 2,
-      examId: null,
-      mode: "overview",
+  it("does not let one account bypass programming cooldown by changing tasks", () => {
+    const first = reserveAiAssistRequest({
+      cooldownSeconds: 20,
       now: 1_000,
-    });
-
-    const examRequest = consumeAiAssistCooldown({
       userId: 1,
-      problemId: 5,
-      examId: 8,
-      mode: "question",
-      now: 2_000,
     });
+    if (first.allowed) {
+      first.markProviderRequest(1_000);
+      first.release();
+    }
 
-    expect(examRequest.allowed).toBe(false);
+    expect(
+      reserveAiAssistRequest({
+        cooldownSeconds: 20,
+        now: 2_000,
+        userId: 1,
+      }),
+    ).toMatchObject({ allowed: false, reason: "cooldown" });
   });
 
-  it("does not let students bypass cooldown by switching help modes", () => {
-    clearAiAssistCooldowns();
-    consumeAiAssistCooldown({
-      userId: 1,
-      problemId: 2,
-      examId: null,
-      mode: "overview",
+  it("keeps programming and objective cooldowns independent", () => {
+    const programming = reserveAiProviderRequest({
+      accountId: 5,
+      cooldownSeconds: 30,
       now: 1_000,
+      profile: "programming",
     });
+    if (programming.allowed) {
+      programming.markProviderRequest(1_000);
+      programming.release();
+    }
 
-    const switchedMode = consumeAiAssistCooldown({
-      userId: 1,
-      problemId: 2,
-      examId: null,
-      mode: "code_review",
-      now: 2_000,
-    });
-
-    expect(switchedMode.allowed).toBe(false);
+    expect(
+      reserveAiProviderRequest({
+        accountId: 5,
+        cooldownSeconds: 30,
+        now: 2_000,
+        profile: "objective",
+      }).allowed,
+    ).toBe(true);
   });
 
-  it("allows only one in-flight AI request per student", () => {
-    clearAiAssistCooldowns();
-
-    const first = reserveAiAssistRequest({ userId: 1, maxConcurrency: 2 });
-    const second = reserveAiAssistRequest({ userId: 1, maxConcurrency: 2 });
+  it("allows only one in-flight request per account and profile", () => {
+    const first = reserveAiAssistRequest({
+      cooldownSeconds: 20,
+      maxConcurrency: 2,
+      userId: 1,
+    });
+    const second = reserveAiAssistRequest({
+      cooldownSeconds: 20,
+      maxConcurrency: 2,
+      userId: 1,
+    });
 
     expect(first.allowed).toBe(true);
     expect(second).toMatchObject({ allowed: false, reason: "user_busy" });
-
     if (first.allowed) first.release();
-    expect(reserveAiAssistRequest({ userId: 1, maxConcurrency: 2 }).allowed).toBe(true);
   });
 
-  it("caps total concurrent AI requests", () => {
-    clearAiAssistCooldowns();
-
-    const first = reserveAiAssistRequest({ userId: 1, maxConcurrency: 2 });
-    const second = reserveAiAssistRequest({ userId: 2, maxConcurrency: 2 });
-    const third = reserveAiAssistRequest({ userId: 3, maxConcurrency: 2 });
+  it("locks the same resource across different staff accounts", () => {
+    const first = reserveAiProviderRequest({
+      accountId: 1,
+      cooldownSeconds: 30,
+      profile: "objective",
+      requestKey: "objective:10:1",
+    });
+    const second = reserveAiProviderRequest({
+      accountId: 2,
+      cooldownSeconds: 30,
+      profile: "objective",
+      requestKey: "objective:10:1",
+    });
 
     expect(first.allowed).toBe(true);
-    expect(second.allowed).toBe(true);
-    expect(third).toMatchObject({ allowed: false, reason: "server_busy" });
+    expect(second).toMatchObject({ allowed: false, reason: "request_busy" });
+    if (first.allowed) first.release();
   });
 
-  it("shares the provider concurrency cap with teacher insight requests", () => {
-    clearAiAssistCooldowns();
-    const student = reserveAiAssistRequest({ userId: 1, maxConcurrency: 2 });
-    const teacher = reserveAiProviderRequest({
-      requestKey: "teacher:9:1",
+  it("shares the global concurrency cap across profiles and roles", () => {
+    const student = reserveAiAssistRequest({
+      cooldownSeconds: 20,
       maxConcurrency: 2,
+      userId: 1,
     });
-    const blocked = reserveAiAssistRequest({ userId: 2, maxConcurrency: 2 });
+    const teacher = reserveAiProviderRequest({
+      accountId: 9,
+      cooldownSeconds: 30,
+      maxConcurrency: 2,
+      profile: "programming",
+      requestKey: "teacher-insight:7:30d",
+    });
+    const objective = reserveAiProviderRequest({
+      accountId: 8,
+      cooldownSeconds: 30,
+      maxConcurrency: 2,
+      profile: "objective",
+      requestKey: "objective:10:1",
+    });
 
     expect(student.allowed).toBe(true);
     expect(teacher.allowed).toBe(true);
-    expect(blocked).toMatchObject({ allowed: false, reason: "server_busy" });
+    expect(objective).toMatchObject({
+      allowed: false,
+      reason: "server_busy",
+    });
+    if (student.allowed) student.release();
+    if (teacher.allowed) teacher.release();
   });
 });
