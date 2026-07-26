@@ -38,6 +38,7 @@ async function main() {
       { key: "defaultMemoryLimitMb", value: "128" },
       { key: "allowStudentRegister", value: "false" },
       { key: "aiPracticeEnabled", value: "false" },
+      { key: "aiObjectiveExplanationEnabled", value: "false" },
     ],
   });
 

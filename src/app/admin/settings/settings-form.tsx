@@ -197,7 +197,7 @@ export function SettingsForm({
         setAiProviderStatus(data.aiProviderStatus as AiProviderAdminStatus);
       }
       notifyBrowserIdentityUpdated(savedSettings);
-      setMessage("设置已保存，学生助手和教师学情摘要会统一使用新配置");
+      setMessage("设置已保存，学生助手、教师学情摘要和选择判断解析会统一使用新配置");
     } catch {
       setError("保存设置失败，请检查本地服务");
     } finally {
@@ -320,8 +320,8 @@ export function SettingsForm({
       <section className="surface p-5">
         <h2 className="text-xl font-black">AI 助手设置</h2>
         <p className="mt-2 text-sm font-semibold text-ink-600">
-          服务商、模型与思考模式会同时作用于学生 AI 助手和教师学情摘要。API Key
-          只从服务器环境变量读取，不会写入数据库或发送到浏览器。
+          服务商、模型与思考模式会同时作用于学生 AI 助手、教师学情摘要和选择判断题
+          AI 解析。API Key 只从服务器环境变量读取，不会写入数据库或发送到浏览器。
         </p>
 
         <div className="mt-5 border border-steel/20 bg-steel/5 p-4">
@@ -503,6 +503,22 @@ export function SettingsForm({
         </label>
         <p className="mt-2 text-sm font-semibold text-ink-600">
           关闭后，学生日常刷题页不会显示 AI 按钮；服务端接口也会拒绝请求。
+        </p>
+        <label className="mt-5 inline-flex items-center gap-3 text-sm font-bold text-ink-800">
+          <input
+            checked={settings.aiObjectiveExplanationEnabled === "true"}
+            type="checkbox"
+            onChange={(event) =>
+              update(
+                "aiObjectiveExplanationEnabled",
+                event.target.checked ? "true" : "false",
+              )
+            }
+          />
+          选择判断题开启 AI 解析
+        </label>
+        <p className="mt-2 text-sm font-semibold text-ink-600">
+          仅供管理员和老师校题使用。解析结果共享，学生端不会显示，也不计入学生 AI 使用统计。
         </p>
         <label className="mt-5 grid max-w-md gap-2 text-sm font-bold text-ink-800">
           AI 对话记录保留时间

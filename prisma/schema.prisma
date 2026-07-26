@@ -8,20 +8,21 @@ datasource db {
 }
 
 model User {
-  id                         Int                       @id @default(autoincrement())
-  username                   String                    @unique
-  passwordHash               String
-  role                       String
-  sessionVersion             Int                       @default(0)
-  createdAt                  DateTime                  @default(now())
-  submissions                Submission[]
-  examRecords                ExamRecord[]
-  studentProfile             StudentProfile?
-  learningAssignments        LearningAssignment[]      @relation("LearningAssignmentStudent")
-  createdLearningAssignments LearningAssignment[]      @relation("LearningAssignmentCreator")
-  createdExams               Exam[]                    @relation("ExamCreator")
-  learningInsightSnapshots   LearningInsightSnapshot[]
-  aiConversations            AiConversation[]
+  id                               Int                       @id @default(autoincrement())
+  username                         String                    @unique
+  passwordHash                     String
+  role                             String
+  sessionVersion                   Int                       @default(0)
+  createdAt                        DateTime                  @default(now())
+  submissions                      Submission[]
+  examRecords                      ExamRecord[]
+  studentProfile                   StudentProfile?
+  learningAssignments              LearningAssignment[]      @relation("LearningAssignmentStudent")
+  createdLearningAssignments       LearningAssignment[]      @relation("LearningAssignmentCreator")
+  createdExams                     Exam[]                    @relation("ExamCreator")
+  learningInsightSnapshots         LearningInsightSnapshot[]
+  aiConversations                  AiConversation[]
+  generatedObjectiveAiExplanations ObjectiveAiExplanation[]  @relation("ObjectiveAiExplanationGenerator")
 }
 
 model StudentProfile {
@@ -56,6 +57,7 @@ model Problem {
   examProblems               ExamProblem[]
   learningAssignmentProblems LearningAssignmentProblem[]
   aiConversations            AiConversation[]
+  objectiveAiExplanations    ObjectiveAiExplanation[]
 
   @@index([problemType, category])
   @@index([archivedAt, problemType, category])
@@ -237,6 +239,29 @@ model SystemSetting {
   value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ObjectiveAiExplanation {
+  id                  Int      @id @default(autoincrement())
+  problemId           Int
+  itemIndex           Int
+  sourceHash          String
+  providerFingerprint String
+  correctAnswer       String
+  explanationJson     String
+  model               String?
+  promptTokens        Int?
+  completionTokens    Int?
+  totalTokens         Int?
+  generatedById       Int?
+  generatedAt         DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  problem             Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  generatedBy         User?    @relation("ObjectiveAiExplanationGenerator", fields: [generatedById], references: [id], onDelete: SetNull)
+
+  @@unique([problemId, itemIndex])
+  @@index([problemId, generatedAt])
+  @@index([generatedById, generatedAt])
 }
 
 model AiConversation {

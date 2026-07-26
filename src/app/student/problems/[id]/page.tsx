@@ -6,6 +6,7 @@ import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
 import { ProblemRichText } from "@/components/ProblemRichText";
 import { ProblemSamples } from "@/components/ProblemSamples";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
+import { ViewportCenteredStickyPanel } from "@/components/ViewportCenteredStickyPanel";
 import { requirePageUser } from "@/lib/auth";
 import { getDisplaySamples } from "@/lib/problemSamples";
 import {
@@ -161,7 +162,7 @@ export default async function StudentProblemDetailPage({
           )}
         </article>
 
-        <aside className="grid content-start gap-4 xl:self-start">
+        <ViewportCenteredStickyPanel enabled={problemType === "objective"}>
           <SubmitForm
             aiEnabled={
               problemType === "programming" &&
@@ -180,7 +181,7 @@ export default async function StudentProblemDetailPage({
             problemId={problem.id}
             sampleCount={samples.length}
           />
-        </aside>
+        </ViewportCenteredStickyPanel>
       </div>
     </AppShell>
   );

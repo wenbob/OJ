@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ObjectiveProblemContent } from "./ObjectiveProblemContent";
+import { ObjectiveAiExplanationProvider } from "./StaffObjectiveAiExplanation";
 
 describe("ObjectiveProblemContent", () => {
   it("renders inline powers and subscripts with KaTeX", () => {
@@ -55,5 +56,35 @@ describe("ObjectiveProblemContent", () => {
     expect(html).toContain('src="https://cdn.luogu.com.cn/upload/image_hosting/test.png"');
     expect(html).not.toContain('src="https://example.com/untrusted.png"');
     expect(html).toContain("https://example.com/untrusted.png");
+  });
+
+  it("only renders staff AI explanation controls when explicitly enabled", () => {
+    const item = {
+      answer: "A",
+      kind: "judge" as const,
+      options: [
+        { label: "A", text: "正确" },
+        { label: "B", text: "错误" },
+      ],
+      score: 2,
+      stem: "这是一道判断题。",
+    };
+    const plainHtml = renderToStaticMarkup(
+      <ObjectiveProblemContent items={[item]} showAnswers />,
+    );
+    const staffHtml = renderToStaticMarkup(
+      <ObjectiveAiExplanationProvider
+        canForceRegenerate
+        problemId={10}
+      >
+        <ObjectiveProblemContent
+          items={[item]}
+          showAiExplanationActions
+          showAnswers
+        />
+      </ObjectiveAiExplanationProvider>,
+    );
+    expect(plainHtml).not.toContain("AI 解析");
+    expect(staffHtml).toContain("AI 解析");
   });
 });

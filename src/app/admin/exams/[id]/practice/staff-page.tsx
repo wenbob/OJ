@@ -9,6 +9,10 @@ import { ProblemRichText } from "@/components/ProblemRichText";
 import { ProblemSamples } from "@/components/ProblemSamples";
 import { ProblemSubmitForm } from "@/components/ProblemSubmitForm";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
+import {
+  ObjectiveAiExplanationPanel,
+  ObjectiveAiExplanationProvider,
+} from "@/components/StaffObjectiveAiExplanation";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatRuntime } from "@/lib/format";
 import { getDisplaySamples } from "@/lib/problemSamples";
@@ -19,7 +23,11 @@ import {
 } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
 import { getLatestAcceptedSubmissionIdsByProblem } from "@/lib/problemSubmissionCounts";
-import { getDefaultCppTemplate } from "@/lib/settings";
+import {
+  boolSetting,
+  getDefaultCppTemplate,
+  getSetting,
+} from "@/lib/settings";
 import {
   getExamAccessWhere,
   getStaffBasePath,
@@ -49,7 +57,7 @@ export async function StaffExamPracticePage({
   );
   if (!Number.isInteger(examId)) notFound();
 
-  const [exam, defaultCodeTemplate] = await Promise.all([
+  const [exam, defaultCodeTemplate, objectiveAiExplanationSetting] = await Promise.all([
     prisma.exam.findFirst({
       where: getExamAccessWhere(user, examId),
       include: {
@@ -69,6 +77,7 @@ export async function StaffExamPracticePage({
       },
     }),
     getDefaultCppTemplate(),
+    getSetting("aiObjectiveExplanationEnabled"),
   ]);
 
   if (!exam) notFound();
@@ -136,6 +145,9 @@ export async function StaffExamPracticePage({
     : [];
   const showProblemList =
     exam.examType !== "objective" || exam.problems.length > 1;
+  const objectiveAiEnabled =
+    selectedProblemType === "objective" &&
+    boolSetting(objectiveAiExplanationSetting);
 
   return (
     <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
@@ -222,6 +234,10 @@ export async function StaffExamPracticePage({
             </aside>
           ) : null}
 
+          <ObjectiveAiExplanationProvider
+            canForceRegenerate={role === "admin"}
+            problemId={selectedProblem.id}
+          >
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
             <article className="surface p-6">
               <div className="flex flex-wrap items-center gap-3">
@@ -256,7 +272,11 @@ export async function StaffExamPracticePage({
               </div>
               <ProblemSection title="题目描述" value={selectedProblem.description} />
               {selectedProblemType === "objective" ? (
-                <ObjectiveProblemContent items={objectiveItems} showAnswers />
+                <ObjectiveProblemContent
+                  items={objectiveItems}
+                  showAiExplanationActions={objectiveAiEnabled}
+                  showAnswers
+                />
               ) : (
                 <>
                   <ProblemSection title="输入格式" value={selectedProblem.inputDescription} />
@@ -267,46 +287,75 @@ export async function StaffExamPracticePage({
               )}
             </article>
 
-            <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:self-start">
-              {selectedLatest ? (
-                <section className="surface p-5">
-                  <h2 className="text-lg font-black">本题最新一次练习提交</h2>
-                  <div className="mt-3 grid gap-2 text-sm font-semibold text-ink-700">
-                    {selectedProblemType === "objective" ? (
+            {objectiveAiEnabled ? (
+              <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:h-[calc(100dvh-3rem)] xl:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] xl:self-start xl:overflow-hidden">
+                <ObjectiveAiExplanationPanel />
+                <div className="grid min-h-0 content-start gap-3 overflow-y-auto overscroll-contain">
+                  {selectedLatest ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 border border-ink-950/10 bg-white/70 px-3 py-2 text-xs font-bold text-ink-700">
+                      <span>最近提交</span>
+                      <StatusBadge status={selectedLatest.status} />
                       <span>
                         答对 {selectedLatest.passedCount}/{selectedLatest.totalCount} 小题
                       </span>
-                    ) : (
-                      <>
-                        <StatusBadge status={selectedLatest.status} />
+                    </div>
+                  ) : null}
+                  <ProblemSubmitForm
+                    key={`${role}-exam-practice-${exam.id}-problem-${selectedProblem.id}`}
+                    defaultCodeTemplate={defaultCodeTemplate}
+                    detailHrefBase={`${basePath}/submissions`}
+                    draftStorageKey={`oj-code-${role}-exam-practice-${exam.id}-problem-${selectedProblem.id}`}
+                    objectiveCompact
+                    problemType={selectedProblemType}
+                    problemId={selectedProblem.id}
+                    refreshOnSuccess
+                    sampleCount={samples.length}
+                  />
+                </div>
+              </aside>
+            ) : (
+              <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:self-start">
+                {selectedLatest ? (
+                  <section className="surface p-5">
+                    <h2 className="text-lg font-black">本题最新一次练习提交</h2>
+                    <div className="mt-3 grid gap-2 text-sm font-semibold text-ink-700">
+                      {selectedProblemType === "objective" ? (
                         <span>
-                          {selectedLatest.passedCount}/{selectedLatest.totalCount} 测试点
+                          答对 {selectedLatest.passedCount}/{selectedLatest.totalCount} 小题
                         </span>
-                        <span>{formatRuntime(selectedLatest.runtimeMs)}</span>
-                        <span>{formatDate(selectedLatest.createdAt)}</span>
-                        <Link
-                          className="btn btn-secondary mt-2 w-full"
-                          href={`${basePath}/submissions/${selectedLatest.id}`}
-                        >
-                          查看提交详情
-                        </Link>
-                      </>
-                    )}
-                  </div>
-                </section>
-              ) : null}
-              <ProblemSubmitForm
-                key={`${role}-exam-practice-${exam.id}-problem-${selectedProblem.id}`}
-                defaultCodeTemplate={defaultCodeTemplate}
-                detailHrefBase={`${basePath}/submissions`}
-                draftStorageKey={`oj-code-${role}-exam-practice-${exam.id}-problem-${selectedProblem.id}`}
-                problemType={selectedProblemType}
-                problemId={selectedProblem.id}
-                refreshOnSuccess
-                sampleCount={samples.length}
-              />
-            </aside>
+                      ) : (
+                        <>
+                          <StatusBadge status={selectedLatest.status} />
+                          <span>
+                            {selectedLatest.passedCount}/{selectedLatest.totalCount} 测试点
+                          </span>
+                          <span>{formatRuntime(selectedLatest.runtimeMs)}</span>
+                          <span>{formatDate(selectedLatest.createdAt)}</span>
+                          <Link
+                            className="btn btn-secondary mt-2 w-full"
+                            href={`${basePath}/submissions/${selectedLatest.id}`}
+                          >
+                            查看提交详情
+                          </Link>
+                        </>
+                      )}
+                    </div>
+                  </section>
+                ) : null}
+                <ProblemSubmitForm
+                  key={`${role}-exam-practice-${exam.id}-problem-${selectedProblem.id}`}
+                  defaultCodeTemplate={defaultCodeTemplate}
+                  detailHrefBase={`${basePath}/submissions`}
+                  draftStorageKey={`oj-code-${role}-exam-practice-${exam.id}-problem-${selectedProblem.id}`}
+                  problemType={selectedProblemType}
+                  problemId={selectedProblem.id}
+                  refreshOnSuccess
+                  sampleCount={samples.length}
+                />
+              </aside>
+            )}
           </div>
+          </ObjectiveAiExplanationProvider>
         </div>
       ) : (
         <section className="surface p-10 text-center text-sm font-semibold text-ink-600">

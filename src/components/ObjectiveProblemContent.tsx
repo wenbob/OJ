@@ -1,4 +1,5 @@
 import type { PublicObjectiveItem } from "@/lib/objectiveProblem";
+import { ObjectiveAiExplanationButton } from "./StaffObjectiveAiExplanation";
 import { ProblemRichText } from "./ProblemRichText";
 
 type ObjectiveProblemContentItem = PublicObjectiveItem & {
@@ -7,9 +8,11 @@ type ObjectiveProblemContentItem = PublicObjectiveItem & {
 
 export function ObjectiveProblemContent({
   items,
+  showAiExplanationActions = false,
   showAnswers = false,
 }: {
   items: ObjectiveProblemContentItem[];
+  showAiExplanationActions?: boolean;
   showAnswers?: boolean;
 }) {
   const totalScore = items.reduce((sum, item) => sum + item.score, 0);
@@ -40,6 +43,9 @@ export function ObjectiveProblemContent({
                   <span className="border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">
                     答案 {item.answer}
                   </span>
+                ) : null}
+                {showAiExplanationActions && item.answer ? (
+                  <ObjectiveAiExplanationButton itemIndex={index + 1} />
                 ) : null}
                 <span className="border border-clay/20 bg-clay/10 px-2.5 py-1 text-xs font-black text-clay">
                   {item.score} 分

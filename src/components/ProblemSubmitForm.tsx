@@ -56,6 +56,7 @@ export function ProblemSubmitForm({
   examEndsAt,
   fromSubmissionId,
   learningAssignmentId,
+  objectiveCompact = false,
   problemType = "programming",
   problemId,
   refreshOnSuccess = false,
@@ -72,6 +73,7 @@ export function ProblemSubmitForm({
   examEndsAt?: string | null;
   fromSubmissionId?: number;
   learningAssignmentId?: number;
+  objectiveCompact?: boolean;
   problemType?: ProblemType;
   problemId: number;
   refreshOnSuccess?: boolean;
@@ -357,7 +359,7 @@ export function ProblemSubmitForm({
           studentId={aiStudentId}
         />
       ) : null}
-      <section className="surface p-5">
+      <section className={`surface ${objectiveCompact && objective ? "p-4" : "p-5"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-black">
@@ -376,7 +378,13 @@ export function ProblemSubmitForm({
       <div className="mt-4">
         <CodeEditor
           key={storageKey}
-          height={objective ? "360px" : "460px"}
+          height={
+            objective
+              ? objectiveCompact
+                ? "clamp(180px, 22dvh, 260px)"
+                : "360px"
+              : "460px"
+          }
           language={objective ? "plaintext" : "cpp"}
           value={code}
           onChange={setCode}

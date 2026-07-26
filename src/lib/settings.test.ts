@@ -64,6 +64,16 @@ describe("browser identity system settings", () => {
     ).toContain("60");
   });
 
+  it("defaults the independent objective explanation switch to off", () => {
+    expect(defaultSystemSettings.aiObjectiveExplanationEnabled).toBe("false");
+    expect(
+      normalizeSystemSettingsPayload({
+        ...defaultSystemSettings,
+        aiObjectiveExplanationEnabled: true,
+      }).aiObjectiveExplanationEnabled,
+    ).toBe("true");
+  });
+
   it("accepts supported AI retention periods and rejects arbitrary values", () => {
     expect(
       validateSystemSettings({

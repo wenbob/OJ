@@ -92,6 +92,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         include: { testCases: true },
       });
       if (payload.problemType === "objective") {
+        await tx.objectiveAiExplanation.deleteMany({
+          where: {
+            itemIndex: {
+              gt: parseObjectiveItems(payload.objectiveItems).length,
+            },
+            problemId,
+          },
+        });
         await tx.examProblem.updateMany({
           where: { problemId },
           data: {
@@ -100,6 +108,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
             ),
           },
         });
+      } else {
+        await tx.objectiveAiExplanation.deleteMany({ where: { problemId } });
       }
       return updatedProblem;
     });

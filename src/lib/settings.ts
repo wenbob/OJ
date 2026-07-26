@@ -21,6 +21,7 @@ export const defaultSystemSettings = {
   defaultMemoryLimitMb: "128",
   allowStudentRegister: "false",
   aiPracticeEnabled: "false",
+  aiObjectiveExplanationEnabled: "false",
   aiConversationRetentionDays: "180",
   aiProvider: "deepseek",
   aiBaseUrl: "https://api.deepseek.com",
@@ -123,7 +124,11 @@ export function normalizeSystemSettingsPayload(body: unknown): SystemSettings {
   const settings = { ...defaultSystemSettings };
   for (const key of settingKeys) {
     const value = record[key];
-    if (key === "allowStudentRegister" || key === "aiPracticeEnabled") {
+    if (
+      key === "allowStudentRegister" ||
+      key === "aiPracticeEnabled" ||
+      key === "aiObjectiveExplanationEnabled"
+    ) {
       settings[key] = value === true || value === "true" ? "true" : "false";
     } else {
       settings[key] = typeof value === "string" ? value : "";

@@ -51,6 +51,9 @@ describe("admin problem type-change ordering", () => {
         findMany: vi.fn().mockResolvedValue([]),
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
+      objectiveAiExplanation: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
       problem: {
         aggregate: vi.fn().mockResolvedValue({ _max: { sortOrder: 20 } }),
         findUnique: vi.fn().mockResolvedValue({
@@ -76,5 +79,11 @@ describe("admin problem type-change ordering", () => {
         }),
       }),
     );
+    expect(tx.objectiveAiExplanation.deleteMany).toHaveBeenCalledWith({
+      where: {
+        itemIndex: { gt: 1 },
+        problemId: 12,
+      },
+    });
   });
 });
