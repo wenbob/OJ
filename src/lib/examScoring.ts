@@ -15,6 +15,7 @@ export type ExamProblemScore = {
   maxScore: number;
   bestStatus: string;
   submissionCount: number;
+  reviewSubmissionId: number | null;
 };
 
 export type ExamScoreResult = {
@@ -53,6 +54,50 @@ export function isExamSubmissionOnTime({
   return !endAt || createdAt.getTime() < endAt.getTime();
 }
 
+export function selectBestObjectiveSubmission({
+  items,
+  submissions,
+}: {
+  items: ReturnType<typeof parseObjectiveItems>;
+  submissions: Array<{
+    id: number;
+    createdAt: Date;
+    caseResults: Array<{ caseIndex: number; status: string }>;
+  }>;
+}) {
+  return submissions.reduce<{
+    createdAt: Date;
+    score: number;
+    submissionId: number;
+  } | null>((best, submission) => {
+    const score = getObjectiveSubmissionScore({
+      caseResults: submission.caseResults,
+      items,
+    });
+    if (!best) {
+      return {
+        createdAt: submission.createdAt,
+        score,
+        submissionId: submission.id,
+      };
+    }
+
+    const newer =
+      submission.createdAt.getTime() > best.createdAt.getTime() ||
+      (submission.createdAt.getTime() === best.createdAt.getTime() &&
+        submission.id > best.submissionId);
+    if (score > best.score || (score === best.score && newer)) {
+      return {
+        createdAt: submission.createdAt,
+        score,
+        submissionId: submission.id,
+      };
+    }
+
+    return best;
+  }, null);
+}
+
 export async function calculateExamScore({
   db = prisma,
   examId,
@@ -89,7 +134,7 @@ export async function calculateExamScore({
           userId,
           ...(submittedBefore ? { createdAt: { lt: submittedBefore } } : {}),
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         select: {
           createdAt: true,
           id: true,
@@ -122,16 +167,14 @@ export async function calculateExamScore({
     const maxScore = isObjective
       ? getObjectiveTotalScore(objectiveItems)
       : examProblem.score;
-    const objectiveScores = isObjective
-      ? problemSubmissions.map((submission) =>
-          getObjectiveSubmissionScore({
-            caseResults: submission.caseResults,
-            items: objectiveItems,
-          }),
-        )
-      : [];
+    const bestObjectiveSubmission = isObjective
+      ? selectBestObjectiveSubmission({
+          items: objectiveItems,
+          submissions: problemSubmissions,
+        })
+      : null;
     const score = isObjective
-      ? Math.max(0, ...objectiveScores)
+      ? bestObjectiveSubmission?.score ?? 0
       : problemSubmissions.some((submission) => submission.status === "Accepted")
         ? examProblem.score
         : 0;
@@ -148,6 +191,7 @@ export async function calculateExamScore({
         ? "Accepted"
         : problemSubmissions[0]?.status ?? "未提交",
       submissionCount: problemSubmissions.length,
+      reviewSubmissionId: bestObjectiveSubmission?.submissionId ?? null,
     };
   });
 

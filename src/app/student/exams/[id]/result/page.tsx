@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { ObjectiveSubmissionBreakdown } from "@/components/ObjectiveSubmissionBreakdown";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { requirePageUser } from "@/lib/auth";
@@ -53,6 +55,37 @@ export default async function StudentExamResultPage({ params }: PageProps) {
     userId: user.id,
   });
   const isFinished = record.status === "submitted" || record.status === "expired";
+  const reviewSubmissionIds = isFinished
+    ? score.problemResults.flatMap((item) =>
+        item.reviewSubmissionId === null ? [] : [item.reviewSubmissionId],
+      )
+    : [];
+  const reviewSubmissions =
+    reviewSubmissionIds.length > 0
+      ? await prisma.submission.findMany({
+          where: {
+            examId,
+            id: { in: reviewSubmissionIds },
+            submissionType: "exam",
+            userId: user.id,
+          },
+          select: {
+            id: true,
+            problemId: true,
+            caseResults: {
+              orderBy: { caseIndex: "asc" },
+              select: {
+                actualOutput: true,
+                caseIndex: true,
+                status: true,
+              },
+            },
+          },
+        })
+      : [];
+  const reviewSubmissionById = new Map(
+    reviewSubmissions.map((submission) => [submission.id, submission]),
+  );
 
   return (
     <AppShell nav={studentNav} title="学生端" user={user}>
@@ -116,23 +149,46 @@ export default async function StudentExamResultPage({ params }: PageProps) {
               </tr>
             </thead>
             <tbody>
-              {score.problemResults.map((item) => (
-                <tr className="border-b border-ink-950/10" key={item.problemId}>
-                  <td className="px-5 py-4 font-black">{item.title}</td>
-                  <td className="px-5 py-4">
-                    <StatusBadge status={item.bestStatus} />
-                  </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {item.score}
-                  </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {item.maxScore}
-                  </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {item.submissionCount}
-                  </td>
-                </tr>
-              ))}
+              {score.problemResults.map((item) => {
+                const reviewSubmission =
+                  item.reviewSubmissionId === null
+                    ? null
+                    : reviewSubmissionById.get(item.reviewSubmissionId);
+                const validReviewSubmission =
+                  reviewSubmission?.problemId === item.problemId
+                    ? reviewSubmission
+                    : null;
+
+                return (
+                  <Fragment key={item.problemId}>
+                    <tr className="border-b border-ink-950/10">
+                      <td className="px-5 py-4 font-black">{item.title}</td>
+                      <td className="px-5 py-4">
+                        <StatusBadge status={item.bestStatus} />
+                      </td>
+                      <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                        {item.score}
+                      </td>
+                      <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                        {item.maxScore}
+                      </td>
+                      <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                        {item.submissionCount}
+                      </td>
+                    </tr>
+                    {isFinished && validReviewSubmission ? (
+                      <tr className="border-b border-ink-950/10 bg-linen/35">
+                        <td className="px-5 pb-5" colSpan={5}>
+                          <ObjectiveSubmissionBreakdown
+                            caseResults={validReviewSubmission.caseResults}
+                            detailHref={`/student/submissions/${validReviewSubmission.id}`}
+                          />
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

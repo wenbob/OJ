@@ -4,9 +4,88 @@ import {
   getExamEndAt,
   isExamSubmissionOnTime,
   refreshFinishedExamScore,
+  selectBestObjectiveSubmission,
 } from "./examScoring";
 
 describe("exam deadline scoring", () => {
+  const objectiveItems = [
+    {
+      answer: "A",
+      kind: "choice" as const,
+      options: [
+        { label: "A", text: "选项 A" },
+        { label: "B", text: "选项 B" },
+      ],
+      score: 2,
+      stem: "第 1 题",
+    },
+    {
+      answer: "B",
+      kind: "choice" as const,
+      options: [
+        { label: "A", text: "选项 A" },
+        { label: "B", text: "选项 B" },
+      ],
+      score: 3,
+      stem: "第 2 题",
+    },
+  ];
+
+  it("selects the highest-scoring objective submission for review", () => {
+    const selected = selectBestObjectiveSubmission({
+      items: objectiveItems,
+      submissions: [
+        {
+          caseResults: [
+            { caseIndex: 1, status: "Accepted" },
+            { caseIndex: 2, status: "Accepted" },
+          ],
+          createdAt: new Date("2026-07-26T00:00:00.000Z"),
+          id: 10,
+        },
+        {
+          caseResults: [
+            { caseIndex: 1, status: "Wrong Answer" },
+            { caseIndex: 2, status: "Accepted" },
+          ],
+          createdAt: new Date("2026-07-26T01:00:00.000Z"),
+          id: 11,
+        },
+      ],
+    });
+
+    expect(selected).toMatchObject({ score: 5, submissionId: 10 });
+  });
+
+  it("breaks equal objective scores by newer time and then larger id", () => {
+    const tiedCases = [
+      { caseIndex: 1, status: "Accepted" },
+      { caseIndex: 2, status: "Wrong Answer" },
+    ];
+    const selected = selectBestObjectiveSubmission({
+      items: objectiveItems,
+      submissions: [
+        {
+          caseResults: tiedCases,
+          createdAt: new Date("2026-07-26T00:00:00.000Z"),
+          id: 10,
+        },
+        {
+          caseResults: tiedCases,
+          createdAt: new Date("2026-07-26T01:00:00.000Z"),
+          id: 11,
+        },
+        {
+          caseResults: tiedCases,
+          createdAt: new Date("2026-07-26T01:00:00.000Z"),
+          id: 12,
+        },
+      ],
+    });
+
+    expect(selected).toMatchObject({ score: 2, submissionId: 12 });
+  });
+
   it("treats the exact deadline and later receipts as expired", () => {
     const startedAt = new Date("2026-07-10T00:00:00.000Z");
     const endAt = getExamEndAt(startedAt, 10)!;

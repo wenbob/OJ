@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { SendHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ObjectiveSubmissionBreakdown } from "@/components/ObjectiveSubmissionBreakdown";
 import { ProblemAiAssist } from "@/components/ProblemAiAssist";
 import { ProblemRunPanel } from "@/components/ProblemRunPanel";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -40,7 +41,7 @@ type SubmissionResult = {
   caseResults?: {
     caseIndex: number;
     status: string;
-    actualOutput?: string | null;
+    actualOutput: string | null;
   }[];
 };
 
@@ -470,9 +471,10 @@ export function ProblemSubmitForm({
           ref={resultRef}
         >
           {objective ? (
-            <div className="mt-4 border border-ink-950/10 bg-white/70 p-4 text-base font-black text-ink-900">
-              答对 {result.passedCount}/{result.totalCount} 小题
-            </div>
+            <ObjectiveSubmissionBreakdown
+              caseResults={result.caseResults ?? []}
+              detailHref={`${detailHrefBase}/${result.id}`}
+            />
           ) : (
             <div className="mt-4 grid gap-2 border border-ink-950/10 bg-white/70 p-4 text-sm font-semibold text-ink-700">
               <StatusBadge status={result.status} />
