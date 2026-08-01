@@ -528,7 +528,7 @@ tar -tzf oj-release.tgz | grep 'libquery_engine'
 # 当前生产环境应看到 libquery_engine-debian-openssl-3.0.x.so.node
 ```
 
-发布包应包含源码、`public`、`prisma`、`scripts`、package 文件、`.next/standalone` 和 `.next/static`；必须排除 `.env`、`*.db`、SQLite 派生文件、`.next/cache`、仓库压缩包和本地 `node_modules` 根目录。standalone 目录内的最小运行依赖是 Next.js 产物的一部分，可以保留。
+发布包应包含源码、`public`、`prisma`、`scripts`、package 文件、`.next/standalone` 和 `.next/static`；必须排除 `.env`、`*.db`、SQLite 派生文件、`.next/cache`、仓库压缩包和 Windows 本机的根 `node_modules`。standalone 目录内的最小运行依赖是 Next.js 产物的一部分，可以保留。若 `package-lock.json` 已改变，必须另外包含同一次本地 Linux 构建生成的根 `node_modules`，不能复用旧服务器依赖。
 
 不能只排除仓库根目录的 `.env`。Next 构建追踪可能把它复制为 `.next/standalone/.env`；发布前必须检查压缩包内的全部归档条目，发现任意层级的环境文件或数据库文件就停止上传：
 
@@ -558,13 +558,16 @@ rm -rf /www/oj-new
 mkdir -p /www/oj-new
 tar -xzf /www/oj-release.tgz -C /www/oj-new
 cp /www/oj/.env /www/oj-new/.env
-cp -al /www/oj/node_modules /www/oj-new/node_modules
+# 仅当 package-lock.json 未变化且发布包没有根 node_modules 时复用旧依赖：
+test -d /www/oj-new/node_modules || cp -al /www/oj/node_modules /www/oj-new/node_modules
 cd /www/oj-new
 npm run check:env
 docker image inspect oj-cpp-judge >/dev/null
 ```
 
 如果 `package-lock.json` 发生依赖变化，不要在 2GB 服务器热运行 `npm ci`。优先在本地 Linux/Docker 环境生成可用于 Ubuntu 的根 `node_modules` 并随发布包上传；否则必须安排维护窗口，先停 PM2 并确认有回滚点后再处理依赖安装。
+
+Windows PowerShell 向远程 `bash -s` 传递多行部署脚本时，不要直接使用字符串管道；管道可能把末行转换为 CRLF，使 `trap` 等 Bash 命令在已切换成功后仍报错并触发回滚。应先把只含 LF 的 UTF-8 脚本编码为 Base64，再在服务器执行 `base64 -d | bash`，或上传经过行尾校验的 `.sh` 文件。
 
 涉及考试会话或鉴权迁移时，切换前还要只读检查生产库中的 `in_progress` 考试。必须结合考试开始时间、时长和当前时间判断是否仍在有效考试窗口；只要存在仍有效记录就延期发布，不在部署过程中强制交卷。已经超过截止时间的陈旧记录可以记录在发布日志中，交由应用的超时结算或学生下次登录流程处理。
 
