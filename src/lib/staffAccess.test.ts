@@ -41,6 +41,10 @@ describe("staff access boundaries", () => {
       href: "/teacher/exams",
       label: "我的考试",
     });
+    expect(teacherNav).toContainEqual({
+      href: "/teacher/assignments",
+      label: "作业发布",
+    });
   });
 
   it("allows teachers to manage only their own creator-scoped resources", () => {

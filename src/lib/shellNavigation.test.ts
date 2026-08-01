@@ -42,6 +42,7 @@ describe("shell navigation active path matching", () => {
     ["/teacher/practice", "题目练习"],
     ["/teacher/exams", "我的考试"],
     ["/teacher/users", "学生管理"],
+    ["/teacher/assignments", "作业发布"],
     ["/teacher/submissions", "日常提交"],
     ["/teacher/ai-usage", "AI 使用"],
     ["/teacher/learning/5", "学情看板"],

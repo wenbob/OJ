@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  createBulkLearningAssignments,
   createLearningAssignment,
   getAssignmentProgress,
   replaceLearningAssignmentProblems,
+  validateBulkLearningAssignmentDraft,
   validateLearningAssignmentDraft,
   validateLearningAssignmentProblemItems,
 } from "./learningAssignments";
@@ -45,6 +47,53 @@ describe("learning assignment progress", () => {
     expect(getAssignmentProgress([{ completedAt: new Date() }, { completedAt: null }]))
       .toEqual({ completed: false, completedCount: 1, percent: 50, problemCount: 2 });
     expect(getAssignmentProgress([{ completedAt: new Date() }]).completed).toBe(true);
+  });
+});
+
+describe("bulk learning assignment validation", () => {
+  it("accepts independent ordered problem lists for multiple students", () => {
+    const result = validateBulkLearningAssignmentDraft({
+      assignments: [
+        { problemIds: [10, 11], studentId: 3 },
+        { problemIds: [10, 12], studentId: 4 },
+      ],
+      dueAt: "2026-08-08T12:00:00.000Z",
+      note: "请按顺序完成",
+      title: "课后练习",
+    });
+
+    expect(result.error).toBeNull();
+    expect(result.data?.assignments).toEqual([
+      { problemIds: [10, 11], studentId: 3 },
+      { problemIds: [10, 12], studentId: 4 },
+    ]);
+  });
+
+  it("rejects duplicate students, duplicate problems and more than 100 students", () => {
+    expect(
+      validateBulkLearningAssignmentDraft({
+        assignments: [
+          { problemIds: [1], studentId: 3 },
+          { problemIds: [2], studentId: 3 },
+        ],
+        title: "课后练习",
+      }).error,
+    ).toContain("重复布置");
+    expect(
+      validateBulkLearningAssignmentDraft({
+        assignments: [{ problemIds: [1, 1], studentId: 3 }],
+        title: "课后练习",
+      }).error,
+    ).toContain("重复添加");
+    expect(
+      validateBulkLearningAssignmentDraft({
+        assignments: Array.from({ length: 101 }, (_, index) => ({
+          problemIds: [1],
+          studentId: index + 1,
+        })),
+        title: "课后练习",
+      }).error,
+    ).toContain("100");
   });
 });
 
@@ -248,5 +297,163 @@ describe("learning assignment database safeguards", () => {
         }),
       }),
     );
+  });
+});
+
+describe("bulk learning assignment database safeguards", () => {
+  function bulkDatabase({
+    archivedProblemId = null as number | null,
+    conflicts = [] as Array<{
+      assignment: { studentId: number };
+      problemId: number;
+      problemTitle: string;
+    }>,
+    problemType = "programming",
+    students = [
+      { id: 2, username: "student02" },
+      { id: 3, username: "student03" },
+    ],
+  } = {}) {
+    let nextId = 30;
+    return {
+      learningAssignment: {
+        create: vi.fn(async () => ({ id: nextId++ })),
+      },
+      learningAssignmentProblem: {
+        findMany: vi.fn(async () => conflicts),
+      },
+      problem: {
+        findMany: vi.fn(async () => [
+          {
+            archivedAt: archivedProblemId === 10 ? new Date() : null,
+            category: "循环",
+            difficulty: "入门",
+            id: 10,
+            problemType,
+            title: "公共题",
+          },
+          {
+            archivedAt: archivedProblemId === 11 ? new Date() : null,
+            category: "数组",
+            difficulty: "普及-",
+            id: 11,
+            problemType,
+            title: "个性题",
+          },
+        ]),
+      },
+      user: {
+        findMany: vi.fn(async () => students),
+      },
+    };
+  }
+
+  const draft = {
+    assignments: [
+      { problemIds: [10], studentId: 2 },
+      { problemIds: [10, 11], studentId: 3 },
+    ],
+    dueAt: null,
+    note: "请按顺序完成",
+    title: "课后练习",
+  };
+
+  it("writes one independent assignment per student with immutable snapshots", async () => {
+    const db = bulkDatabase();
+    const result = await createBulkLearningAssignments({
+      createdById: 9,
+      db: db as never,
+      draft,
+    });
+
+    expect(result).toEqual([
+      { id: 30, problemCount: 1, studentId: 2, username: "student02" },
+      { id: 31, problemCount: 2, studentId: 3, username: "student03" },
+    ]);
+    expect(db.learningAssignment.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          createdById: 9,
+          problems: {
+            create: [
+              expect.objectContaining({ order: 0, problemId: 10 }),
+              expect.objectContaining({ order: 1, problemId: 11 }),
+            ],
+          },
+          studentId: 3,
+        }),
+      }),
+    );
+  });
+
+  it("reports every affected student and performs zero writes on conflict", async () => {
+    const db = bulkDatabase({
+      conflicts: [
+        {
+          assignment: { studentId: 3 },
+          problemId: 11,
+          problemTitle: "个性题",
+        },
+      ],
+    });
+
+    await expect(
+      createBulkLearningAssignments({
+        createdById: 9,
+        db: db as never,
+        draft,
+      }),
+    ).rejects.toMatchObject({
+      conflicts: [
+        {
+          problems: [{ problemId: 11, title: "个性题" }],
+          studentId: 3,
+          username: "student03",
+        },
+      ],
+    });
+    expect(db.learningAssignment.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects missing students and objective problems before writing", async () => {
+    const missingStudentDb = bulkDatabase({
+      students: [{ id: 2, username: "student02" }],
+    });
+    await expect(
+      createBulkLearningAssignments({
+        createdById: 9,
+        db: missingStudentDb as never,
+        draft,
+      }),
+    ).rejects.toThrow("不存在");
+    expect(missingStudentDb.learningAssignment.create).not.toHaveBeenCalled();
+
+    const objectiveDb = bulkDatabase({ problemType: "objective" });
+    await expect(
+      createBulkLearningAssignments({
+        createdById: 9,
+        db: objectiveDb as never,
+        draft,
+      }),
+    ).rejects.toThrow("编程题");
+    expect(objectiveDb.learningAssignment.create).not.toHaveBeenCalled();
+  });
+
+  it("identifies a problem archived after it was selected", async () => {
+    const db = bulkDatabase({ archivedProblemId: 11 });
+
+    await expect(
+      createBulkLearningAssignments({
+        createdById: 9,
+        db: db as never,
+        draft,
+      }),
+    ).rejects.toMatchObject({
+      invalidProblems: [
+        { problemId: 11, reason: "archived", title: "个性题" },
+      ],
+    });
+    expect(db.learningAssignment.create).not.toHaveBeenCalled();
   });
 });

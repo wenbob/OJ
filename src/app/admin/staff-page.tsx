@@ -12,6 +12,7 @@ import {
   Trophy,
   Users,
   BrainCircuit,
+  ClipboardList,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { prisma } from "@/lib/prisma";
@@ -140,8 +141,16 @@ export async function StaffHomePage({ role }: { role: StaffRole }) {
             text={
               role === "admin"
                 ? "维护学生、老师和管理员账号，设置学生自定义头衔"
-                : "维护学生账号、密码、头衔和个人 AI 权限"
+                : "新增学生、调整个人 AI 权限并重置初始密码"
             }
+          />
+          <AdminEntry
+            className="lg:col-span-4"
+            count="批量"
+            href={`${basePath}/assignments`}
+            icon={<ClipboardList size={23} />}
+            label="作业发布"
+            text="批量选择学生，共用题单并完成每个人的个性化调整"
           />
           <AdminEntry
             className="lg:col-span-4"

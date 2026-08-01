@@ -32,6 +32,7 @@ export function getStaffNav(role: StaffRole) {
       : []),
     { href: `${basePath}/exams`, label: role === "admin" ? "模拟考试" : "我的考试" },
     { href: `${basePath}/users`, label: role === "admin" ? "用户管理" : "学生管理" },
+    { href: `${basePath}/assignments`, label: "作业发布" },
     { href: `${basePath}/submissions`, label: "日常提交" },
     { href: `${basePath}/exam-submissions`, label: "考试提交" },
   ];

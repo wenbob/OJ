@@ -7,6 +7,7 @@ import {
   type LearningWindow,
 } from "./learningAnalytics";
 import { getAssignmentProgress } from "./learningAssignments";
+import { sortStudentsByDirectory } from "./studentDirectory";
 
 const programmingProblemSelect = {
   archivedAt: true,
@@ -64,7 +65,7 @@ export async function getTeacherLearningDashboard(window: LearningWindow) {
     assignmentsByStudent.set(assignment.studentId, list);
   }
 
-  const rows = students.map((student) => {
+  const rows = sortStudentsByDirectory(students).map((student) => {
     const studentAssignments = assignmentsByStudent.get(student.id) ?? [];
     const activeIncompleteAssignments = studentAssignments.filter(
       (assignment) => !getAssignmentProgress(assignment.problems).completed,

@@ -1,0 +1,32 @@
+export const STUDENT_DIRECTORY_INITIALS = [
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+  "G",
+  "H",
+  "I",
+  "J",
+  "K",
+  "L",
+  "M",
+  "N",
+  "O",
+  "P",
+  "Q",
+  "R",
+  "S",
+  "T",
+  "U",
+  "V",
+  "W",
+  "X",
+  "Y",
+  "Z",
+  "#",
+] as const;
+
+export type StudentDirectoryInitial =
+  (typeof STUDENT_DIRECTORY_INITIALS)[number];

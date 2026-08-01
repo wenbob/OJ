@@ -1,6 +1,6 @@
 // Shared server page for administrator and teacher shells.
 import Link from "next/link";
-import { ArrowRight, BookOpenCheck, Clock3, Users } from "lucide-react";
+import { BookOpenCheck, Clock3, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { isLearningWindow, type LearningWindow } from "@/lib/learningAnalytics";
 import { getTeacherLearningDashboard } from "@/lib/teacherLearning";
@@ -11,6 +11,7 @@ import {
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
+import { StudentLearningDirectory } from "./student-learning-directory";
 
 type PageProps = {
   searchParams: Promise<{ window?: string | string[] }>;
@@ -62,53 +63,28 @@ export async function StaffLearningPage({
             暂无学生账号。
           </div>
         ) : (
-          <div className="divide-y divide-ink-950/10">
-            {dashboard.rows.map((row) => (
-              <Link
-                className="arena-link-card grid gap-4 p-5 md:grid-cols-[1.15fr_1fr_1fr_auto] md:items-center"
-                href={`${basePath}/learning/${row.student.id}?window=${window}`}
-                key={row.student.id}
-              >
-                <div>
-                  <p className="text-lg font-black text-ink-950">{row.student.username}</p>
-                  <p className="mt-1 text-xs font-bold text-ink-600">
-                    {row.analytics.summary.lastTrainingAt
-                      ? `最后训练 ${formatDate(row.analytics.summary.lastTrainingAt)}`
-                      : "尚无编程提交"}
-                  </p>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <MiniStat label="提交" value={row.analytics.summary.submissionCount} />
-                  <MiniStat label="唯一 AC" value={row.analytics.summary.uniqueAcceptedInWindow} />
-                  <MiniStat label="待攻克" value={row.analytics.summary.pendingProblemCount} />
-                </div>
-                <div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {!row.analytics.hasLearningData ? (
-                      <Tag label="尚未形成学情" tone="muted" />
-                    ) : row.analytics.issueLabels.length ? (
-                      row.analytics.issueLabels.slice(0, 2).map((label) => (
-                        <Tag key={label} label={label} tone="warn" />
-                      ))
-                    ) : (
-                      <Tag label="训练状态稳定" tone="good" />
-                    )}
-                  </div>
-                  <p className="mt-2 text-xs font-bold text-ink-600">
-                    {row.analytics.categories[0]
-                      ? `最薄弱：${row.analytics.categories[0].category}`
-                      : "暂无薄弱分类"}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between gap-4 md:justify-end">
-                  <span className="text-xs font-bold text-ink-600">
-                    专项 {row.assignmentCompletedCount}/{row.assignmentProblemCount}
-                  </span>
-                  <ArrowRight className="text-clay" size={18} />
-                </div>
-              </Link>
-            ))}
-          </div>
+          <StudentLearningDirectory
+            basePath={basePath}
+            key={window}
+            rows={dashboard.rows.map((row) => ({
+              assignmentCompletedCount: row.assignmentCompletedCount,
+              assignmentProblemCount: row.assignmentProblemCount,
+              directoryInitial: row.student.directoryInitial,
+              directorySortKey: row.student.directorySortKey,
+              hasLearningData: row.analytics.hasLearningData,
+              issueLabels: row.analytics.issueLabels,
+              lastTrainingAt:
+                row.analytics.summary.lastTrainingAt?.toISOString() ?? null,
+              pendingProblemCount: row.analytics.summary.pendingProblemCount,
+              submissionCount: row.analytics.summary.submissionCount,
+              topCategory: row.analytics.categories[0]?.category ?? null,
+              uniqueAcceptedInWindow:
+                row.analytics.summary.uniqueAcceptedInWindow,
+              userId: row.student.id,
+              username: row.student.username,
+            }))}
+            window={window}
+          />
         )}
       </section>
     </AppShell>
@@ -150,17 +126,4 @@ function OverviewStat({ icon, label, value }: { icon: React.ReactNode; label: st
       <p className="data-number mt-2 text-3xl font-black text-ink-950">{value}</p>
     </div>
   );
-}
-
-function MiniStat({ label, value }: { label: string; value: number }) {
-  return <span className="bg-ink-950/[0.04] px-2 py-2"><b className="data-number block text-lg text-ink-950">{value}</b><span className="text-[11px] font-bold text-ink-600">{label}</span></span>;
-}
-
-function Tag({ label, tone }: { label: string; tone: "good" | "muted" | "warn" }) {
-  const style = tone === "good" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : tone === "warn" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-ink-950/10 bg-stone-100 text-ink-600";
-  return <span className={`border px-2 py-1 text-[11px] font-black ${style}`}>{label}</span>;
-}
-
-function formatDate(value: Date) {
-  return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(value);
 }
