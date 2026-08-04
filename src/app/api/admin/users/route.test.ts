@@ -187,6 +187,7 @@ describe("admin users API custom title handling", () => {
             create: {
               aiAccessEnabled: false,
               customTitle: "算法新星",
+              objectiveAiAccessEnabled: false,
             },
           },
           username: "alice",
@@ -219,7 +220,11 @@ describe("admin users API custom title handling", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           studentProfile: {
-            create: { aiAccessEnabled: true, customTitle: null },
+            create: {
+              aiAccessEnabled: true,
+              customTitle: null,
+              objectiveAiAccessEnabled: false,
+            },
           },
         }),
       }),
@@ -261,9 +266,14 @@ describe("admin users API custom title handling", () => {
       create: {
         aiAccessEnabled: false,
         customTitle: "算法新星",
+        objectiveAiAccessEnabled: false,
         userId: 2,
       },
-      update: { aiAccessEnabled: false, customTitle: "算法新星" },
+      update: {
+        aiAccessEnabled: false,
+        customTitle: "算法新星",
+        objectiveAiAccessEnabled: false,
+      },
       where: { userId: 2 },
     });
   });
@@ -285,8 +295,17 @@ describe("admin users API custom title handling", () => {
 
     expect(response.status).toBe(200);
     expect(tx.studentProfile.upsert).toHaveBeenCalledWith({
-      create: { aiAccessEnabled: true, customTitle: null, userId: 2 },
-      update: { aiAccessEnabled: true, customTitle: null },
+      create: {
+        aiAccessEnabled: true,
+        customTitle: null,
+        objectiveAiAccessEnabled: false,
+        userId: 2,
+      },
+      update: {
+        aiAccessEnabled: true,
+        customTitle: null,
+        objectiveAiAccessEnabled: false,
+      },
       where: { userId: 2 },
     });
     expect(tx.studentProfile.deleteMany).not.toHaveBeenCalled();
@@ -386,7 +405,11 @@ describe("admin users API custom title handling", () => {
           passwordHash: "hashed-password",
           role: "student",
           studentProfile: {
-            create: { aiAccessEnabled: true, customTitle: null },
+            create: {
+              aiAccessEnabled: true,
+              customTitle: null,
+              objectiveAiAccessEnabled: false,
+            },
           },
           username: "bob",
         }),
@@ -568,6 +591,7 @@ describe("admin users API custom title handling", () => {
       create: {
         aiAccessEnabled: true,
         customTitle: null,
+        objectiveAiAccessEnabled: false,
         userId: 2,
       },
       update: { aiAccessEnabled: true },

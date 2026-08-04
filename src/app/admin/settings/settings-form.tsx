@@ -14,8 +14,14 @@ import type {
 } from "@/lib/aiProvider";
 import { MAX_BROWSER_ICON_BYTES, resolveBrowserTitle } from "@/lib/browserIdentity";
 import {
+  AI_CUSTOM_PROMPT_MAX_CHARS,
   AI_COOLDOWN_MAX_SECONDS,
   AI_COOLDOWN_MIN_SECONDS,
+  defaultAiObjectiveExplanationPrompt,
+  defaultAiProgrammingCodeReviewPrompt,
+  defaultAiProgrammingNextStepPrompt,
+  defaultAiProgrammingOverviewPrompt,
+  defaultAiProgrammingQuestionPrompt,
   isValidAiCooldownSeconds,
   type SystemSettings,
 } from "@/lib/settings";
@@ -62,6 +68,51 @@ const aiProfileSettingKeys = {
     | "thinkingMode",
     keyof SystemSettings
   >
+>;
+
+const aiPromptDefinitions = {
+  programming: [
+    {
+      defaultValue: defaultAiProgrammingOverviewPrompt,
+      description: "用于“理解题目”，控制题意分析、步骤说明和提醒方式。",
+      key: "aiProgrammingOverviewPrompt",
+      label: "理解题目",
+    },
+    {
+      defaultValue: defaultAiProgrammingNextStepPrompt,
+      description: "用于“下一步提示”，控制对学生当前进度的引导方式。",
+      key: "aiProgrammingNextStepPrompt",
+      label: "下一步提示",
+    },
+    {
+      defaultValue: defaultAiProgrammingCodeReviewPrompt,
+      description: "用于“检查代码”，控制问题定位和解释方式。",
+      key: "aiProgrammingCodeReviewPrompt",
+      label: "检查代码",
+    },
+    {
+      defaultValue: defaultAiProgrammingQuestionPrompt,
+      description: "用于学生或校题人员自由提问时的回答方式。",
+      key: "aiProgrammingQuestionPrompt",
+      label: "自由提问",
+    },
+  ],
+  objective: [
+    {
+      defaultValue: defaultAiObjectiveExplanationPrompt,
+      description: "控制选择题、判断题的整体思路、逐项分析和知识点表达方式。",
+      key: "aiObjectiveExplanationPrompt",
+      label: "题目解析",
+    },
+  ],
+} as const satisfies Record<
+  AiModelProfile,
+  ReadonlyArray<{
+    defaultValue: string;
+    description: string;
+    key: keyof SystemSettings;
+    label: string;
+  }>
 >;
 
 export function SettingsForm({
@@ -147,10 +198,31 @@ export function SettingsForm({
         return;
       }
     }
+    for (const definition of [
+      ...aiPromptDefinitions.programming,
+      ...aiPromptDefinitions.objective,
+    ]) {
+      const value = settings[definition.key];
+      if (!value.trim()) {
+        setError(`${definition.label}提示词不能为空`);
+        return;
+      }
+      if (value.length > AI_CUSTOM_PROMPT_MAX_CHARS) {
+        setError(
+          `${definition.label}提示词不能超过 ${AI_CUSTOM_PROMPT_MAX_CHARS} 个字`,
+        );
+        return;
+      }
+      if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) {
+        setError(`${definition.label}提示词不能包含非法控制字符`);
+        return;
+      }
+    }
     for (const [label, value] of [
       ["学生编程助手", settings.aiProgrammingStudentCooldownSeconds],
       ["老师学情摘要", settings.aiProgrammingTeacherCooldownSeconds],
       ["管理员学情摘要", settings.aiProgrammingAdminCooldownSeconds],
+      ["学生选择判断解析", settings.aiObjectiveStudentCooldownSeconds],
       ["老师选择判断解析", settings.aiObjectiveTeacherCooldownSeconds],
       ["管理员选择判断解析", settings.aiObjectiveAdminCooldownSeconds],
     ] as const) {
@@ -189,7 +261,7 @@ export function SettingsForm({
         }));
       }
       notifyBrowserIdentityUpdated(savedSettings);
-      setMessage("设置已保存，两类 AI 模型与角色触发间隔已经生效");
+      setMessage("设置已保存，两类 AI 模型、提示词与角色触发间隔已经生效");
     } catch {
       setError("保存设置失败，请检查本地服务");
     } finally {
@@ -319,7 +391,7 @@ export function SettingsForm({
         <div className="mt-5 grid gap-5 2xl:grid-cols-2">
           <AiProviderProfileEditor
             label="编程题 AI 模型"
-            description="用于学生编程助手，以及老师和管理员的学情 AI 摘要。"
+            description="用于学生编程助手、后台编程校题助手，以及老师和管理员的学情 AI 摘要。"
             onError={setError}
             pending={pending}
             profile="programming"
@@ -359,6 +431,7 @@ export function SettingsForm({
               </thead>
               <tbody className="divide-y divide-ink-950/10 bg-white/45">
                 <CooldownRow
+                  objectiveKey="aiObjectiveStudentCooldownSeconds"
                   programmingKey="aiProgrammingStudentCooldownSeconds"
                   roleLabel="学生"
                   settings={settings}
@@ -382,7 +455,7 @@ export function SettingsForm({
             </table>
           </div>
           <p className="mt-2 text-xs font-semibold text-ink-500">
-            学生选择判断题不开放 AI；编程题的老师和管理员间隔用于学情摘要。
+            客观题间隔同时用于首次生成和主动刷新；有效共享缓存的普通读取不计时。
           </p>
         </div>
 
@@ -414,7 +487,39 @@ export function SettingsForm({
             选择判断题开启 AI 解析
           </label>
           <p className="mt-2 text-sm font-semibold text-ink-600">
-            仅供管理员和老师校题使用。解析结果共享，学生端不会显示，也不计入学生 AI 使用统计。
+            解析结果由管理员、老师和获授权学生共享；任一角色重新生成成功后都会更新共享版本。
+          </p>
+          <label className="mt-5 inline-flex items-center gap-3 text-sm font-bold text-ink-800">
+            <input
+              checked={settings.aiStudentObjectiveExplanationEnabled === "true"}
+              type="checkbox"
+              onChange={(event) =>
+                update(
+                  "aiStudentObjectiveExplanationEnabled",
+                  event.target.checked ? "true" : "false",
+                )
+              }
+            />
+            学生端开启选择判断 AI 解析
+          </label>
+          <p className="mt-2 text-sm font-semibold text-ink-600">
+            还需学生个人权限开启且当前题已完成至少一次日常提交；正式考试中始终不可用。
+          </p>
+          <label className="mt-5 inline-flex items-center gap-3 text-sm font-bold text-ink-800">
+            <input
+              checked={settings.aiStaffProgrammingAssistEnabled === "true"}
+              type="checkbox"
+              onChange={(event) =>
+                update(
+                  "aiStaffProgrammingAssistEnabled",
+                  event.target.checked ? "true" : "false",
+                )
+              }
+            />
+            后台开启编程题 AI 助手
+          </label>
+          <p className="mt-2 text-sm font-semibold text-ink-600">
+            供管理员和老师校题使用，不受学生日常或考试 AI 开关影响。
           </p>
           <label className="mt-5 grid max-w-md gap-2 text-sm font-bold text-ink-800">
             AI 对话记录保留时间
@@ -733,7 +838,87 @@ function AiProviderProfileEditor({
           </p>
         </div>
       ) : null}
+
+      <div className="mt-5 border-t border-ink-950/10 pt-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h4 className="font-black text-ink-950">自定义教学提示词</h4>
+            <p className="mt-1 text-xs font-semibold leading-5 text-ink-600">
+              只调整教学表达和讲解要求。答案、输出格式、隐藏测试点和代码保护规则由服务端固定。
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3">
+          {aiPromptDefinitions[profile].map((definition) => (
+            <AiPromptEditor
+              definition={definition}
+              disabled={pending}
+              key={definition.key}
+              update={update}
+              value={settings[definition.key]}
+            />
+          ))}
+        </div>
+      </div>
     </section>
+  );
+}
+
+function AiPromptEditor({
+  definition,
+  disabled,
+  update,
+  value,
+}: {
+  definition: {
+    defaultValue: string;
+    description: string;
+    key: keyof SystemSettings;
+    label: string;
+  };
+  disabled: boolean;
+  update: (key: keyof SystemSettings, value: string) => void;
+  value: string;
+}) {
+  return (
+    <details className="border border-ink-950/10 bg-white/55 p-3">
+      <summary className="cursor-pointer select-none font-black text-ink-900">
+        {definition.label}
+      </summary>
+      <p className="mt-3 text-xs font-semibold leading-5 text-ink-600">
+        {definition.description}
+      </p>
+      <textarea
+        className="field mt-3 min-h-48 resize-y font-mono text-sm leading-6"
+        disabled={disabled}
+        maxLength={AI_CUSTOM_PROMPT_MAX_CHARS}
+        onChange={(event) => update(definition.key, event.target.value)}
+        value={value}
+      />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <span
+          className={`text-xs font-bold ${
+            value.length >= AI_CUSTOM_PROMPT_MAX_CHARS
+              ? "text-rose-700"
+              : "text-ink-500"
+          }`}
+        >
+          {value.length}/{AI_CUSTOM_PROMPT_MAX_CHARS}
+        </span>
+        <button
+          className="btn btn-secondary"
+          disabled={disabled || value === definition.defaultValue}
+          onClick={() => update(definition.key, definition.defaultValue)}
+          type="button"
+        >
+          <RotateCcw size={15} />
+          恢复默认
+        </button>
+      </div>
+      <p className="mt-2 text-[11px] font-semibold text-amber-800">
+        恢复默认或修改内容后，还需要点击页面底部“保存设置”才会生效。
+      </p>
+    </details>
   );
 }
 

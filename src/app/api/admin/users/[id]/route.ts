@@ -27,6 +27,10 @@ function readAiAccessEnabled(value: unknown) {
   return value === true || value === "true";
 }
 
+function readObjectiveAiAccessEnabled(value: unknown) {
+  return value === true || value === "true";
+}
+
 export async function PUT(request: NextRequest, context: RouteContext) {
   const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
@@ -60,6 +64,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const requestedRole = readRole(record.role);
   const role = requestedRole;
   const aiAccessEnabled = readAiAccessEnabled(record.aiAccessEnabled);
+  const objectiveAiAccessEnabled = readObjectiveAiAccessEnabled(
+    record.objectiveAiAccessEnabled,
+  );
   const customTitle = normalizeCustomTitle(record.customTitle);
   const customTitleError = validateCustomTitle(customTitle);
 
@@ -108,11 +115,20 @@ export async function PUT(request: NextRequest, context: RouteContext) {
             data: { createdById: null },
           });
         }
-        if (customTitle || aiAccessEnabled) {
+        if (customTitle || aiAccessEnabled || objectiveAiAccessEnabled) {
           await tx.studentProfile.upsert({
             where: { userId },
-            create: { aiAccessEnabled, customTitle, userId },
-            update: { aiAccessEnabled, customTitle },
+            create: {
+              aiAccessEnabled,
+              customTitle,
+              objectiveAiAccessEnabled,
+              userId,
+            },
+            update: {
+              aiAccessEnabled,
+              customTitle,
+              objectiveAiAccessEnabled,
+            },
           });
         } else {
           await tx.studentProfile.deleteMany({ where: { userId } });
@@ -129,7 +145,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           role: true,
           createdAt: true,
           studentProfile: {
-            select: { aiAccessEnabled: true, customTitle: true },
+            select: {
+              aiAccessEnabled: true,
+              customTitle: true,
+              objectiveAiAccessEnabled: true,
+            },
           },
         },
       });
@@ -162,9 +182,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const record =
     typeof body === "object" && body ? (body as Record<string, unknown>) : {};
+  const keys = Object.keys(record);
+  const allowedKeys = new Set([
+    "aiAccessEnabled",
+    "objectiveAiAccessEnabled",
+  ]);
   if (
-    Object.keys(record).length !== 1 ||
-    typeof record.aiAccessEnabled !== "boolean"
+    keys.length === 0 ||
+    keys.length > 2 ||
+    keys.some((key) => !allowedKeys.has(key)) ||
+    keys.some((key) => typeof record[key] !== "boolean")
   ) {
     return NextResponse.json(
       { error: "只能提交布尔类型的 AI 权限" },
@@ -186,11 +213,28 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       await tx.studentProfile.upsert({
         where: { userId },
         create: {
-          aiAccessEnabled: record.aiAccessEnabled as boolean,
+          aiAccessEnabled:
+            typeof record.aiAccessEnabled === "boolean"
+              ? record.aiAccessEnabled
+              : false,
           customTitle: null,
+          objectiveAiAccessEnabled:
+            typeof record.objectiveAiAccessEnabled === "boolean"
+              ? record.objectiveAiAccessEnabled
+              : false,
           userId,
         },
-        update: { aiAccessEnabled: record.aiAccessEnabled as boolean },
+        update: {
+          ...(typeof record.aiAccessEnabled === "boolean"
+            ? { aiAccessEnabled: record.aiAccessEnabled }
+            : {}),
+          ...(typeof record.objectiveAiAccessEnabled === "boolean"
+            ? {
+                objectiveAiAccessEnabled:
+                  record.objectiveAiAccessEnabled,
+              }
+            : {}),
+        },
       });
 
       return tx.user.findUniqueOrThrow({
@@ -201,7 +245,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
           role: true,
           createdAt: true,
           studentProfile: {
-            select: { aiAccessEnabled: true, customTitle: true },
+            select: {
+              aiAccessEnabled: true,
+              customTitle: true,
+              objectiveAiAccessEnabled: true,
+            },
           },
         },
       });

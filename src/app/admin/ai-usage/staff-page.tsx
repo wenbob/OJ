@@ -102,7 +102,7 @@ export async function StaffAiUsagePage({
                 {dashboard.rows.map((row) => (
                   <tr className="hover:bg-steel/[0.04]" key={row.student.id}>
                     <td className="px-5 py-4 font-black text-ink-950">{row.student.username}</td>
-                    <td className="px-3 py-4"><StatusPill good={row.student.aiAccessEnabled} label={row.student.aiAccessEnabled ? "已开通" : "未开通"} /></td>
+                    <td className="px-3 py-4"><div className="grid gap-1"><StatusPill good={row.student.aiAccessEnabled} label={`编程 ${row.student.aiAccessEnabled ? "开" : "关"}`} /><StatusPill good={row.student.objectiveAiAccessEnabled} label={`选择判断 ${row.student.objectiveAiAccessEnabled ? "开" : "关"}`} /></div></td>
                     <td className="data-number px-3 py-4 font-black">{row.usageCount}</td>
                     <td className="px-3 py-4 font-bold text-ink-700">{row.successCount} / {row.cachedCount} / {row.failedCount}</td>
                     <td className="data-number px-3 py-4 font-bold">{row.providerCallCount}</td>
@@ -128,7 +128,7 @@ function FilterPanel({ filters }: { filters: ReturnType<typeof readAiUsageFilter
       <input name="window" type="hidden" value={filters.window} />
       <Field label="学生名"><input className="field" defaultValue={filters.query} name="q" placeholder="留空查看全部" /></Field>
       <Field label="范围"><select className="field" defaultValue={filters.scope} name="scope"><option value="">全部</option><option value="practice">日常练习</option><option value="exam">考试</option></select></Field>
-      <Field label="功能"><select className="field" defaultValue={filters.mode} name="mode"><option value="">全部</option><option value="overview">理解题目</option><option value="next_step">下一步提示</option><option value="code_review">检查代码</option><option value="question">自由提问</option></select></Field>
+      <Field label="功能"><select className="field" defaultValue={filters.mode} name="mode"><option value="">全部</option><option value="overview">理解题目</option><option value="next_step">下一步提示</option><option value="code_review">检查代码</option><option value="question">自由提问</option><option value="objective_explanation">选择判断解析</option></select></Field>
       <Field label="状态"><select className="field" defaultValue={filters.status} name="status"><option value="">全部</option><option value="success">成功</option><option value="cached">缓存命中</option><option value="failed">失败</option><option value="interrupted">请求中断</option><option value="pending">处理中</option></select></Field>
       {filters.window === "custom" ? <><Field label="开始日期"><input className="field" defaultValue={filters.startDate} name="start" type="date" /></Field><Field label="结束日期"><input className="field" defaultValue={filters.endDate} name="end" type="date" /></Field></> : null}
       <button className="btn btn-primary self-end justify-center" type="submit">应用筛选</button>

@@ -18,6 +18,7 @@ import {
 } from "@/components/StaffObjectiveAnswerVisibility";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatRuntime } from "@/lib/format";
+import { getAiCooldownSeconds } from "@/lib/aiRuntimeSettings";
 import { getDisplaySamples } from "@/lib/problemSamples";
 import {
   getPublicObjectiveItems,
@@ -59,6 +60,8 @@ export async function StaffPracticeProblemPage({
     latestAcceptedSubmissionIds,
     defaultCodeTemplate,
     objectiveAiExplanationSetting,
+    staffProgrammingAssistSetting,
+    staffProgrammingCooldownSeconds,
   ] = await Promise.all([
     prisma.problem.findUnique({
       where: { id: problemId },
@@ -79,6 +82,8 @@ export async function StaffPracticeProblemPage({
     }),
     getDefaultCppTemplate(),
     getSetting("aiObjectiveExplanationEnabled"),
+    getSetting("aiStaffProgrammingAssistEnabled"),
+    getAiCooldownSeconds("programming", role),
   ]);
 
   if (!problem || problem.archivedAt) notFound();
@@ -93,6 +98,9 @@ export async function StaffPracticeProblemPage({
   const objectiveAiEnabled =
     problemType === "objective" &&
     boolSetting(objectiveAiExplanationSetting);
+  const staffProgrammingAiEnabled =
+    problemType === "programming" &&
+    boolSetting(staffProgrammingAssistSetting);
   const samples = getDisplaySamples({
     sampleInput: problem.sampleInput,
     sampleOutput: problem.sampleOutput,
@@ -109,7 +117,7 @@ export async function StaffPracticeProblemPage({
         key={`staff-objective-answers-${problem.id}`}
       >
         <ObjectiveAiExplanationProvider
-          canForceRegenerate={role === "admin"}
+          canForceRegenerate
           problemId={problem.id}
         >
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
@@ -219,6 +227,10 @@ export async function StaffPracticeProblemPage({
                 </section>
               ) : null}
               <ProblemSubmitForm
+                aiCooldownSeconds={staffProgrammingCooldownSeconds ?? 30}
+                aiEnabled={staffProgrammingAiEnabled}
+                aiEndpoint={`/api/admin/problems/${problem.id}/programming-assist`}
+                aiStudentId={user.id}
                 defaultCodeTemplate={defaultCodeTemplate}
                 detailHrefBase={`${basePath}/submissions`}
                 problemType={problemType}

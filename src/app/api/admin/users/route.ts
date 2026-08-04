@@ -12,6 +12,7 @@ import {
   readJsonWithLimit,
 } from "@/lib/requestLimits";
 import { requireStaffApiUser } from "@/lib/staffAccess";
+import { boolSetting, getSetting } from "@/lib/settings";
 import { TEACHER_STUDENT_INITIAL_PASSWORD } from "@/lib/userManagementPolicy";
 
 function readRole(value: unknown) {
@@ -25,11 +26,15 @@ function readAiAccessEnabled(value: unknown) {
   return value === true || value === "true";
 }
 
+function readObjectiveAiAccessEnabled(value: unknown) {
+  return value === true || value === "true";
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
-  const [users, rankings] = await Promise.all([
+  const [users, rankings, objectiveMaster, objectiveStudent] = await Promise.all([
     prisma.user.findMany({
       where: auth.user.role === "teacher" ? { role: "student" } : undefined,
       select: {
@@ -38,22 +43,32 @@ export async function GET(request: NextRequest) {
         role: true,
         createdAt: true,
         studentProfile: {
-          select: { aiAccessEnabled: true, customTitle: true },
+          select: {
+            aiAccessEnabled: true,
+            customTitle: true,
+            objectiveAiAccessEnabled: true,
+          },
         },
         _count: { select: { submissions: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
     getStudentRankings(),
+    getSetting("aiObjectiveExplanationEnabled"),
+    getSetting("aiStudentObjectiveExplanationEnabled"),
   ]);
   const rankingByUserId = new Map(rankings.map((item) => [item.userId, item]));
 
   return NextResponse.json({
+    studentObjectiveAiGloballyEnabled:
+      boolSetting(objectiveMaster) && boolSetting(objectiveStudent),
     users: users.map((user) => {
       const customTitle = user.studentProfile?.customTitle ?? "";
       return {
         ...user,
         aiAccessEnabled: user.studentProfile?.aiAccessEnabled ?? false,
+        objectiveAiAccessEnabled:
+          user.studentProfile?.objectiveAiAccessEnabled ?? false,
         customTitle,
         ranking: rankingByUserId.get(user.id) ?? null,
       };
@@ -80,7 +95,10 @@ export async function POST(request: NextRequest) {
   if (
     teacherRequest &&
     Object.keys(record).some(
-      (key) => key !== "username" && key !== "aiAccessEnabled",
+      (key) =>
+        key !== "username" &&
+        key !== "aiAccessEnabled" &&
+        key !== "objectiveAiAccessEnabled",
     )
   ) {
     return NextResponse.json(
@@ -106,10 +124,23 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+  if (
+    teacherRequest &&
+    record.objectiveAiAccessEnabled !== undefined &&
+    typeof record.objectiveAiAccessEnabled !== "boolean"
+  ) {
+    return NextResponse.json(
+      { error: "选择判断 AI 权限必须是布尔值" },
+      { status: 400 },
+    );
+  }
   const role = teacherRequest ? "student" : requestedRole;
   const aiAccessEnabled = teacherRequest
     ? record.aiAccessEnabled !== false
     : readAiAccessEnabled(record.aiAccessEnabled);
+  const objectiveAiAccessEnabled = teacherRequest
+    ? record.objectiveAiAccessEnabled === true
+    : readObjectiveAiAccessEnabled(record.objectiveAiAccessEnabled);
   const customTitle = teacherRequest
     ? null
     : normalizeCustomTitle(record.customTitle);
@@ -135,10 +166,15 @@ export async function POST(request: NextRequest) {
         username,
         passwordHash: await hashPassword(password),
         role,
-        ...(role === "student" && (customTitle || aiAccessEnabled)
+        ...(role === "student" &&
+        (customTitle || aiAccessEnabled || objectiveAiAccessEnabled)
           ? {
               studentProfile: {
-                create: { aiAccessEnabled, customTitle },
+                create: {
+                  aiAccessEnabled,
+                  customTitle,
+                  objectiveAiAccessEnabled,
+                },
               },
             }
           : {}),
@@ -149,7 +185,11 @@ export async function POST(request: NextRequest) {
         role: true,
         createdAt: true,
         studentProfile: {
-          select: { aiAccessEnabled: true, customTitle: true },
+          select: {
+            aiAccessEnabled: true,
+            customTitle: true,
+            objectiveAiAccessEnabled: true,
+          },
         },
       },
     });

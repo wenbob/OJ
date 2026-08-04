@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MAX_BROWSER_ICON_BYTES } from "@/lib/browserIdentity";
 import { prisma } from "@/lib/prisma";
 import {
+  AI_CUSTOM_PROMPT_MAX_CHARS,
   defaultSystemSettings,
   getPublicSettings,
   normalizeSystemSettingsPayload,
@@ -66,6 +67,8 @@ describe("browser identity system settings", () => {
 
   it("defaults the independent objective explanation switch to off", () => {
     expect(defaultSystemSettings.aiObjectiveExplanationEnabled).toBe("false");
+    expect(defaultSystemSettings.aiStudentObjectiveExplanationEnabled).toBe("false");
+    expect(defaultSystemSettings.aiStaffProgrammingAssistEnabled).toBe("false");
     expect(
       normalizeSystemSettingsPayload({
         ...defaultSystemSettings,
@@ -140,6 +143,63 @@ describe("browser identity system settings", () => {
     });
   });
 
+  it("keeps default AI prompts when an older settings payload omits them", () => {
+    const settings = normalizeSystemSettingsPayload({
+      ...defaultSystemSettings,
+      aiProgrammingOverviewPrompt: undefined,
+      aiProgrammingNextStepPrompt: undefined,
+      aiProgrammingCodeReviewPrompt: undefined,
+      aiProgrammingQuestionPrompt: undefined,
+      aiObjectiveExplanationPrompt: undefined,
+    });
+
+    expect(settings.aiProgrammingOverviewPrompt).toBe(
+      defaultSystemSettings.aiProgrammingOverviewPrompt,
+    );
+    expect(settings.aiProgrammingNextStepPrompt).toBe(
+      defaultSystemSettings.aiProgrammingNextStepPrompt,
+    );
+    expect(settings.aiProgrammingCodeReviewPrompt).toBe(
+      defaultSystemSettings.aiProgrammingCodeReviewPrompt,
+    );
+    expect(settings.aiProgrammingQuestionPrompt).toBe(
+      defaultSystemSettings.aiProgrammingQuestionPrompt,
+    );
+    expect(settings.aiObjectiveExplanationPrompt).toBe(
+      defaultSystemSettings.aiObjectiveExplanationPrompt,
+    );
+  });
+
+  it("normalizes and validates administrator AI prompts", () => {
+    const normalized = normalizeSystemSettingsPayload({
+      ...defaultSystemSettings,
+      aiProgrammingOverviewPrompt: "  第一行\r\n第二行  ",
+    });
+    expect(normalized.aiProgrammingOverviewPrompt).toBe("第一行\n第二行");
+    expect(validateSystemSettings(normalized)).toBe("");
+
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiProgrammingQuestionPrompt: "   ",
+      }),
+    ).toContain("不能为空");
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiObjectiveExplanationPrompt: "题".repeat(
+          AI_CUSTOM_PROMPT_MAX_CHARS + 1,
+        ),
+      }),
+    ).toContain(String(AI_CUSTOM_PROMPT_MAX_CHARS));
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiProgrammingCodeReviewPrompt: "检查\u0000代码",
+      }),
+    ).toContain("控制字符");
+  });
+
   it("validates objective profile fields and role cooldown boundaries", () => {
     expect(
       validateSystemSettings({
@@ -149,6 +209,12 @@ describe("browser identity system settings", () => {
         aiObjectiveProvider: "custom",
       }),
     ).toContain("选择判断题");
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        aiObjectiveStudentCooldownSeconds: "4",
+      }),
+    ).toContain("学生选择判断解析");
     expect(
       validateSystemSettings({
         ...defaultSystemSettings,

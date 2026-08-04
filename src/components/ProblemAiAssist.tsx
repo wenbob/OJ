@@ -27,12 +27,14 @@ const AI_CHAT_MAX_QUESTION_CHARS = 300;
 
 export function ProblemAiAssist({
   code,
+  endpoint = "/api/ai/problem-assist",
   examId,
   initialCooldownSeconds,
   problemId,
   studentId,
 }: {
   code: string;
+  endpoint?: string;
   examId?: number;
   initialCooldownSeconds?: number;
   problemId: number;
@@ -133,7 +135,7 @@ export function ProblemAiAssist({
     const requestId = createAiChatClientId();
 
     try {
-      const response = await fetch("/api/ai/problem-assist", {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           Accept: "text/event-stream",

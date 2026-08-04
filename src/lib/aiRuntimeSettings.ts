@@ -24,6 +24,10 @@ const cooldownSettings = {
     },
   },
   objective: {
+    student: {
+      fallback: 30,
+      key: "aiObjectiveStudentCooldownSeconds",
+    },
     teacher: {
       fallback: 30,
       key: "aiObjectiveTeacherCooldownSeconds",

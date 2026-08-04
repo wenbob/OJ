@@ -1,25 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ObjectiveAiExplanationError } from "@/lib/objectiveAiExplanation";
 import {
-  createAiProviderFingerprint,
-  getEffectiveAiProviderConfig,
-} from "@/lib/aiProvider";
-import {
-  buildObjectiveExplanationPrompt,
-  createObjectiveExplanationSourceHash,
-  generateObjectiveAiExplanation,
-  ObjectiveAiExplanationError,
-  parseObjectiveExplanationCore,
-  serializeObjectiveExplanationCore,
-  toObjectiveAiExplanationPayload,
-} from "@/lib/objectiveAiExplanation";
+  findValidObjectiveExplanation,
+  generateAndStoreObjectiveExplanation,
+  ObjectiveExplanationWorkflowError,
+  prepareObjectiveExplanation,
+  type ObjectiveExplanationResult,
+} from "@/lib/objectiveAiExplanationWorkflow";
 import { reserveObjectiveAiExplanation } from "@/lib/objectiveAiExplanationRateLimit";
 import { getAiCooldownSeconds } from "@/lib/aiRuntimeSettings";
-import {
-  normalizeObjectiveAnswer,
-  parseObjectiveItems,
-  validateObjectiveItems,
-} from "@/lib/objectiveProblem";
-import { prisma } from "@/lib/prisma";
 import {
   PayloadTooLargeError,
   REQUEST_LIMITS,
@@ -39,33 +28,14 @@ function parseProblemId(value: string) {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-function explanationResponse({
-  cached,
+function explanationResponse(
+  result: ObjectiveExplanationResult,
   cooldownSeconds = 0,
-  core,
-  correctAnswer,
-  generatedAt,
-  itemIndex,
-  model,
-}: {
-  cached: boolean;
-  cooldownSeconds?: number;
-  core: NonNullable<ReturnType<typeof parseObjectiveExplanationCore>>;
-  correctAnswer: string;
-  generatedAt: Date;
-  itemIndex: number;
-  model: string | null;
-}) {
+) {
   return NextResponse.json({
-    cached,
+    cached: result.cached,
     cooldownSeconds,
-    explanation: toObjectiveAiExplanationPayload({
-      core,
-      correctAnswer,
-      generatedAt,
-      itemIndex,
-      model,
-    }),
+    explanation: result.payload,
   });
 }
 
@@ -111,12 +81,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "force 参数不合法" }, { status: 400 });
   }
   const force = record.force === true;
-  if (force && auth.user.role !== "admin") {
-    return NextResponse.json(
-      { error: "只有管理员可以重新生成共享解析" },
-      { status: 403 },
-    );
-  }
 
   const enabled = boolSetting(
     await getSetting("aiObjectiveExplanationEnabled"),
@@ -128,100 +92,32 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
-  const problem = await prisma.problem.findFirst({
-    where: {
-      archivedAt: null,
-      id: problemId,
-      problemType: "objective",
-    },
-    select: {
-      category: true,
-      description: true,
-      difficulty: true,
-      objectiveItems: true,
-      title: true,
-    },
-  });
-  if (!problem) {
-    return NextResponse.json(
-      { error: "选择判断题不存在或已经下架" },
-      { status: 404 },
-    );
-  }
-
-  const items = parseObjectiveItems(problem.objectiveItems);
-  if (validateObjectiveItems(items).length > 0) {
-    return NextResponse.json(
-      { error: "该题的选择判断数据不完整，请先修正题目" },
-      { status: 400 },
-    );
-  }
-  const item = items[itemIndex - 1];
-  if (!item) {
-    return NextResponse.json({ error: "小题序号超出范围" }, { status: 400 });
-  }
-
-  let aiConfig;
+  let prepared;
   try {
-    aiConfig = await getEffectiveAiProviderConfig("objective");
-  } catch {
+    prepared = await prepareObjectiveExplanation({ itemIndex, problemId });
+  } catch (error) {
+    if (error instanceof ObjectiveExplanationWorkflowError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json(
-      { error: "当前 AI 服务配置无效，请先检查系统设置" },
+      { error: "选择判断题解析准备失败" },
       { status: 503 },
     );
   }
-  const providerFingerprint = createAiProviderFingerprint(aiConfig);
-  const sourceHash = createObjectiveExplanationSourceHash({
-    ...problem,
-    item,
-    itemIndex,
-  });
-  const correctAnswer = normalizeObjectiveAnswer(item.answer);
-  const expectedLabels = item.options.map((option) => option.label);
-
-  const findValidCache = async () => {
-    const cached = await prisma.objectiveAiExplanation.findUnique({
-      where: { problemId_itemIndex: { itemIndex, problemId } },
-    });
-    if (
-      !cached ||
-      cached.sourceHash !== sourceHash ||
-      cached.providerFingerprint !== providerFingerprint ||
-      cached.correctAnswer !== correctAnswer
-    ) {
-      return null;
-    }
-    const core = parseObjectiveExplanationCore(
-      cached.explanationJson,
-      expectedLabels,
-    );
-    return core ? { cached, core } : null;
-  };
 
   if (!force) {
-    const existing = await findValidCache();
-    if (existing) {
-      return explanationResponse({
-        cached: true,
-        core: existing.core,
-        correctAnswer,
-        generatedAt: existing.cached.generatedAt,
-        itemIndex,
-        model: existing.cached.model,
-      });
-    }
+    const existing = await findValidObjectiveExplanation(prepared);
+    if (existing) return explanationResponse(existing);
   }
 
+  const role = auth.user.role === "admin" ? "admin" : "teacher";
   const cooldownSeconds =
-    (await getAiCooldownSeconds(
-      "objective",
-      auth.user.role === "admin" ? "admin" : "teacher",
-    )) ?? 30;
+    (await getAiCooldownSeconds("objective", role)) ?? 30;
   const reservation = reserveObjectiveAiExplanation({
+    accountId: auth.user.id,
     cooldownSeconds,
     itemIndex,
     problemId,
-    staffId: auth.user.id,
   });
   if (!reservation.allowed) {
     return NextResponse.json(
@@ -240,60 +136,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const prompt = buildObjectiveExplanationPrompt({
-      ...problem,
-      item,
-      itemIndex,
-    });
-    const generated = await generateObjectiveAiExplanation({
-      config: aiConfig,
-      item,
+    const generated = await generateAndStoreObjectiveExplanation({
+      generatedById: auth.user.id,
       onProviderRequest: reservation.markProviderRequest,
-      prompt,
+      prepared,
     });
-    const generatedAt = new Date();
-    const saved = await prisma.objectiveAiExplanation.upsert({
-      where: { problemId_itemIndex: { itemIndex, problemId } },
-      create: {
-        completionTokens: generated.completionTokens,
-        correctAnswer,
-        explanationJson: serializeObjectiveExplanationCore(generated.core),
-        generatedAt,
-        generatedById: auth.user.id,
-        itemIndex,
-        model: generated.model,
-        problemId,
-        promptTokens: generated.promptTokens,
-        providerFingerprint,
-        sourceHash,
-        totalTokens: generated.totalTokens,
-      },
-      update: {
-        completionTokens: generated.completionTokens,
-        correctAnswer,
-        explanationJson: serializeObjectiveExplanationCore(generated.core),
-        generatedAt,
-        generatedById: auth.user.id,
-        model: generated.model,
-        promptTokens: generated.promptTokens,
-        providerFingerprint,
-        sourceHash,
-        totalTokens: generated.totalTokens,
-      },
-    });
-    return explanationResponse({
-      cached: false,
-      cooldownSeconds,
-      core: generated.core,
-      correctAnswer,
-      generatedAt: saved.generatedAt,
-      itemIndex,
-      model: saved.model,
-    });
+    return explanationResponse(generated, cooldownSeconds);
   } catch (error) {
     const known =
       error instanceof ObjectiveAiExplanationError ? error : null;
-    const status = known?.kind === "input-too-large" ? 400 : 502;
     return NextResponse.json(
       {
         cooldownSeconds: reservation.providerRequestStarted()
@@ -301,7 +152,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
           : 0,
         error: known?.message ?? "AI 解析生成失败，请稍后重试",
       },
-      { status },
+      { status: known?.kind === "input-too-large" ? 400 : 502 },
     );
   } finally {
     reservation.release();

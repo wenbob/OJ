@@ -6,11 +6,16 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
 import { ProblemRichText } from "@/components/ProblemRichText";
-import type { ObjectiveAiExplanationPayload } from "@/lib/objectiveAiExplanation";
+import { createAiChatClientId } from "@/lib/aiChat";
+import {
+  isObjectiveAiExplanationPayload,
+  type ObjectiveAiExplanationPayload,
+} from "@/lib/objectiveAiExplanationPayload";
 
 type ExplanationState = {
   cached: boolean;
@@ -20,9 +25,11 @@ type ExplanationState = {
 type ObjectiveAiExplanationContextValue = {
   activeItemIndex: number | null;
   canForceRegenerate: boolean;
+  cooldownRemainingSeconds: number;
   error: string;
   explanations: Record<number, ExplanationState>;
   pendingItemIndex: number | null;
+  lockedMessage: string;
   requestExplanation: (itemIndex: number, force?: boolean) => Promise<void>;
 };
 
@@ -39,41 +46,20 @@ function useObjectiveAiExplanation() {
   return value;
 }
 
-function isExplanationPayload(
-  value: unknown,
-): value is ObjectiveAiExplanationPayload {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  return (
-    Number.isInteger(record.itemIndex) &&
-    typeof record.correctAnswer === "string" &&
-    typeof record.overview === "string" &&
-    typeof record.takeaway === "string" &&
-    typeof record.generatedAt === "string" &&
-    (typeof record.model === "string" || record.model === null) &&
-    Array.isArray(record.options) &&
-    record.options.every((option) => {
-      if (!option || typeof option !== "object" || Array.isArray(option)) {
-        return false;
-      }
-      const optionRecord = option as Record<string, unknown>;
-      return (
-        typeof optionRecord.label === "string" &&
-        typeof optionRecord.isCorrect === "boolean" &&
-        typeof optionRecord.explanation === "string"
-      );
-    })
-  );
-}
-
 export function ObjectiveAiExplanationProvider({
+  audited = false,
   canForceRegenerate,
   children,
+  lockedMessage = "",
   problemId,
+  requestPath,
 }: {
+  audited?: boolean;
   canForceRegenerate: boolean;
   children: ReactNode;
+  lockedMessage?: string;
   problemId: number;
+  requestPath?: string;
 }) {
   const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
   const [pendingItemIndex, setPendingItemIndex] = useState<number | null>(null);
@@ -81,29 +67,68 @@ export function ObjectiveAiExplanationProvider({
     Record<number, ExplanationState>
   >({});
   const [error, setError] = useState("");
+  const [conversationId] = useState(() => createAiChatClientId());
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const cooldownRemainingSeconds = Math.max(
+    0,
+    Math.ceil((cooldownUntil - now) / 1_000),
+  );
+
+  useEffect(() => {
+    if (cooldownUntil <= Date.now()) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [cooldownUntil]);
+
+  const startCooldown = useCallback((seconds: unknown) => {
+    const value = Number(seconds);
+    if (!Number.isInteger(value) || value <= 0) return;
+    const startedAt = Date.now();
+    setNow(startedAt);
+    setCooldownUntil(startedAt + value * 1_000);
+  }, []);
 
   const requestExplanation = useCallback(
     async (itemIndex: number, force = false) => {
       setActiveItemIndex(itemIndex);
       setError("");
+      if (lockedMessage) {
+        setError(lockedMessage);
+        return;
+      }
+      if (force && cooldownRemainingSeconds > 0) return;
       if (!force && explanations[itemIndex]) return;
 
       setPendingItemIndex(itemIndex);
       try {
         const response = await fetch(
-          `/api/admin/problems/${problemId}/objective-explanation`,
+          requestPath ??
+            `/api/admin/problems/${problemId}/objective-explanation`,
           {
-            body: JSON.stringify({ force, itemIndex }),
+            body: JSON.stringify({
+              ...(audited
+                ? {
+                    conversationId,
+                    requestId: createAiChatClientId(),
+                  }
+                : {}),
+              force,
+              itemIndex,
+            }),
             headers: { "Content-Type": "application/json" },
             method: "POST",
           },
         );
         const data = (await response.json().catch(() => ({}))) as {
           cached?: unknown;
+          cooldownSeconds?: unknown;
           error?: unknown;
           explanation?: unknown;
+          retryAfterSeconds?: unknown;
         };
         if (!response.ok) {
+          startCooldown(data.retryAfterSeconds ?? data.cooldownSeconds);
           throw new Error(
             typeof data.error === "string"
               ? data.error
@@ -111,7 +136,7 @@ export function ObjectiveAiExplanationProvider({
           );
         }
         const explanation = data.explanation;
-        if (!isExplanationPayload(explanation)) {
+        if (!isObjectiveAiExplanationPayload(explanation)) {
           throw new Error("AI 解析返回格式异常，请稍后重试");
         }
         setExplanations((current) => ({
@@ -121,6 +146,7 @@ export function ObjectiveAiExplanationProvider({
             explanation,
           },
         }));
+        startCooldown(data.cooldownSeconds);
       } catch (requestError) {
         setError(
           requestError instanceof Error
@@ -131,24 +157,37 @@ export function ObjectiveAiExplanationProvider({
         setPendingItemIndex(null);
       }
     },
-    [explanations, problemId],
+    [
+      audited,
+      conversationId,
+      cooldownRemainingSeconds,
+      explanations,
+      lockedMessage,
+      problemId,
+      requestPath,
+      startCooldown,
+    ],
   );
 
   const value = useMemo(
     () => ({
       activeItemIndex,
       canForceRegenerate,
+      cooldownRemainingSeconds,
       error,
       explanations,
       pendingItemIndex,
+      lockedMessage,
       requestExplanation,
     }),
     [
       activeItemIndex,
       canForceRegenerate,
+      cooldownRemainingSeconds,
       error,
       explanations,
       pendingItemIndex,
+      lockedMessage,
       requestExplanation,
     ],
   );
@@ -168,6 +207,7 @@ export function ObjectiveAiExplanationButton({
   const {
     activeItemIndex,
     explanations,
+    lockedMessage,
     pendingItemIndex,
     requestExplanation,
   } = useObjectiveAiExplanation();
@@ -183,16 +223,19 @@ export function ObjectiveAiExplanationButton({
           ? "border-steel bg-steel text-white"
           : "border-steel/30 bg-steel/5 text-steel hover:bg-steel/10"
       } disabled:cursor-wait disabled:opacity-60`}
-      disabled={pendingItemIndex !== null}
+      disabled={pendingItemIndex !== null || Boolean(lockedMessage)}
       onClick={() => requestExplanation(itemIndex)}
+      title={lockedMessage || undefined}
       type="button"
     >
       <Sparkles className={pending ? "animate-pulse" : ""} size={13} />
-      {pending
-        ? "解析中"
-        : active && hasExplanation
-          ? "正在查看"
-          : "AI 解析"}
+      {lockedMessage
+        ? "提交后解锁"
+        : pending
+          ? "解析中"
+          : active && hasExplanation
+            ? "正在查看"
+            : "AI 解析"}
     </button>
   );
 }
@@ -201,8 +244,10 @@ export function ObjectiveAiExplanationPanel() {
   const {
     activeItemIndex,
     canForceRegenerate,
+    cooldownRemainingSeconds,
     error,
     explanations,
+    lockedMessage,
     pendingItemIndex,
     requestExplanation,
   } = useObjectiveAiExplanation();
@@ -239,12 +284,16 @@ export function ObjectiveAiExplanationPanel() {
         {state && canForceRegenerate ? (
           <button
             className="btn btn-secondary px-3 py-2 text-xs"
-            disabled={pendingItemIndex !== null}
+            disabled={
+              pendingItemIndex !== null || cooldownRemainingSeconds > 0
+            }
             onClick={regenerate}
             type="button"
           >
             <RefreshCw className={pending ? "animate-spin" : ""} size={14} />
-            重新生成
+            {cooldownRemainingSeconds > 0
+              ? `${cooldownRemainingSeconds} 秒后可刷新`
+              : "重新生成"}
           </button>
         ) : null}
       </div>
@@ -258,10 +307,12 @@ export function ObjectiveAiExplanationPanel() {
           <div className="flex h-full min-h-56 flex-col items-center justify-center border border-dashed border-steel/30 bg-steel/5 p-6 text-center">
             <Sparkles className="text-steel" size={28} />
             <p className="mt-4 font-black text-ink-900">
-              点击任意小题旁的“AI 解析”
+              {lockedMessage || "点击任意小题旁的“AI 解析”"}
             </p>
             <p className="mt-2 max-w-xs text-sm font-semibold leading-6 text-ink-600">
-              解析会说明正确选项的依据，并逐项指出错误选项的问题。
+              {lockedMessage
+                ? "完成一次日常提交后，无论答对或答错，都可以逐题查看解析。"
+                : "解析会说明正确选项的依据，并逐项指出错误选项的问题。"}
             </p>
           </div>
         ) : pending && !state ? (

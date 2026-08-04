@@ -2,6 +2,7 @@
 import { AppShell } from "@/components/AppShell";
 import { prisma } from "@/lib/prisma";
 import { getStudentRankings } from "@/lib/ranking";
+import { boolSetting, getSetting } from "@/lib/settings";
 import {
   getStaffNav,
   getStaffTitle,
@@ -12,7 +13,7 @@ import { UserManager } from "./user-manager";
 
 export async function StaffUsersPage({ role }: { role: StaffRole }) {
   const user = await requireStaffPageUser(role);
-  const [users, rankings] = await Promise.all([
+  const [users, rankings, objectiveMaster, objectiveStudent] = await Promise.all([
     prisma.user.findMany({
       where: role === "teacher" ? { role: "student" } : undefined,
       select: {
@@ -21,13 +22,19 @@ export async function StaffUsersPage({ role }: { role: StaffRole }) {
         role: true,
         createdAt: true,
         studentProfile: {
-          select: { aiAccessEnabled: true, customTitle: true },
+          select: {
+            aiAccessEnabled: true,
+            customTitle: true,
+            objectiveAiAccessEnabled: true,
+          },
         },
         _count: { select: { submissions: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
     getStudentRankings(),
+    getSetting("aiObjectiveExplanationEnabled"),
+    getSetting("aiStudentObjectiveExplanationEnabled"),
   ]);
   const rankingByUserId = new Map(rankings.map((item) => [item.userId, item]));
 
@@ -40,10 +47,15 @@ export async function StaffUsersPage({ role }: { role: StaffRole }) {
           role: item.role,
           createdAt: item.createdAt.toISOString(),
           aiAccessEnabled: item.studentProfile?.aiAccessEnabled ?? false,
+          objectiveAiAccessEnabled:
+            item.studentProfile?.objectiveAiAccessEnabled ?? false,
           customTitle: item.studentProfile?.customTitle ?? "",
           ranking: rankingByUserId.get(item.id) ?? null,
           submissions: item._count.submissions,
         }))}
+        initialStudentObjectiveAiGloballyEnabled={
+          boolSetting(objectiveMaster) && boolSetting(objectiveStudent)
+        }
         viewerRole={role}
       />
     </AppShell>

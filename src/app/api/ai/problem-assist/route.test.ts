@@ -12,7 +12,9 @@ import {
   failAiUsageTurn,
   findExistingAiUsageTurn,
 } from "@/lib/aiUsageAudit";
+import { requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { handleProblemAssist } from "@/lib/problemAiAssistRoute";
 import { POST } from "./route";
 
 vi.mock("@/lib/auth", () => ({
@@ -75,6 +77,8 @@ vi.mock("@/lib/prisma", () => ({
           value:
             where.key === "aiProgrammingStudentCooldownSeconds"
               ? "7"
+              : where.key.endsWith("Prompt")
+                ? "使用管理员设置的教学语气。"
               : "true",
         }),
       ),
@@ -112,6 +116,30 @@ describe("POST /api/ai/problem-assist", () => {
     clearAiAssistAdviceCache();
     clearAiAssistCooldowns();
     vi.clearAllMocks();
+    vi.mocked(requireApiUser).mockResolvedValue({
+      user: { id: 1, username: "student", role: "student" },
+      response: null,
+    });
+  });
+
+  it("allows staff practice assistance without reading student permissions", async () => {
+    vi.mocked(requireApiUser).mockResolvedValueOnce({
+      user: { id: 12, username: "teacher", role: "teacher" },
+      response: null,
+    });
+
+    const response = await handleProblemAssist(
+      request({ problemId: 10, mode: "overview", code: "" }) as never,
+      { audience: "staff", requiredProblemId: 10 },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.advice).toContain("边界");
+    expect(prisma.studentProfile.findUnique).not.toHaveBeenCalled();
+    expect(createPendingAiUsageTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ studentId: 12 }),
+    );
   });
 
   it("returns AI advice when practice AI is enabled", async () => {
@@ -138,6 +166,9 @@ describe("POST /api/ai/problem-assist", () => {
     );
     expect(completeAiUsageTurn).toHaveBeenCalledWith(
       expect.objectContaining({ cached: false, providerCallCount: 1 }),
+    );
+    expect(vi.mocked(requestDeepSeekAdvice).mock.calls[0]?.[0]).toContain(
+      "使用管理员设置的教学语气",
     );
   });
 

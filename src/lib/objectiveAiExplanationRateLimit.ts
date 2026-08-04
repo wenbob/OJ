@@ -4,20 +4,20 @@ import {
 } from "@/lib/aiAssistRateLimit";
 
 export function reserveObjectiveAiExplanation({
+  accountId,
   cooldownSeconds,
   itemIndex,
   now,
   problemId,
-  staffId,
 }: {
+  accountId: number;
   cooldownSeconds: number;
   itemIndex: number;
   now?: number;
   problemId: number;
-  staffId: number;
 }) {
   return reserveAiProviderRequest({
-    accountId: staffId,
+    accountId,
     cooldownSeconds,
     now,
     profile: "objective",

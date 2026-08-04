@@ -50,7 +50,7 @@ export function ObjectiveProblemContent({
                 {staffAnswerVisibility && item.answer ? (
                   <StaffObjectiveAnswerBadge answer={item.answer} />
                 ) : null}
-                {showAiExplanationActions && item.answer ? (
+                {showAiExplanationActions ? (
                   <ObjectiveAiExplanationButton itemIndex={index + 1} />
                 ) : null}
                 <span className="border border-clay/20 bg-clay/10 px-2.5 py-1 text-xs font-black text-clay">

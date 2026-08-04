@@ -80,8 +80,10 @@ describe("AI usage audit", () => {
     const data = vi.mocked(prisma.aiConversationTurn.create).mock.calls[0]?.[0]
       .data as Record<string, unknown>;
     expect(data).toEqual({
+      aiProfile: "programming",
       conversationId: 7,
       mode: "question",
+      objectiveItemIndex: null,
       requestId: "request_12345678",
       status: "pending",
       userContent: "这道题为什么要判断三个范围？",

@@ -13,6 +13,11 @@ import { ProblemRunPanel } from "@/components/ProblemRunPanel";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatRuntime } from "@/lib/format";
 import type { ProblemType } from "@/lib/objectiveProblem";
+import {
+  createObjectiveSubmissionRefreshState,
+  parseObjectiveSubmissionRefreshState,
+  type ObjectiveSubmissionResult,
+} from "@/lib/objectiveSubmissionRefresh";
 
 const CodeEditor = dynamic(() => import("@/components/CodeEditor"), {
   ssr: false,
@@ -31,23 +36,11 @@ int main() {
 }
 `;
 
-type SubmissionResult = {
-  id: number;
-  status: string;
-  passedCount: number;
-  totalCount: number;
-  runtimeMs: number;
-  errorMessage?: string | null;
-  caseResults?: {
-    caseIndex: number;
-    status: string;
-    actualOutput: string | null;
-  }[];
-};
-
 export function ProblemSubmitForm({
   aiCooldownSeconds,
+  aiEndpoint,
   aiEnabled = false,
+  aiExamId,
   aiStudentId,
   defaultCodeTemplate,
   detailHrefBase = "/student/submissions",
@@ -65,7 +58,9 @@ export function ProblemSubmitForm({
   sampleCount = 0,
 }: {
   aiCooldownSeconds?: number;
+  aiEndpoint?: string;
   aiEnabled?: boolean;
+  aiExamId?: number;
   aiStudentId?: number;
   defaultCodeTemplate?: string;
   detailHrefBase?: string;
@@ -99,7 +94,11 @@ export function ProblemSubmitForm({
   const [loadedStorageKey, setLoadedStorageKey] = useState<string | null>(null);
   const [loadMessage, setLoadMessage] = useState("");
   const [loadError, setLoadError] = useState("");
-  const [result, setResult] = useState<SubmissionResult | null>(null);
+  const objectiveRefreshStorageKey =
+    objective && refreshOnSuccess
+      ? `oj:objective-submission-result:v1:${examId ?? "practice"}:${problemId}`
+      : null;
+  const [result, setResult] = useState<ObjectiveSubmissionResult | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -130,6 +129,20 @@ export function ProblemSubmitForm({
       setCountedForLearningAssignment(false);
       setLearningAssignmentDetached(false);
       setCode(initialCode);
+
+      if (objectiveRefreshStorageKey) {
+        const restored = parseObjectiveSubmissionRefreshState(
+          window.sessionStorage.getItem(objectiveRefreshStorageKey),
+        );
+        window.sessionStorage.removeItem(objectiveRefreshStorageKey);
+        if (restored) {
+          setResult(restored.result);
+          setCountedForLearningAssignment(
+            restored.countedForLearningAssignment,
+          );
+          setLearningAssignmentDetached(restored.learningAssignmentDetached);
+        }
+      }
 
       if (fromSubmissionId) {
         try {
@@ -182,7 +195,14 @@ export function ProblemSubmitForm({
       cancelled = true;
       window.cancelAnimationFrame(frame);
     };
-  }, [examId, fromSubmissionId, initialCode, problemId, storageKey]);
+  }, [
+    examId,
+    fromSubmissionId,
+    initialCode,
+    objectiveRefreshStorageKey,
+    problemId,
+    storageKey,
+  ]);
 
   useEffect(() => {
     if (!examEndsAt) return;
@@ -223,8 +243,14 @@ export function ProblemSubmitForm({
       });
     });
 
+    if (objectiveRefreshStorageKey) {
+      window.setTimeout(() => {
+        window.sessionStorage.removeItem(objectiveRefreshStorageKey);
+      }, 5_000);
+    }
+
     return () => window.cancelAnimationFrame(frame);
-  }, [result]);
+  }, [objectiveRefreshStorageKey, result]);
 
   async function submit() {
     if (shouldFinishExamAfterObjectiveSubmit && !showObjectiveExamConfirm) {
@@ -286,6 +312,20 @@ export function ProblemSubmitForm({
     setResult(data.submission);
     setCountedForLearningAssignment(Boolean(data.countedForLearningAssignment));
     setLearningAssignmentDetached(Boolean(data.learningAssignmentDetached));
+    if (objectiveRefreshStorageKey) {
+      window.sessionStorage.setItem(
+        objectiveRefreshStorageKey,
+        createObjectiveSubmissionRefreshState({
+          countedForLearningAssignment: Boolean(
+            data.countedForLearningAssignment,
+          ),
+          learningAssignmentDetached: Boolean(
+            data.learningAssignmentDetached,
+          ),
+          result: data.submission,
+        }),
+      );
+    }
     if (data.submission?.status === "Accepted") {
       setShowAcceptedPopup(true);
     }
@@ -333,6 +373,7 @@ export function ProblemSubmitForm({
                 className="max-h-[86vh] max-w-[86vw] object-contain"
                 height={1254}
                 src="/ac-success.png"
+                unoptimized
                 width={1254}
               />
             </div>
@@ -357,7 +398,8 @@ export function ProblemSubmitForm({
       {aiEnabled && !objective ? (
         <ProblemAiAssist
           code={code}
-          examId={examId}
+          endpoint={aiEndpoint}
+          examId={aiExamId ?? examId}
           initialCooldownSeconds={aiCooldownSeconds}
           problemId={problemId}
           studentId={aiStudentId}

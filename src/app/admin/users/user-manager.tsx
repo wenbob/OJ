@@ -7,18 +7,20 @@ import {
   Pencil,
   Plus,
   Save,
+  Search,
   ShieldCheck,
   Trash2,
   X,
 } from "lucide-react";
 import type { FormEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDate } from "@/lib/format";
 import type { StaffRole } from "@/lib/staffAccess";
 import { TEACHER_STUDENT_INITIAL_PASSWORD } from "@/lib/userManagementPolicy";
 
 type UserItem = {
   aiAccessEnabled?: boolean;
+  objectiveAiAccessEnabled?: boolean;
   customTitle?: string | null;
   id: number;
   ranking?: {
@@ -35,6 +37,7 @@ type UserItem = {
   studentProfile?: {
     aiAccessEnabled: boolean;
     customTitle: string | null;
+    objectiveAiAccessEnabled: boolean;
   } | null;
   submissions?: number;
   _count?: { submissions: number };
@@ -42,6 +45,7 @@ type UserItem = {
 
 const blankForm = {
   aiAccessEnabled: false,
+  objectiveAiAccessEnabled: false,
   customTitle: "",
   username: "",
   password: "",
@@ -58,9 +62,11 @@ function createBlankForm(viewerRole: StaffRole) {
 
 export function UserManager({
   initialUsers,
+  initialStudentObjectiveAiGloballyEnabled,
   viewerRole,
 }: {
   initialUsers: UserItem[];
+  initialStudentObjectiveAiGloballyEnabled: boolean;
   viewerRole: StaffRole;
 }) {
   const [users, setUsers] = useState(initialUsers);
@@ -70,10 +76,31 @@ export function UserManager({
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
   const [rowPendingId, setRowPendingId] = useState<number | null>(null);
+  const [bulkPending, setBulkPending] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [studentObjectiveAiGloballyEnabled, setStudentObjectiveAiGloballyEnabled] =
+    useState(initialStudentObjectiveAiGloballyEnabled);
   const [showPassword, setShowPassword] = useState(false);
   const [stickyTop, setStickyTop] = useState(16);
   const formPanelRef = useRef<HTMLFormElement>(null);
   const usernameInputRef = useRef<HTMLInputElement>(null);
+  const visibleUsers = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("zh-CN");
+    if (!normalized) return users;
+    return users.filter((user) =>
+      user.username.toLocaleLowerCase("zh-CN").includes(normalized),
+    );
+  }, [query, users]);
+  const visibleStudentIds = useMemo(
+    () => visibleUsers.filter((user) => user.role === "student").map((user) => user.id),
+    [visibleUsers],
+  );
+  const allVisibleStudentsSelected =
+    visibleStudentIds.length > 0 &&
+    visibleStudentIds.every((id) => selectedStudentIds.has(id));
 
   useEffect(() => {
     const panel = formPanelRef.current;
@@ -116,9 +143,16 @@ export function UserManager({
           ...item,
           aiAccessEnabled:
             item.aiAccessEnabled ?? item.studentProfile?.aiAccessEnabled ?? false,
+          objectiveAiAccessEnabled:
+            item.objectiveAiAccessEnabled ??
+            item.studentProfile?.objectiveAiAccessEnabled ??
+            false,
           customTitle: item.customTitle ?? item.studentProfile?.customTitle ?? "",
           submissions: item.submissions ?? item._count?.submissions ?? 0,
         })),
+      );
+      setStudentObjectiveAiGloballyEnabled(
+        data.studentObjectiveAiGloballyEnabled === true,
       );
     }
   }
@@ -128,6 +162,7 @@ export function UserManager({
     setEditingId(user.id);
     setForm({
       aiAccessEnabled: user.aiAccessEnabled ?? false,
+      objectiveAiAccessEnabled: user.objectiveAiAccessEnabled ?? false,
       customTitle: user.customTitle ?? "",
       username: user.username,
       password: "",
@@ -189,10 +224,12 @@ export function UserManager({
       viewerRole === "teacher"
         ? {
             aiAccessEnabled: form.aiAccessEnabled,
+            objectiveAiAccessEnabled: form.objectiveAiAccessEnabled,
             username: form.username,
           }
         : {
             aiAccessEnabled: form.aiAccessEnabled,
+            objectiveAiAccessEnabled: form.objectiveAiAccessEnabled,
             customTitle: form.customTitle,
             password: form.password,
             role: form.role,
@@ -238,17 +275,24 @@ export function UserManager({
     await reload();
   }
 
-  async function toggleAiAccess(user: UserItem) {
-    if (viewerRole !== "teacher" || rowPendingId !== null) return;
+  async function toggleAiAccess(
+    user: UserItem,
+    profile: "programming" | "objective",
+  ) {
+    if (rowPendingId !== null) return;
 
     setRowPendingId(user.id);
     setError("");
     setMessage("");
-    const nextEnabled = !user.aiAccessEnabled;
+    const field =
+      profile === "programming"
+        ? "aiAccessEnabled"
+        : "objectiveAiAccessEnabled";
+    const nextEnabled = !Boolean(user[field]);
     const response = await fetch(`/api/admin/users/${user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ aiAccessEnabled: nextEnabled }),
+      body: JSON.stringify({ [field]: nextEnabled }),
     });
     const data = await response.json().catch(() => ({}));
     setRowPendingId(null);
@@ -260,7 +304,52 @@ export function UserManager({
 
     await reload();
     setMessage(
-      `已${nextEnabled ? "开启" : "关闭"}学生 ${user.username} 的 AI 权限。`,
+      `已${nextEnabled ? "开启" : "关闭"}学生 ${user.username} 的${
+        profile === "programming" ? "编程" : "选择判断"
+      } AI 权限。`,
+    );
+  }
+
+  function toggleVisibleStudents() {
+    setSelectedStudentIds((current) => {
+      const next = new Set(current);
+      if (allVisibleStudentsSelected) {
+        visibleStudentIds.forEach((id) => next.delete(id));
+      } else {
+        visibleStudentIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }
+
+  async function bulkUpdateObjectiveAi(enabled: boolean) {
+    const userIds = Array.from(selectedStudentIds);
+    if (userIds.length === 0 || bulkPending) return;
+    if (
+      !confirm(
+        `确认${enabled ? "开启" : "关闭"}已选 ${userIds.length} 名学生的选择判断 AI 权限吗？`,
+      )
+    ) {
+      return;
+    }
+    setBulkPending(true);
+    setError("");
+    setMessage("");
+    const response = await fetch("/api/admin/users/ai-access/bulk", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled, profile: "objective", userIds }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setBulkPending(false);
+    if (!response.ok) {
+      setError(data.error ?? "批量更新选择判断 AI 权限失败");
+      return;
+    }
+    setSelectedStudentIds(new Set());
+    await reload();
+    setMessage(
+      `已${enabled ? "开启" : "关闭"} ${data.updatedCount ?? userIds.length} 名学生的选择判断 AI 权限。`,
     );
   }
 
@@ -301,14 +390,81 @@ export function UserManager({
           <h1 className="text-2xl font-black">
             {viewerRole === "admin" ? "用户管理" : "学生管理"}
           </h1>
+          <div
+            className={`mt-4 border px-3 py-2 text-sm font-bold ${
+              studentObjectiveAiGloballyEnabled
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+          >
+            学生选择判断 AI 总开关：
+            {studentObjectiveAiGloballyEnabled
+              ? "已开启"
+              : "已关闭，个人授权暂不生效"}
+          </div>
+          <div className="mt-4 grid gap-3">
+            <label className="relative block">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400"
+                size={17}
+              />
+              <input
+                className="field w-full pl-10"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索学生用户名"
+                value={query}
+              />
+            </label>
+            <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  checked={allVisibleStudentsSelected}
+                  disabled={visibleStudentIds.length === 0}
+                  onChange={toggleVisibleStudents}
+                  type="checkbox"
+                />
+                全选当前搜索结果
+              </label>
+              <span className="text-ink-500">
+                已选 {selectedStudentIds.size} 名学生
+              </span>
+              <button
+                className="btn btn-secondary px-3 py-2"
+                disabled={selectedStudentIds.size === 0 || bulkPending}
+                onClick={() => void bulkUpdateObjectiveAi(true)}
+                type="button"
+              >
+                批量开启选择判断 AI
+              </button>
+              <button
+                className="btn btn-secondary px-3 py-2"
+                disabled={selectedStudentIds.size === 0 || bulkPending}
+                onClick={() => void bulkUpdateObjectiveAi(false)}
+                type="button"
+              >
+                批量关闭选择判断 AI
+              </button>
+              {selectedStudentIds.size > 0 ? (
+                <button
+                  className="text-xs font-black text-steel underline"
+                  onClick={() => setSelectedStudentIds(new Set())}
+                  type="button"
+                >
+                  清空选择
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse">
+          <table className="w-full min-w-[1120px] border-collapse">
             <thead>
               <tr className="border-b border-ink-950/10 bg-white/55 text-left">
+                <th className="table-head px-3 py-3">选择</th>
                 <th className="table-head px-5 py-3">用户名</th>
                 <th className="table-head px-5 py-3">角色</th>
-                <th className="table-head px-5 py-3">AI 权限</th>
+                <th className="table-head px-5 py-3">编程 AI</th>
+                <th className="table-head px-5 py-3">选择判断 AI</th>
                 <th className="table-head px-5 py-3">头衔</th>
                 <th className="table-head px-5 py-3">段位积分</th>
                 <th className="table-head px-5 py-3">提交</th>
@@ -317,8 +473,27 @@ export function UserManager({
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
+              {visibleUsers.map((user) => (
                 <tr className="border-b border-ink-950/10" key={user.id}>
+                  <td className="px-3 py-4 text-center">
+                    {user.role === "student" ? (
+                      <input
+                        aria-label={`选择学生 ${user.username}`}
+                        checked={selectedStudentIds.has(user.id)}
+                        onChange={() =>
+                          setSelectedStudentIds((current) => {
+                            const next = new Set(current);
+                            if (next.has(user.id)) next.delete(user.id);
+                            else next.add(user.id);
+                            return next;
+                          })
+                        }
+                        type="checkbox"
+                      />
+                    ) : (
+                      "-"
+                    )}
+                  </td>
                   <td className="px-5 py-4 font-black">{user.username}</td>
                   <td className="px-5 py-4 text-sm font-semibold text-ink-700">
                     {user.role}
@@ -333,6 +508,21 @@ export function UserManager({
                         }`}
                       >
                         {user.aiAccessEnabled ? "已开通" : "未开通"}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className="px-5 py-4 text-sm font-bold">
+                    {user.role === "student" ? (
+                      <span
+                        className={`inline-flex border px-2 py-1 text-xs font-black ${
+                          user.objectiveAiAccessEnabled
+                            ? "border-moss/30 bg-moss/10 text-moss"
+                            : "border-ink-950/10 bg-white/60 text-ink-500"
+                        }`}
+                      >
+                        {user.objectiveAiAccessEnabled ? "已开通" : "未开通"}
                       </span>
                     ) : (
                       "-"
@@ -377,15 +567,28 @@ export function UserManager({
                           <button
                             className="btn btn-secondary px-3 py-2"
                             disabled={rowPendingId !== null}
-                            onClick={() => toggleAiAccess(user)}
+                            onClick={() => toggleAiAccess(user, "programming")}
                             type="button"
                           >
                             <ShieldCheck size={15} />
                             {rowPendingId === user.id
                               ? "处理中"
                               : user.aiAccessEnabled
-                                ? "关闭 AI"
-                                : "开启 AI"}
+                                ? "关闭编程 AI"
+                                : "开启编程 AI"}
+                          </button>
+                          <button
+                            className="btn btn-secondary px-3 py-2"
+                            disabled={rowPendingId !== null}
+                            onClick={() => toggleAiAccess(user, "objective")}
+                            type="button"
+                          >
+                            <ShieldCheck size={15} />
+                            {rowPendingId === user.id
+                              ? "处理中"
+                              : user.objectiveAiAccessEnabled
+                                ? "关闭选择 AI"
+                                : "开启选择 AI"}
                           </button>
                           <button
                             className="btn btn-secondary px-3 py-2"
@@ -575,10 +778,30 @@ export function UserManager({
             />
             <span>
               {viewerRole === "teacher"
-                ? "新学生默认开通 AI 对话权限"
-                : "开通 AI 对话权限"}
+                ? "新学生默认开通编程 AI 权限"
+                : "开通编程 AI 权限"}
               <span className="mt-1 block text-xs font-semibold leading-5 text-indigo-800">
                 仍需同时开启日常练习 AI 总开关或当前考试 AI 开关。
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 border border-sky-200 bg-sky-50/70 p-4 text-sm font-bold text-sky-950">
+            <input
+              checked={form.objectiveAiAccessEnabled}
+              className="mt-0.5 h-4 w-4 accent-sky-700"
+              disabled={viewerRole === "admin" && form.role !== "student"}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  objectiveAiAccessEnabled: event.target.checked,
+                }))
+              }
+              type="checkbox"
+            />
+            <span>
+              开通选择判断 AI 解析权限
+              <span className="mt-1 block text-xs font-semibold leading-5 text-sky-800">
+                还需管理员开启总开关；学生提交当前题一次后才能逐题查看解析。
               </span>
             </span>
           </label>

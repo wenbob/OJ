@@ -9,6 +9,31 @@ int main() {
 }
 `;
 
+export const AI_CUSTOM_PROMPT_MAX_CHARS = 4_000;
+
+export const defaultAiProgrammingOverviewPrompt = `帮助学生理解这道题，不读取或猜测学生代码。
+
+请按三个部分回答：
+题目分析：用 2 到 4 句讲清楚输入是什么、要找到什么、最后输出什么。
+解题步骤：根据题目难度决定 3 到 6 步，每一步用“第一步、第二步……”开头，讲清楚具体要想什么、比较什么、记录什么。
+小提醒：最后只提醒一个最容易错的地方。`;
+
+export const defaultAiProgrammingNextStepPrompt = `根据当前题目和学生已经写好的代码，只告诉学生现在最应该完成的一个小步骤。
+
+先用一句话说学生已经做到哪里，再用 2 到 4 句说明下一步要检查、比较、记录或补充什么。不要继续讲后面的完整解法。`;
+
+export const defaultAiProgrammingCodeReviewPrompt = `检查学生当前代码。
+
+最多指出三个真正影响结果的问题。每个问题必须说清楚“第几行、哪里不对、为什么会出问题、学生应该检查什么”。只允许说行号和自然语言问题，不要复述该行源码、变量表达式或正确写法。如果暂时看不出错误，就说明已经完成了什么，并只给下一项检查方向。`;
+
+export const defaultAiProgrammingQuestionPrompt = `先判断学生本次问题是否与当前题目、当前代码或当前解法直接相关。
+
+如果无关，只能原样返回系统规定的无关问题回复。如果相关，就结合当前代码和历史对话回答学生现在问的这一小点。只回答当前这一问，不扩展成完整解法。`;
+
+export const defaultAiObjectiveExplanationPrompt = `请使用简短、清楚、适合学生阅读的中文解释这道选择判断题。
+
+先说明整体判断思路，再按原顺序解释每个选项：正确项说明为什么正确，错误项逐一指出错在哪里。最后用一句容易记住的话总结知识点。专业术语首次出现时要顺手解释。允许少量 Markdown、行内代码和 LaTeX，但不要使用表格。`;
+
 export const defaultSystemSettings = {
   siteName: "C++ OJ",
   siteSubtitle: "在线练习平台",
@@ -22,6 +47,8 @@ export const defaultSystemSettings = {
   allowStudentRegister: "false",
   aiPracticeEnabled: "false",
   aiObjectiveExplanationEnabled: "false",
+  aiStudentObjectiveExplanationEnabled: "false",
+  aiStaffProgrammingAssistEnabled: "false",
   aiConversationRetentionDays: "180",
   aiProvider: "deepseek",
   aiBaseUrl: "https://api.deepseek.com",
@@ -33,11 +60,17 @@ export const defaultSystemSettings = {
   aiObjectiveModel: "deepseek-v4-pro",
   aiObjectiveThinkingMode: "enabled",
   aiObjectiveCustomThinkingProtocol: "none",
+  aiProgrammingOverviewPrompt: defaultAiProgrammingOverviewPrompt,
+  aiProgrammingNextStepPrompt: defaultAiProgrammingNextStepPrompt,
+  aiProgrammingCodeReviewPrompt: defaultAiProgrammingCodeReviewPrompt,
+  aiProgrammingQuestionPrompt: defaultAiProgrammingQuestionPrompt,
+  aiObjectiveExplanationPrompt: defaultAiObjectiveExplanationPrompt,
   aiProgrammingStudentCooldownSeconds: "20",
   aiProgrammingTeacherCooldownSeconds: "30",
   aiProgrammingAdminCooldownSeconds: "30",
   aiObjectiveTeacherCooldownSeconds: "30",
   aiObjectiveAdminCooldownSeconds: "30",
+  aiObjectiveStudentCooldownSeconds: "30",
 };
 
 export type SystemSettingKey = keyof typeof defaultSystemSettings;
@@ -55,12 +88,43 @@ const backwardCompatibleAiSettingKeys = new Set<SystemSettingKey>([
   "aiObjectiveModel",
   "aiObjectiveThinkingMode",
   "aiObjectiveCustomThinkingProtocol",
+  "aiProgrammingOverviewPrompt",
+  "aiProgrammingNextStepPrompt",
+  "aiProgrammingCodeReviewPrompt",
+  "aiProgrammingQuestionPrompt",
+  "aiObjectiveExplanationPrompt",
   "aiProgrammingStudentCooldownSeconds",
   "aiProgrammingTeacherCooldownSeconds",
   "aiProgrammingAdminCooldownSeconds",
   "aiObjectiveTeacherCooldownSeconds",
   "aiObjectiveAdminCooldownSeconds",
+  "aiObjectiveStudentCooldownSeconds",
 ]);
+
+const aiCustomPromptKeys = new Set<SystemSettingKey>([
+  "aiProgrammingOverviewPrompt",
+  "aiProgrammingNextStepPrompt",
+  "aiProgrammingCodeReviewPrompt",
+  "aiProgrammingQuestionPrompt",
+  "aiObjectiveExplanationPrompt",
+]);
+
+export type AiProgrammingPromptMode =
+  | "overview"
+  | "next_step"
+  | "code_review"
+  | "question";
+
+export const aiProgrammingPromptSettingKeys = {
+  overview: "aiProgrammingOverviewPrompt",
+  next_step: "aiProgrammingNextStepPrompt",
+  code_review: "aiProgrammingCodeReviewPrompt",
+  question: "aiProgrammingQuestionPrompt",
+} as const satisfies Record<AiProgrammingPromptMode, SystemSettingKey>;
+
+export function normalizeAiCustomPrompt(value: string) {
+  return value.replace(/\r\n?/g, "\n").trim();
+}
 
 function positiveInt(value: string | undefined, fallback: number) {
   const parsed = Number(value);
@@ -156,11 +220,18 @@ export function normalizeSystemSettingsPayload(body: unknown): SystemSettings {
     if (
       key === "allowStudentRegister" ||
       key === "aiPracticeEnabled" ||
-      key === "aiObjectiveExplanationEnabled"
+      key === "aiObjectiveExplanationEnabled" ||
+      key === "aiStudentObjectiveExplanationEnabled" ||
+      key === "aiStaffProgrammingAssistEnabled"
     ) {
       settings[key] = value === true || value === "true" ? "true" : "false";
     } else {
-      settings[key] = typeof value === "string" ? value : "";
+      settings[key] =
+        typeof value === "string"
+          ? aiCustomPromptKeys.has(key)
+            ? normalizeAiCustomPrompt(value)
+            : value
+          : "";
     }
   }
   if (record.aiObjectiveProvider === undefined) {
@@ -196,6 +267,22 @@ export function validateSystemSettings(settings: SystemSettings) {
     return "默认评测内存限制必须大于 0";
   }
   if (!settings.defaultCppTemplate.trim()) return "默认 C++ 代码模板不能为空";
+  for (const [label, key] of [
+    ["编程题理解题目", "aiProgrammingOverviewPrompt"],
+    ["编程题下一步提示", "aiProgrammingNextStepPrompt"],
+    ["编程题检查代码", "aiProgrammingCodeReviewPrompt"],
+    ["编程题自由提问", "aiProgrammingQuestionPrompt"],
+    ["选择判断题解析", "aiObjectiveExplanationPrompt"],
+  ] as const) {
+    const value = settings[key];
+    if (!value.trim()) return `${label}提示词不能为空`;
+    if (value.length > AI_CUSTOM_PROMPT_MAX_CHARS) {
+      return `${label}提示词不能超过 ${AI_CUSTOM_PROMPT_MAX_CHARS} 个字`;
+    }
+    if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) {
+      return `${label}提示词不能包含非法控制字符`;
+    }
+  }
   if (!["0", "30", "90", "180", "365"].includes(settings.aiConversationRetentionDays)) {
     return "AI 对话保留时间不合法";
   }
@@ -221,6 +308,7 @@ export function validateSystemSettings(settings: SystemSettings) {
     ["学生编程助手", settings.aiProgrammingStudentCooldownSeconds],
     ["老师学情摘要", settings.aiProgrammingTeacherCooldownSeconds],
     ["管理员学情摘要", settings.aiProgrammingAdminCooldownSeconds],
+    ["学生选择判断解析", settings.aiObjectiveStudentCooldownSeconds],
     ["老师选择判断解析", settings.aiObjectiveTeacherCooldownSeconds],
     ["管理员选择判断解析", settings.aiObjectiveAdminCooldownSeconds],
   ] as const) {

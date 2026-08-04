@@ -64,6 +64,8 @@
 - [2026-07-26 后台选择判断 AI 解析与学生答案面板跟随上线记录](docs/ops-review-2026-07-26.md)
 - [2026-07-27 全角色选择判断逐题反馈上线记录](docs/ops-review-2026-07-27.md)
 - [2026-08-01 批量作业发布、学情通讯录与低内存上线记录](docs/ops-review-2026-08-01.md)
+- [2026-08-04 间歇性 504 与 AC 图片优化器修复记录](docs/ops-review-2026-08-04.md)
+- [2026-08-04 学生客观题 AI 与自定义提示词发布记录](docs/ops-review-2026-08-04-ai-student-release.md)
 
 ## 技术栈
 
@@ -256,21 +258,22 @@ npm run db:status
 
 ### 分层 AI 学习助手
 
-- 学生 AI 助手只在编程题中出现，并同时受“学生个人 AI 权限”和日常练习/当前考试 AI 开关控制；任一条件关闭时页面隐藏，服务端也拒绝请求。
+- 学生编程 AI 助手同时受“学生个人编程 AI 权限”和日常练习/当前考试 AI 开关控制；任一条件关闭时页面隐藏，服务端也拒绝请求。
 - 学生可以选择“理解题目”“下一步提示”“检查当前代码”，也可以自由追问当前题目；后两类提示和自由提问会读取编辑器里的最新代码。
 - AI 只讲当前题目的意思、思路、下一步动作和问题位置，不提供完整代码、可复制代码语句、最终答案或隐藏测试数据。
 - 学生端在当前浏览器保留最近 20 条消息，发给 AI 时只携带最近 12 条；服务端另存学生实际可见问答和调用统计供老师审阅，但不保存代码快照、完整 Prompt 或内部推理。
 - 同一学生在所有编程题、考试和 AI 模式中共用账号级触发间隔；管理员可在 5–600 秒内调整，默认 20 秒。只有真正调用上游模型时才开始计时，有效缓存和同一请求的幂等重放不会消耗间隔。
 - 请求发出后页面会立即显示思考状态，并每 2 秒更新用时；最终回复通过安全检查后逐段流式出现，难题等待期间不会呈现为页面卡死。
 
-### 后台选择判断题 AI 解析
+### 共享选择判断题 AI 解析
 
-- 管理员可在系统设置中独立开启 `aiObjectiveExplanationEnabled`；该开关默认关闭，不受学生个人 AI 权限、日常练习 AI 或考试 AI 开关影响。
-- 开启后，管理员和老师可在题目练习详情及模拟考试练习中点击每道小题的“AI 解析”。页面标题旁的“显示答案”统一控制标准答案，进入或切换题目时默认隐藏；学生端不会显示入口、解析或标准答案。
+- 管理员可在系统设置中独立开启 `aiObjectiveExplanationEnabled` 主开关；学生使用还需开启 `aiStudentObjectiveExplanationEnabled` 和该学生个人“选择判断 AI”权限。
+- 管理员和老师可在题目练习详情及模拟考试练习中点击每道小题的“AI 解析”。学生只在日常刷题或专项练习中、当前大题至少提交过一次日常答案后逐题解锁；正式考试及考后结果页始终不开放。
+- 学生首次进入尚未提交的客观题时不显示 AI 回答面板，答题区保持居中；首次日常提交后页面解锁 AI 面板，并自动定位到本次逐题结果。结果明确显示答对、答错和总题数，页面刷新切换布局时仍保留本次结果。
 - 桌面端右侧栏上方约 70% 显示解析，下方约 30% 保留答案输入和提交；两个区域各自滚动。移动端按题目、解析、答案输入自然纵向排列。
 - 题干、选项和标准答案全部由服务端读取。数据库答案始终是最终依据，选项正误标记由服务端生成，模型只负责解释正确项依据和各错误项原因。
-- 有效解析按题目小题共享。题面、选项、答案或选择判断模型配置变化后缓存自动失效；老师可生成缺失解析，只有管理员可以确认后强制重新生成。
-- 解析缓存只保存结构化中文解析、配置指纹、模型和 Token 统计，不保存 API Key、内部推理、完整 Prompt 或上游原始响应，也不计入学生 AI 使用统计。
+- 有效解析按题目小题跨角色共享。学生、老师和管理员都可以按各自生成/刷新间隔确认后重新生成；成功会覆盖所有用户看到的共享版本，失败不会破坏旧解析。题面、选项、答案或选择判断模型配置变化后缓存自动失效。
+- 解析缓存只保存结构化中文解析、配置指纹、模型和 Token 统计，不保存 API Key、内部推理、完整 Prompt 或上游原始响应。学生读取和生成会写入 AI 使用审计；有效缓存读取的模型调用和 Token 均为 0。
 
 ### 专项练习
 
@@ -405,7 +408,7 @@ oj-code-exam-${examId}-problem-${problemId}
 
 编程题提交后的结果卡片会直接展示一个“程序输出”区域，优先显示第一个未通过测试点的用户输出；如果全部通过，则显示第一个测试点输出。选择判断题会直接展开逐题正确/错误及自己的答案。完整结果仍可进入提交详情页查看。
 
-当提交结果为 `Accepted` 时，页面会居中显示透明背景的通过提示图片，带短暂弹入和淡出动效，并在约 1 秒后自动消失。
+当提交结果为 `Accepted` 时，页面会居中显示透明背景的通过提示图片，带短暂弹入和淡出动效，并在约 1 秒后自动消失。提示图直接从 `/ac-success.png` 加载，不经过 Next.js `/_next/image` 优化器。
 
 ### 日常提交记录
 
@@ -504,7 +507,7 @@ oj-code-exam-${examId}-problem-${problemId}
 
 老师账号由管理员创建，登录后进入独立的 `/teacher`。老师可以练习和校验现有题目、创建并管理自己的考试、管理学生账号、查看全部学生提交与学情、批量发布课后练习并维护自己下发的专项练习，以及审阅 AI 使用和天梯。
 
-老师不能访问系统设置、AI 模型配置、题目管理、题目导入、上下架、题序或分类排序，也不能使用考试 Markdown 导入。老师只能查看和新增学生、调整学生个人 AI 权限，以及把学生密码重置为固定初始值 `12345678`；不能修改用户名、角色或自定义头衔，不能删除学生，也不能枚举或管理老师和管理员。老师的考试和专项练习按创建者隔离。
+老师不能访问系统设置、AI 模型配置、题目管理、题目导入、上下架、题序或分类排序，也不能使用考试 Markdown 导入。老师只能查看和新增学生、分别调整编程 AI 与选择判断 AI 权限，以及把学生密码重置为固定初始值 `12345678`；不能修改用户名、角色或自定义头衔，不能删除学生，也不能枚举或管理老师和管理员。老师的考试和专项练习按创建者隔离。
 
 详细操作见 [老师端使用说明](docs/teacher-guide.md)。
 
@@ -632,7 +635,7 @@ POST /api/admin/problems/bulk-delete
 - “已通过”旁提供“查看通过代码/查看通过答案”快捷入口，打开当前管理员最近一次 Accepted 的提交详情。
 - 题目详情复用 Monaco Editor 和 Judge 流程。
 - 题目详情页提供管理员专用“复制本题”按钮，可复制 Markdown 格式完整题面。
-- 独立开关开启后，选择判断题每道小题提供共享 AI 解析；管理员可以强制重新生成，老师只能读取有效缓存或生成缺失解析。
+- 独立开关开启后，选择判断题每道小题提供共享 AI 解析；管理员和老师都可以按各自间隔重新生成并覆盖共享版本。编程题还可使用独立后台编程助手开关进行校题提示。
 - 管理员提交也保存到 `Submission`，并可在管理员提交记录中查看。
 
 ### 用户管理
@@ -649,7 +652,7 @@ POST /api/admin/problems/bulk-delete
 - 新增学生、老师或管理员账号。
 - 编辑用户名和角色。
 - 设置或清空学生自定义头衔。
-- 为学生单独开通或关闭 AI 对话权限，默认关闭。
+- 分别为学生开通或关闭“编程 AI”和“选择判断 AI”权限；两项互不影响，选择判断权限默认关闭。
 - 安全重置密码：编辑时留空保持原密码，填写新密码后必须再次确认且至少 8 位，并可临时显示或隐藏输入内容。
 - 删除用户。
 - 删除前二次确认。
@@ -657,7 +660,7 @@ POST /api/admin/problems/bulk-delete
 - 原密码使用不可逆 `passwordHash` 保存，页面和接口都无法查看或返回；修改密码后会递增 `sessionVersion`，使旧会话失效。
 - 桌面端编辑表单会在视口内自适应居中跟随；内容超过视口时改为面板内部滚动，移动端保持普通上下布局。
 
-老师端 `/teacher/users` 使用受限学生管理：新增学生的初始密码由服务端固定为 `12345678`，个人 AI 权限默认开启且创建前可取消。已有学生只提供 AI 权限切换和固定密码重置；老师不能编辑用户名、角色或自定义头衔，也不能删除学生。学生头衔和段位仍可只读查看。
+老师端 `/teacher/users` 使用受限学生管理：新增学生的初始密码由服务端固定为 `12345678`，可分别设置编程 AI 与选择判断 AI。已有学生提供两项独立权限开关、搜索、搜索结果全选和选择判断 AI 批量开关，以及固定密码重置；老师不能编辑用户名、角色或自定义头衔，也不能删除学生。学生头衔和段位仍可只读查看。
 
 ### AI 使用与对话审阅
 
@@ -800,11 +803,13 @@ ended      已结束，学生端不可继续答题和提交
 - 默认评测时间限制 `defaultTimeLimitMs`
 - 默认评测内存限制 `defaultMemoryLimitMb`
 - 日常练习 AI 助手开关 `aiPracticeEnabled`
-- 选择判断题 AI 解析开关 `aiObjectiveExplanationEnabled`（默认关闭，仅管理员和老师校题使用）
+- 选择判断题 AI 主开关 `aiObjectiveExplanationEnabled`、学生总开关 `aiStudentObjectiveExplanationEnabled` 和后台编程助手开关 `aiStaffProgrammingAssistEnabled`（均默认关闭）
 - AI 对话记录保留时间 `aiConversationRetentionDays`（30、90、180、365 天或永久，默认 180 天）
 - 编程题 AI 配置 `aiProvider`、`aiBaseUrl`、`aiModel`、`aiThinkingMode`、`aiCustomThinkingProtocol`
 - 选择判断 AI 配置 `aiObjectiveProvider`、`aiObjectiveBaseUrl`、`aiObjectiveModel`、`aiObjectiveThinkingMode`、`aiObjectiveCustomThinkingProtocol`
-- 五项角色触发间隔：学生编程助手、老师/管理员学情摘要、老师/管理员选择判断解析（5–600 秒）
+- 编程题四种模式提示词 `aiProgrammingOverviewPrompt`、`aiProgrammingNextStepPrompt`、`aiProgrammingCodeReviewPrompt`、`aiProgrammingQuestionPrompt`
+- 选择判断解析提示词 `aiObjectiveExplanationPrompt`
+- 六项角色触发间隔：学生/老师/管理员编程入口与学生/老师/管理员选择判断生成刷新（5–600 秒）
 - 是否允许学生自助注册 `allowStudentRegister`
 
 说明：
@@ -816,8 +821,10 @@ ended      已结束，学生端不可继续答题和提交
 - 默认 C++ 模板已接入 Monaco Editor。
 - 默认评测时间和内存已接入提交接口。
 - 日常练习 AI 关闭时，学生日常刷题页不显示 AI 按钮，服务端接口也会拒绝请求。
-- 日常练习 AI 总开关不会绕过个人权限；学生个人 AI 权限关闭时同样不显示，接口返回 403。
-- 模型配置只允许管理员在系统设置中调整，学生端和教师学情页只读跟随。编程题配置用于学生助手与老师/管理员学情摘要；选择判断配置只用于后台客观题解析。两套配置可选择不同服务商、模型和思考模式，对应配置变化只使对应缓存失效。
+- 日常练习 AI 总开关不会绕过个人编程 AI 权限；任一关闭时编程助手不显示，接口返回 403。
+- 模型配置只允许管理员在系统设置中调整，学生端和教师页面只读跟随。编程题配置用于学生助手、后台校题助手与老师/管理员学情摘要；选择判断配置用于三种角色的共享客观题解析。两套配置可选择不同服务商、模型和思考模式，对应配置变化只使对应缓存失效。
+- 管理员还可以分别编辑编程题四种助手模式和选择判断解析的教学提示词。提示词只调整表达、步骤与详略；禁止完整代码、隐藏测试点、数据库标准答案和结构化输出格式等安全规则由服务端固定，不能被自定义内容覆盖。学情摘要继续使用独立固定提示词。
+- 提示词保存后立即作用于新请求。编程题按最终提示词哈希隔离缓存；选择判断提示词变化后，旧共享解析自动失效并在下次调用时重新生成。
 - “获取可用模型”从当前服务商的 `/models` 读取列表；若上游不支持该接口，仍可手工填写 Chat Completions 模型 ID。列表可能包含非对话模型，管理员需要按服务商说明选择。
 - 自定义服务只兼容 OpenAI Chat Completions；生产环境必须使用公共 HTTPS，系统会阻止本机、内网、保留网络、DNS 重绑定和重定向目标。
 - API Key 始终来自服务器环境变量槽，不进入 `SystemSetting`、前端响应或 AI 审计。切换密钥后需要重启本地/服务器进程。
@@ -885,125 +892,8 @@ PUT /api/admin/settings
 ## 数据范围
 ```
 
-示例：
-
-````markdown
-# A+B 问题
-
-## 难度
-
-入门
-
-## 分类
-
-基础语法
-
-## 题目描述
-
-输入两个整数 a 和 b，输出它们的和。
-
-## 输入格式
-
-一行两个整数 a 和 b。
-
-## 输出格式
-
-输出一个整数，表示 a+b 的结果。
-
-## 样例
-
-### 输入样例 1
-
-```text
-1 2
-```
-
-### 输出样例 1
-
-```text
-3
-```
-
-### 输入样例 2
-
-```text
-10 20
-```
-
-### 输出样例 2
-
-```text
-30
-```
-
-## 数据范围
-
-1 <= a, b <= 1000
-````
-
-选择判断题格式：
-
-````markdown
-# GESP 选择判断标准样例
-
-## 题型
-
-选择判断
-
-## 难度
-
-入门
-
-## 分类
-
-GESP 一级
-
-## 题目描述
-
-请按题号顺序作答，每行填写一个答案字母。
-
-## 客观题
-
-### 第 1 题
-
-在 C++ 中，下列不可做变量名的是（ ）。
-
-A. five-Star
-B. five_star
-C. fiveStar
-D. _fiveStar
-
-答案：A
-分值：2
-
-### 第 2 题
-
-阅读下面代码，判断输出结果。
-
-```cpp
-int a = 3;
-int b = 4;
-cout << a + b << endl;
-```
-
-A. 输出 `7`
-B. 输出 `34`
-C. 编译错误
-D. 没有输出
-
-答案：A
-分值：2
-
-### 第 3 题
-
-`break` 语句可以终止当前循环。（ ）
-
-A. 正确
-B. 错误
-
-答案：A
-分值：2
-````
+编程题与选择判断题的完整标准模板统一维护在
+[管理员手册的 Markdown 标准格式](docs/admin-guide.md#6-markdown-标准格式)，避免 README 与导入规范出现两份不同版本。选择判断题还必须包含 `## 题型`、`## 客观题`、`### 第 N 题`、单行选项、`答案：A` 和正整数分值。
 
 ### Markdown 导入限制
 
@@ -1120,7 +1010,7 @@ JUDGE_CONCURRENCY=1
 核心表：
 
 - `User`：用户账号，包含 `student`、`teacher` 和 `admin` 三种角色；`sessionVersion` 用于废除旧会话，学生只保留最后一次登录，老师和管理员保持多设备登录。
-- `StudentProfile`：学生扩展档案，保存管理员自定义头衔和个人 AI 权限；积分和段位实时从提交记录计算，不写入该表。
+- `StudentProfile`：学生扩展档案，保存管理员自定义头衔、编程 AI 权限和选择判断 AI 权限；积分和段位实时从提交记录计算，不写入该表。
 - `Problem`：题目主体信息，包含标题、描述、难度、分类和第一组样例。
 - `Problem.sortOrder`：管理员维护的题库自定义顺序，数值越大越靠前；学生端只读跟随。
 - `ProblemCategoryOrder`：按题型保存分类标签顺序。
@@ -1135,9 +1025,9 @@ JUDGE_CONCURRENCY=1
 - `LearningAssignment`：教师下发给学生的专项练习，保存标题、说明、截止日期和归档状态。
 - `LearningAssignmentProblem`：专项练习题目及顺序、题目信息快照和 `completedAt`；编辑任务时保留行会保留完成状态，新加题创建新快照。
 - `LearningInsightSnapshot`：按学生和分析周期缓存 AI 教师摘要及聚合统计哈希。
-- `ObjectiveAiExplanation`：按题目与小题序号保存管理员、老师共享的结构化选择判断解析；题目内容和 AI 配置变化时通过哈希失效。
+- `ObjectiveAiExplanation`：按题目与小题序号保存学生、老师、管理员共享的结构化选择判断解析；题目内容和 AI 配置变化时通过哈希失效。
 - `AiConversation`：学生在一道题中的一次 AI 对话，保存学生、日常/考试范围和题目/考试标题快照。
-- `AiConversationTurn`：AI 对话回合，保存可见问答、处理状态、响应时长、真实模型调用次数及 API 返回的 Token 数据；不保存代码或内部推理。
+- `AiConversationTurn`：AI 对话回合，使用 `aiProfile` 区分编程与选择判断，并可记录客观题小题序号；保存可见问答、处理状态、响应时长、真实模型调用次数及 API 返回的 Token 数据，不保存代码或内部推理。
 - `SystemSetting`：系统设置，按 key-value 保存站点配置。
 
 提交类型：
@@ -1191,6 +1081,8 @@ npm run seed
 0011_teacher_role_exam_ownership
 0012_objective_ai_explanations
 0013_ai_profiles_and_cooldowns
+0014_student_objective_ai_access
+0015_ai_custom_prompts
 ```
 
 本地开发创建新迁移：
@@ -1340,6 +1232,7 @@ GET  /api/problems
 GET  /api/problems/[id]
 POST /api/problems/[id]/run
 POST /api/problems/[id]/submit
+POST /api/problems/[id]/objective-explanation
 GET  /api/submissions/my
 GET  /api/submissions/[id]
 POST /api/ai/problem-assist
@@ -1368,11 +1261,13 @@ POST   /api/admin/problems/categories/order
 POST   /api/admin/problems/import/parse
 POST   /api/admin/problems/import/confirm
 POST   /api/admin/problems/[id]/objective-explanation
+POST   /api/admin/problems/[id]/programming-assist
 
 GET    /api/admin/users
 POST   /api/admin/users
 PUT    /api/admin/users/[id]
 PATCH  /api/admin/users/[id]
+PATCH  /api/admin/users/ai-access/bulk
 DELETE /api/admin/users/[id]
 POST   /api/admin/users/[id]/reset-password
 
@@ -1402,7 +1297,7 @@ GET    /api/admin/settings
 PUT    /api/admin/settings
 ```
 
-管理员用户接口支持 `customTitle` 和 `aiAccessEnabled` 字段：管理员创建或编辑学生时可设置最多 20 字的自定义头衔，并可单独开通 AI 对话权限；个人 AI 权限默认关闭。老师使用同一组受分级鉴权保护的地址，但 `POST /api/admin/users` 只接受用户名和 AI 权限，`PATCH /api/admin/users/[id]` 只切换学生 AI 权限，固定密码重置必须调用 `/reset-password`；老师不能调用完整编辑或删除能力。
+管理员用户接口支持 `customTitle`、`aiAccessEnabled` 和 `objectiveAiAccessEnabled`：管理员创建或编辑学生时可设置最多 20 字的自定义头衔，并分别开通编程与选择判断 AI。老师使用同一组受分级鉴权保护的地址，但 `POST /api/admin/users` 只接受用户名和两项 AI 权限，`PATCH /api/admin/users/[id]` 只切换学生 AI 权限，选择判断批量授权使用 `/api/admin/users/ai-access/bulk`，固定密码重置必须调用 `/reset-password`；老师不能调用完整编辑或删除能力。
 
 `POST /api/problems/[id]/run` 接收 `code`、`mode = samples|custom`、可选 `customInput` 和学生考试使用的可选 `examId`。代码上限 128KB，自定义输入上限 32KB；接口只支持编程题，不接受 `learningAssignmentId`，样例输入和标准输出只能由服务端读取。参数错误、未登录、考试不可用、内容过大、频率过高和 Judge 不可用分别使用 400、401、403、413、429、503。
 
@@ -1483,7 +1378,7 @@ GET /api/admin/problems?page=1&pageSize=50&category=基础语法
 [ ] 数据库已备份
 [ ] /api/health 返回 ok
 [ ] 运行样例和自定义输入冒烟测试通过，且未新增 Submission
-[ ] Accepted 冒烟测试通过
+[ ] Accepted 冒烟测试通过，AC 图片直接请求 /ac-success.png，未经过 /_next/image
 [ ] Wrong Answer 冒烟测试通过
 [ ] Compile Error 冒烟测试通过
 [ ] Runtime Error 冒烟测试通过

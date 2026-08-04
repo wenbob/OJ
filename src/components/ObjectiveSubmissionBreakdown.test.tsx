@@ -35,7 +35,7 @@ describe("ObjectiveSubmissionBreakdown", () => {
       />,
     );
 
-    expect(html).toContain("答对 1/3 小题");
+    expect(html).toContain("答对 1 题 · 答错 2 题 · 共 3 题");
     expect(html).toContain("第 1 题");
     expect(html).toContain("第 2 题");
     expect(html).toContain("第 3 题");

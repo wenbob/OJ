@@ -92,6 +92,36 @@ describe("ObjectiveProblemContent", () => {
     expect(staffHtml).toContain("AI 解析");
   });
 
+  it("renders an authorized student AI control without embedding an answer", () => {
+    const html = renderToStaticMarkup(
+      <ObjectiveAiExplanationProvider
+        audited
+        canForceRegenerate
+        problemId={10}
+        requestPath="/api/problems/10/objective-explanation"
+      >
+        <ObjectiveProblemContent
+          items={[
+            {
+              kind: "choice",
+              options: [
+                { label: "A", text: "选项一" },
+                { label: "B", text: "选项二" },
+              ],
+              score: 2,
+              stem: "请选择正确答案。",
+            },
+          ]}
+          showAiExplanationActions
+        />
+      </ObjectiveAiExplanationProvider>,
+    );
+
+    expect(html).toContain("AI 解析");
+    expect(html).not.toContain("答案 A");
+    expect(html).not.toContain("答案 B");
+  });
+
   it("keeps staff answers hidden by default behind one page-level toggle", () => {
     const html = renderToStaticMarkup(
       <StaffObjectiveAnswerVisibilityProvider>

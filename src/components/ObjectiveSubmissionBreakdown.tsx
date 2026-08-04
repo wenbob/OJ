@@ -47,6 +47,7 @@ export function ObjectiveSubmissionBreakdown({
   const passedCount = caseResults.filter((item) =>
     isObjectiveCaseCorrect(item.status),
   ).length;
+  const failedCount = caseResults.length - passedCount;
 
   return (
     <details
@@ -56,7 +57,7 @@ export function ObjectiveSubmissionBreakdown({
       <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-4 py-3">
         <span className="font-black text-ink-950">逐题结果</span>
         <span className="text-sm font-black text-ink-700">
-          答对 {passedCount}/{caseResults.length} 小题
+          答对 {passedCount} 题 · 答错 {failedCount} 题 · 共 {caseResults.length} 题
         </span>
       </summary>
 

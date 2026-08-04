@@ -145,12 +145,12 @@ AI_CUSTOM_API_KEY=
 注意：
 
 - API Key 只能放在服务器 `.env`，不要提交到 Git、数据库、管理页面或前端代码。修改密钥后使用 `pm2 restart oj --update-env` 重新加载。
-- 管理员在 `/admin/settings` 分别维护“编程题 AI”和“选择判断 AI”两套非敏感配置。编程题配置用于学生助手及教师学情摘要，选择判断配置用于后台客观题解析；两套配置可以选择不同服务商、模型和思考模式。
+- 管理员在 `/admin/settings` 分别维护“编程题 AI”和“选择判断 AI”两套非敏感配置。编程题配置用于学生助手、后台编程校题助手及教师学情摘要，选择判断配置用于学生、老师和管理员共享的客观题解析；两套配置可以选择不同服务商、模型和思考模式。
 - DeepSeek 固定访问 `https://api.deepseek.com`，豆包固定访问 `https://ark.cn-beijing.volces.com/api/v3`。自定义 Base URL 在生产环境必须是公共 HTTPS，且不能带 URL 凭据、查询参数或片段。
 - 自定义上游请求会固定 DNS 解析地址并禁止重定向；本机、内网、链路本地、保留网络和云元数据地址都会被拒绝。开发环境只额外允许 HTTP loopback 调试。
 - 所有学生 AI 请求必须经过 `/api/ai/problem-assist`，浏览器不能直接调用上游服务；模型发现只能由管理员接口调用。
 - AI 使用“双重开关”：学生个人 AI 权限与日常练习/当前考试 AI 开关必须同时开启；任一关闭时学生端隐藏整个 AI 面板，服务端也会拒绝请求。
-- 学生选择判断题不开放 AI 助手，避免泄露答案。管理员和老师校题使用独立的 `aiObjectiveExplanationEnabled` 开关（默认关闭）；开启后解析按题目小题写入数据库共享缓存，题面、标准答案或模型配置变化时自动失效，且不计入学生 AI 使用统计。
+- 学生选择判断 AI 由 `aiObjectiveExplanationEnabled` 主开关、`aiStudentObjectiveExplanationEnabled` 学生总开关和个人 `objectiveAiAccessEnabled` 共同控制，只在日常/专项且当前题已有日常提交时逐题开放，正式考试始终拒绝。解析按题目小题写入跨角色共享缓存，题面、标准答案或模型配置变化时自动失效；学生调用写入 AI 使用审计，后台调用不混入学生看板。
 - 服务端按角色和题型读取 5–600 秒的管理员配置：学生编程默认 20 秒，老师/管理员学情摘要及选择判断解析默认 30 秒。有效缓存和幂等重放不计时，真正开始上游请求后即使失败也会进入对应间隔。
 - AI 请求超时为 240 秒，输出预算为 4096 tokens；对推理未完成或输出不合格的结果返回友好错误，不把内部推理内容交给学生。
 - 新学生端使用 SSE 接收思考心跳和安全回复片段，旧客户端 JSON 响应继续兼容；回复必须先通过完整安全清洗，不能直接透传上游原始 token。
@@ -508,6 +508,37 @@ systemctl reload nginx
 curl http://127.0.0.1:3000
 ```
 
+PM2 显示 `online`，但站点间歇 504：
+
+1. 不要把 PM2 状态或端口监听当成应用健康证明。先分别直连 Next 和经本机 Nginx 的健康接口；公网地址另做同样检查：
+
+```bash
+curl --max-time 5 -v http://127.0.0.1:3000/api/health
+curl --max-time 5 -v http://127.0.0.1/api/health
+```
+
+2. 如果直连 Next 也超时，故障在应用上游，不是 Nginx 本身。继续检查进程、端口、资源和日志增量：
+
+```bash
+pm2 status
+ss -ltnp | grep ':3000'
+free -h
+df -h /
+pm2 logs oj --lines 100
+grep -a ' 504 ' /var/log/nginx/access.log | tail -n 30
+```
+
+3. 如果故障紧随 `Accepted` 出现，检查 AC 图片是否被错误送入 Next.js 图片优化器：
+
+```bash
+grep -a '/_next/image?url=%2Fac-success.png' /var/log/nginx/access.log | tail -n 20
+grep -n 'unoptimized' /www/oj/src/components/ProblemSubmitForm.tsx
+```
+
+`public/ac-success.png` 必须由浏览器直接请求 `/ac-success.png`，`ProblemSubmitForm.tsx` 中的 Next Image 必须保留 `unoptimized`。不要在生产环境手动请求可疑的 `/_next/image` 地址；该动作可能再次冻结应用。`pm2 restart oj --update-env` 可以临时恢复已经冻结的进程，但永久修复仍须按标准 Linux standalone 流程构建、审计和发布。
+
+恢复或发布后，至少验证直连健康接口、实际 CSS/JS、`/ac-success.png`、浏览器网络请求和 Nginx 504 日志增量。完整事故证据见 [2026-08-04 间歇性 504 与 AC 图片优化器修复记录](ops-review-2026-08-04.md)。
+
 数据库误操作：
 
 1. 立即停止服务：`pm2 stop oj`
@@ -601,11 +632,14 @@ curl http://127.0.0.1:3000/api/health
 
 默认情况下，`scripts/load-env.mjs` 还会把 standalone 服务绑定到 `127.0.0.1`。外部流量只能经 Nginx 的 80/443 端口进入；发布后应确认 `ss -ltnp | grep 3000` 显示为 `127.0.0.1:3000`，并在云安全组中移除公网 `3000` 端口。
 
-切换后除了 `/api/health`，还要抽查登录页的 `_next/static` 资源：
+切换后除了 `/api/health`，还要抽查登录页的 `_next/static` 资源和 AC 静态图：
 
 ```bash
 curl -I http://127.0.0.1:3000/_next/static/某个实际 chunk.css
+curl -I http://127.0.0.1:3000/ac-success.png
 ```
+
+浏览器完成一次 Accepted 冒烟后，网络面板应看到 `/ac-success.png`，不应出现针对该图片的 `/_next/image` 请求。
 
 如果健康检查失败，立即把最新 `/www/oj-old-*` 恢复为 `/www/oj`。健康检查应保留至少 60 秒的重试窗口，避免服务尚未完全启动时误判失败。
 

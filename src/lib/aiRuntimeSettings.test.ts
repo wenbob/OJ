@@ -26,7 +26,10 @@ describe("AI runtime cooldown settings", () => {
       fallback: 30,
       key: "aiObjectiveTeacherCooldownSeconds",
     });
-    expect(getAiCooldownDefinition("objective", "student")).toBeNull();
+    expect(getAiCooldownDefinition("objective", "student")).toMatchObject({
+      fallback: 30,
+      key: "aiObjectiveStudentCooldownSeconds",
+    });
   });
 
   it("uses configured values and safely falls back for invalid stored data", async () => {
@@ -46,7 +49,7 @@ describe("AI runtime cooldown settings", () => {
     );
   });
 
-  it("resolves the full settings snapshot without opening student objective AI", () => {
+  it("resolves the full settings snapshot for all objective roles", () => {
     const settings = {
       ...defaultSystemSettings,
       aiObjectiveAdminCooldownSeconds: "600",
@@ -57,6 +60,6 @@ describe("AI runtime cooldown settings", () => {
       resolveAiCooldownSeconds(settings, "programming", "teacher"),
     ).toBe(5);
     expect(resolveAiCooldownSeconds(settings, "objective", "admin")).toBe(600);
-    expect(resolveAiCooldownSeconds(settings, "objective", "student")).toBeNull();
+    expect(resolveAiCooldownSeconds(settings, "objective", "student")).toBe(30);
   });
 });

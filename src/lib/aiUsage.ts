@@ -6,7 +6,13 @@ import { prisma } from "@/lib/prisma";
 const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 export const AI_USAGE_WINDOWS = ["today", "7d", "30d", "all", "custom"] as const;
-export const AI_USAGE_MODES = ["overview", "next_step", "code_review", "question"] as const;
+export const AI_USAGE_MODES = [
+  "overview",
+  "next_step",
+  "code_review",
+  "question",
+  "objective_explanation",
+] as const;
 export const AI_USAGE_STATUSES = ["pending", "success", "cached", "failed", "interrupted"] as const;
 export const AI_USAGE_SCOPES = ["practice", "exam"] as const;
 
@@ -27,6 +33,7 @@ export const aiUsageModeLabels: Record<string, string> = {
   next_step: "下一步提示",
   code_review: "检查当前代码",
   question: "自由提问",
+  objective_explanation: "选择判断解析",
 };
 
 export const aiUsageStatusLabels: Record<string, string> = {
@@ -92,7 +99,12 @@ export async function getAiUsageDashboard(
       select: {
         id: true,
         username: true,
-        studentProfile: { select: { aiAccessEnabled: true } },
+        studentProfile: {
+          select: {
+            aiAccessEnabled: true,
+            objectiveAiAccessEnabled: true,
+          },
+        },
       },
     }),
     prisma.aiConversationTurn.findMany({
@@ -129,6 +141,9 @@ export async function getAiUsageDashboard(
         id: student.id,
         username: student.username,
         aiAccessEnabled: Boolean(student.studentProfile?.aiAccessEnabled),
+        objectiveAiAccessEnabled: Boolean(
+          student.studentProfile?.objectiveAiAccessEnabled,
+        ),
       },
       ...summarizeTurns(studentTurns),
     };
@@ -177,7 +192,12 @@ export async function getAiUsageStudentDetail({
     select: {
       id: true,
       username: true,
-      studentProfile: { select: { aiAccessEnabled: true } },
+      studentProfile: {
+        select: {
+          aiAccessEnabled: true,
+          objectiveAiAccessEnabled: true,
+        },
+      },
     },
   });
   if (!student) return null;
@@ -202,6 +222,8 @@ export async function getAiUsageStudentDetail({
         id: true,
         requestId: true,
         mode: true,
+        aiProfile: true,
+        objectiveItemIndex: true,
         userContent: true,
         assistantContent: true,
         status: true,
@@ -235,6 +257,9 @@ export async function getAiUsageStudentDetail({
       id: student.id,
       username: student.username,
       aiAccessEnabled: Boolean(student.studentProfile?.aiAccessEnabled),
+      objectiveAiAccessEnabled: Boolean(
+        student.studentProfile?.objectiveAiAccessEnabled,
+      ),
     },
     summary: summarizeTurns(summaryTurns),
     items,

@@ -13,7 +13,7 @@ import {
 import { clearObjectiveAiExplanationRateLimits } from "@/lib/objectiveAiExplanationRateLimit";
 import { parseObjectiveItems } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
-import { getSetting } from "@/lib/settings";
+import { defaultSystemSettings, getSetting } from "@/lib/settings";
 import { requireStaffApiUser } from "@/lib/staffAccess";
 import { POST } from "./route";
 
@@ -137,9 +137,13 @@ describe("POST /api/admin/problems/:id/objective-explanation", () => {
       response: null,
       user: { id: 1, role: "admin", username: "admin" },
     });
-    vi.mocked(getSetting).mockImplementation(async (key) =>
-      key === "aiObjectiveExplanationEnabled" ? "true" : "11",
-    );
+    vi.mocked(getSetting).mockImplementation(async (key) => {
+      if (key === "aiObjectiveExplanationEnabled") return "true";
+      if (key === "aiObjectiveExplanationPrompt") {
+        return defaultSystemSettings.aiObjectiveExplanationPrompt;
+      }
+      return "11";
+    });
     vi.mocked(prisma.problem.findFirst).mockResolvedValue(problem as never);
     vi.mocked(
       prisma.objectiveAiExplanation.findUnique,
@@ -217,23 +221,57 @@ describe("POST /api/admin/problems/:id/objective-explanation", () => {
     expect(generateObjectiveAiExplanation).not.toHaveBeenCalled();
   });
 
-  it("allows teachers to generate but rejects teacher force refresh", async () => {
+  it("regenerates when the administrator changes the objective prompt", async () => {
+    const parsedItem = parseObjectiveItems(problem.objectiveItems)[0];
+    vi.mocked(getSetting).mockImplementation(async (key) => {
+      if (key === "aiObjectiveExplanationEnabled") return "true";
+      if (key === "aiObjectiveExplanationPrompt") return "每个选项都举一个例子。";
+      return "11";
+    });
+    vi.mocked(
+      prisma.objectiveAiExplanation.findUnique,
+    ).mockResolvedValueOnce({
+      correctAnswer: "B",
+      explanationJson: serializeObjectiveExplanationCore(core),
+      generatedAt: new Date("2026-07-26T07:00:00Z"),
+      model: "test-model",
+      providerFingerprint: createAiProviderFingerprint(providerConfig),
+      sourceHash: createObjectiveExplanationSourceHash({
+        ...problem,
+        item: parsedItem,
+        itemIndex: 1,
+      }),
+    } as never);
+
+    const response = await POST(
+      request({ itemIndex: 1 }) as never,
+      context(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(generateObjectiveAiExplanation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining("每个选项都举一个例子"),
+      }),
+    );
+  });
+
+  it("allows teachers to generate and force refresh shared explanations", async () => {
     vi.mocked(requireStaffApiUser).mockResolvedValue({
       response: null,
       user: { id: 2, role: "teacher", username: "teacher" },
     });
-    const denied = await POST(
+    const refreshed = await POST(
       request({ force: true, itemIndex: 1 }) as never,
       context(),
     );
-    expect(denied.status).toBe(403);
-    expect(prisma.problem.findFirst).not.toHaveBeenCalled();
-
-    const allowed = await POST(
-      request({ itemIndex: 1 }) as never,
-      context(),
+    expect(refreshed.status).toBe(200);
+    expect(prisma.objectiveAiExplanation.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ generatedById: 2 }),
+        update: expect.objectContaining({ generatedById: 2 }),
+      }),
     );
-    expect(allowed.status).toBe(200);
   });
 
   it("rejects disabled settings and student callers", async () => {

@@ -17,7 +17,7 @@ describe("objective AI explanation rate limit", () => {
       itemIndex: 1,
       now: 1_000,
       problemId: 10,
-      staffId: 5,
+      accountId: 5,
     });
     expect(first.allowed).toBe(true);
     if (first.allowed) {
@@ -31,7 +31,7 @@ describe("objective AI explanation rate limit", () => {
         itemIndex: 2,
         now: 2_000,
         problemId: 20,
-        staffId: 5,
+        accountId: 5,
       }),
     ).toMatchObject({
       allowed: false,
@@ -46,7 +46,7 @@ describe("objective AI explanation rate limit", () => {
       itemIndex: 1,
       now: 1_000,
       problemId: 10,
-      staffId: 5,
+      accountId: 5,
     });
     expect(first.allowed).toBe(true);
 
@@ -56,7 +56,7 @@ describe("objective AI explanation rate limit", () => {
         itemIndex: 1,
         now: 1_000,
         problemId: 10,
-        staffId: 6,
+        accountId: 6,
       }),
     ).toMatchObject({ allowed: false, reason: "request_busy" });
     if (first.allowed) first.release();
@@ -68,7 +68,7 @@ describe("objective AI explanation rate limit", () => {
       itemIndex: 1,
       now: 1_000,
       problemId: 10,
-      staffId: 5,
+      accountId: 5,
     });
     if (first.allowed) {
       first.markProviderRequest(1_000);
@@ -79,7 +79,7 @@ describe("objective AI explanation rate limit", () => {
       itemIndex: 2,
       now: 31_000,
       problemId: 10,
-      staffId: 5,
+      accountId: 5,
     });
     expect(later.allowed).toBe(true);
     if (later.allowed) later.release();

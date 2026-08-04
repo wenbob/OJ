@@ -19,6 +19,7 @@ import {
 } from "@/components/StaffObjectiveAnswerVisibility";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatRuntime } from "@/lib/format";
+import { getAiCooldownSeconds } from "@/lib/aiRuntimeSettings";
 import { getDisplaySamples } from "@/lib/problemSamples";
 import {
   getPublicObjectiveItems,
@@ -61,7 +62,13 @@ export async function StaffExamPracticePage({
   );
   if (!Number.isInteger(examId)) notFound();
 
-  const [exam, defaultCodeTemplate, objectiveAiExplanationSetting] = await Promise.all([
+  const [
+    exam,
+    defaultCodeTemplate,
+    objectiveAiExplanationSetting,
+    staffProgrammingAssistSetting,
+    staffProgrammingCooldownSeconds,
+  ] = await Promise.all([
     prisma.exam.findFirst({
       where: getExamAccessWhere(user, examId),
       include: {
@@ -82,6 +89,8 @@ export async function StaffExamPracticePage({
     }),
     getDefaultCppTemplate(),
     getSetting("aiObjectiveExplanationEnabled"),
+    getSetting("aiStaffProgrammingAssistEnabled"),
+    getAiCooldownSeconds("programming", role),
   ]);
 
   if (!exam) notFound();
@@ -152,6 +161,9 @@ export async function StaffExamPracticePage({
   const objectiveAiEnabled =
     selectedProblemType === "objective" &&
     boolSetting(objectiveAiExplanationSetting);
+  const staffProgrammingAiEnabled =
+    selectedProblemType === "programming" &&
+    boolSetting(staffProgrammingAssistSetting);
 
   return (
     <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
@@ -242,7 +254,7 @@ export async function StaffExamPracticePage({
             key={`staff-objective-answers-${selectedProblem.id}`}
           >
             <ObjectiveAiExplanationProvider
-              canForceRegenerate={role === "admin"}
+              canForceRegenerate
               problemId={selectedProblem.id}
             >
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
@@ -355,6 +367,11 @@ export async function StaffExamPracticePage({
                   </section>
                 ) : null}
                 <ProblemSubmitForm
+                  aiCooldownSeconds={staffProgrammingCooldownSeconds ?? 30}
+                  aiEnabled={staffProgrammingAiEnabled}
+                  aiEndpoint={`/api/admin/problems/${selectedProblem.id}/programming-assist`}
+                  aiExamId={exam.id}
+                  aiStudentId={user.id}
                   key={`${role}-exam-practice-${exam.id}-problem-${selectedProblem.id}`}
                   defaultCodeTemplate={defaultCodeTemplate}
                   detailHrefBase={`${basePath}/submissions`}

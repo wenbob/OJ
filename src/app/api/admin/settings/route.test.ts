@@ -132,6 +132,49 @@ describe("PUT /api/admin/settings", () => {
     );
   });
 
+  it("normalizes and persists all administrator AI prompts atomically", async () => {
+    const response = await PUT(
+      request({
+        ...defaultSystemSettings,
+        aiProgrammingOverviewPrompt: "  用生活场景解释\r\n每次三步  ",
+        aiProgrammingNextStepPrompt: "每次只问一个问题",
+        aiProgrammingCodeReviewPrompt: "先肯定，再指出问题",
+        aiProgrammingQuestionPrompt: "只回答当前问题",
+        aiObjectiveExplanationPrompt: "逐项用简单中文解释",
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(prisma.systemSetting.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: {
+          key: "aiProgrammingOverviewPrompt",
+          value: "用生活场景解释\n每次三步",
+        },
+      }),
+    );
+    expect(prisma.systemSetting.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: {
+          key: "aiObjectiveExplanationPrompt",
+          value: "逐项用简单中文解释",
+        },
+      }),
+    );
+  });
+
+  it("rejects an invalid AI prompt before writing any settings", async () => {
+    const response = await PUT(
+      request({
+        ...defaultSystemSettings,
+        aiProgrammingQuestionPrompt: "  ",
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("rejects private custom Base URLs before persisting settings", async () => {
     const response = await PUT(
       request({

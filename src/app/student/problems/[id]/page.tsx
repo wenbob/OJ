@@ -3,6 +3,10 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
+import {
+  ObjectiveAiExplanationPanel,
+  ObjectiveAiExplanationProvider,
+} from "@/components/StaffObjectiveAiExplanation";
 import { ProblemRichText } from "@/components/ProblemRichText";
 import { ProblemSamples } from "@/components/ProblemSamples";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
@@ -17,6 +21,7 @@ import {
 } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
 import { boolSetting, getDefaultCppTemplate, getSetting } from "@/lib/settings";
+import { getStudentObjectiveAiDisplayState } from "@/lib/studentObjectiveAi";
 import { SubmitForm } from "./submit-form";
 
 const studentNav = [
@@ -61,6 +66,9 @@ export default async function StudentProblemDetailPage({
     aiPracticeEnabled,
     aiCooldownSeconds,
     studentProfile,
+    objectiveAiMasterSetting,
+    studentObjectiveAiSetting,
+    priorPracticeSubmission,
     assignment,
   ] =
     await Promise.all([
@@ -78,7 +86,20 @@ export default async function StudentProblemDetailPage({
       getAiCooldownSeconds("programming", "student"),
       prisma.studentProfile.findUnique({
         where: { userId: user.id },
-        select: { aiAccessEnabled: true },
+        select: {
+          aiAccessEnabled: true,
+          objectiveAiAccessEnabled: true,
+        },
+      }),
+      getSetting("aiObjectiveExplanationEnabled"),
+      getSetting("aiStudentObjectiveExplanationEnabled"),
+      prisma.submission.findFirst({
+        where: {
+          problemId,
+          submissionType: "practice",
+          userId: user.id,
+        },
+        select: { id: true },
       }),
       Number.isInteger(requestedAssignmentId)
         ? prisma.learningAssignment.findFirst({
@@ -98,6 +119,18 @@ export default async function StudentProblemDetailPage({
     problemType === "objective"
       ? getPublicObjectiveItems(parseObjectiveItems(problem.objectiveItems))
       : [];
+  const objectiveAiEnabled =
+    problemType === "objective" &&
+    boolSetting(objectiveAiMasterSetting) &&
+    boolSetting(studentObjectiveAiSetting) &&
+    Boolean(studentProfile?.objectiveAiAccessEnabled);
+  const objectiveAiDisplay = getStudentObjectiveAiDisplayState({
+    enabled: objectiveAiEnabled,
+    hasPriorPracticeSubmission: Boolean(priorPracticeSubmission),
+  });
+  const objectiveAiLockedMessage = priorPracticeSubmission
+    ? ""
+    : "请先提交一次当前选择判断题";
   const samples = getDisplaySamples({
     sampleInput: problem.sampleInput,
     sampleOutput: problem.sampleOutput,
@@ -128,6 +161,13 @@ export default async function StudentProblemDetailPage({
           </Link>
         </section>
       ) : null}
+      <ObjectiveAiExplanationProvider
+        audited
+        canForceRegenerate
+        lockedMessage={objectiveAiLockedMessage}
+        problemId={problem.id}
+        requestPath={`/api/problems/${problem.id}/objective-explanation`}
+      >
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(520px,44%)]">
         <article className="surface p-6">
           <div className="flex flex-wrap items-center gap-3">
@@ -154,7 +194,10 @@ export default async function StudentProblemDetailPage({
           </div>
           <ProblemSection title="题目描述" value={problem.description} />
           {problemType === "objective" ? (
-            <ObjectiveProblemContent items={objectiveItems} />
+            <ObjectiveProblemContent
+              items={objectiveItems}
+              showAiExplanationActions={objectiveAiDisplay.showActions}
+            />
           ) : (
             <>
               <ProblemSection title="输入格式" value={problem.inputDescription} />
@@ -165,6 +208,27 @@ export default async function StudentProblemDetailPage({
           )}
         </article>
 
+        {objectiveAiDisplay.showPanel ? (
+          <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:h-[calc(100dvh-3rem)] xl:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] xl:self-start xl:overflow-hidden">
+            <ObjectiveAiExplanationPanel />
+            <div className="grid min-h-0 content-start gap-3 overflow-y-auto overscroll-contain">
+              <SubmitForm
+                defaultCodeTemplate={defaultCodeTemplate}
+                fromSubmissionId={
+                  Number.isInteger(fromSubmissionId) ? fromSubmissionId : undefined
+                }
+                learningAssignmentId={
+                  assignment?.status === "active" ? assignment.id : undefined
+                }
+                objectiveCompact
+                problemType={problemType}
+                problemId={problem.id}
+                refreshOnSuccess
+                sampleCount={samples.length}
+              />
+            </div>
+          </aside>
+        ) : (
         <ViewportCenteredStickyPanel enabled={problemType === "objective"}>
           <SubmitForm
             aiCooldownSeconds={aiCooldownSeconds ?? undefined}
@@ -183,10 +247,13 @@ export default async function StudentProblemDetailPage({
             }
             problemType={problemType}
             problemId={problem.id}
+            refreshOnSuccess={problemType === "objective"}
             sampleCount={samples.length}
           />
         </ViewportCenteredStickyPanel>
+        )}
       </div>
+      </ObjectiveAiExplanationProvider>
     </AppShell>
   );
 }

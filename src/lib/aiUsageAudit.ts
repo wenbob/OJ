@@ -7,6 +7,8 @@ const CLIENT_ID_PATTERN = /^[A-Za-z0-9_-]{8,80}$/;
 const INTERRUPTED_AFTER_MS = 10 * 60 * 1000;
 const MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
+export type AiUsageMode = AiAssistMode | "objective_explanation";
+
 let lastMaintenanceAt = 0;
 
 export type AiUsageExecution = {
@@ -85,10 +87,12 @@ export async function findExistingAiUsageTurn({
 }
 
 export async function createPendingAiUsageTurn({
+  aiProfile = "programming",
   clientConversationId,
   examId,
   examTitle,
   mode,
+  objectiveItemIndex = null,
   problemId,
   problemTitle,
   requestId,
@@ -96,10 +100,12 @@ export async function createPendingAiUsageTurn({
   studentId,
   userContent,
 }: {
+  aiProfile?: "programming" | "objective";
   clientConversationId: string;
   examId: number | null;
   examTitle: string | null;
-  mode: AiAssistMode;
+  mode: AiUsageMode;
+  objectiveItemIndex?: number | null;
   problemId: number;
   problemTitle: string;
   requestId: string;
@@ -146,6 +152,8 @@ export async function createPendingAiUsageTurn({
     data: {
       conversationId: conversation.id,
       mode,
+      aiProfile,
+      objectiveItemIndex,
       requestId,
       status: "pending",
       userContent,
