@@ -10,7 +10,6 @@ import {
 import { ProblemRichText } from "@/components/ProblemRichText";
 import { ProblemSamples } from "@/components/ProblemSamples";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
-import { ViewportCenteredStickyPanel } from "@/components/ViewportCenteredStickyPanel";
 import { requirePageUser } from "@/lib/auth";
 import { getAiCooldownSeconds } from "@/lib/aiRuntimeSettings";
 import { getDisplaySamples } from "@/lib/problemSamples";
@@ -209,9 +208,9 @@ export default async function StudentProblemDetailPage({
         </article>
 
         {objectiveAiDisplay.showPanel ? (
-          <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:h-[calc(100dvh-3rem)] xl:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] xl:self-start xl:overflow-hidden">
+          <aside className="grid content-start gap-4 xl:self-start">
             <ObjectiveAiExplanationPanel />
-            <div className="grid min-h-0 content-start gap-3 overflow-y-auto overscroll-contain">
+            <div className="grid content-start gap-3">
               <SubmitForm
                 defaultCodeTemplate={defaultCodeTemplate}
                 fromSubmissionId={
@@ -229,7 +228,7 @@ export default async function StudentProblemDetailPage({
             </div>
           </aside>
         ) : (
-        <ViewportCenteredStickyPanel enabled={problemType === "objective"}>
+        <aside className="grid content-start gap-4 xl:self-start">
           <SubmitForm
             aiCooldownSeconds={aiCooldownSeconds ?? undefined}
             aiEnabled={
@@ -250,7 +249,7 @@ export default async function StudentProblemDetailPage({
             refreshOnSuccess={problemType === "objective"}
             sampleCount={samples.length}
           />
-        </ViewportCenteredStickyPanel>
+        </aside>
         )}
       </div>
       </ObjectiveAiExplanationProvider>

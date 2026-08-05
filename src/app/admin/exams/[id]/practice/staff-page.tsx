@@ -312,9 +312,9 @@ export async function StaffExamPracticePage({
             </article>
 
             {objectiveAiEnabled ? (
-              <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:h-[calc(100dvh-3rem)] xl:grid-rows-[minmax(0,7fr)_minmax(0,3fr)] xl:self-start xl:overflow-hidden">
+              <aside className="grid content-start gap-4 xl:self-start">
                 <ObjectiveAiExplanationPanel />
-                <div className="grid min-h-0 content-start gap-3 overflow-y-auto overscroll-contain">
+                <div className="grid content-start gap-3">
                   {selectedLatest ? (
                     <div className="flex flex-wrap items-center justify-between gap-2 border border-ink-950/10 bg-white/70 px-3 py-2 text-xs font-bold text-ink-700">
                       <span>最近提交</span>

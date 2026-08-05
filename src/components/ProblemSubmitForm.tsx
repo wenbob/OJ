@@ -36,6 +36,8 @@ int main() {
 }
 `;
 
+const objectiveAnswerEditorHeight = "clamp(360px, 44dvh, 520px)";
+
 export function ProblemSubmitForm({
   aiCooldownSeconds,
   aiEndpoint,
@@ -425,11 +427,7 @@ export function ProblemSubmitForm({
         <CodeEditor
           key={storageKey}
           height={
-            objective
-              ? objectiveCompact
-                ? "clamp(180px, 22dvh, 260px)"
-                : "360px"
-              : "460px"
+            objective ? objectiveAnswerEditorHeight : "460px"
           }
           language={objective ? "plaintext" : "cpp"}
           value={code}
