@@ -9,7 +9,8 @@
 - 系统：Ubuntu 22.04.5 LTS
 - 配置：2 核 CPU、2GB 内存、40GB 系统盘、3M 固定带宽
 - 项目目录：`/www/oj`
-- 对外访问：`http://39.105.91.81`
+- 对外访问：`https://botcode.work`
+- 兼容入口：`http://39.105.91.81`、`http(s)://www.botcode.work` 统一跳转到正式域名
 
 已安装组件：
 
@@ -23,7 +24,7 @@
 
 - `22`：SSH
 - `80`：HTTP
-- `443`：HTTPS，后续配置证书后使用
+- `443`：HTTPS 正式流量
 
 完成 Nginx 反向代理后，建议关闭安全组中的 `3000` 对外访问。
 
@@ -58,6 +59,9 @@ nano .env
 NODE_ENV=production
 DATABASE_URL="file:/www/oj/prisma/prod.db"
 SESSION_SECRET="请替换成至少 32 位的强随机字符串"
+APP_ORIGIN=https://botcode.work
+SESSION_COOKIE_SECURE=true
+OJ_LISTEN_HOST=127.0.0.1
 JUDGE_MODE=docker
 JUDGE_DOCKER_IMAGE=oj-cpp-judge
 JUDGE_CONCURRENCY=1
@@ -71,7 +75,13 @@ ARK_API_KEY=
 AI_CUSTOM_API_KEY=
 ```
 
-不要把 `.env` 提交到 Git，也不要把真实密码或真实 secret 写进文档。
+不要把 `.env` 提交到 Git，也不要把真实密码、证书注册邮箱或 secret 写进文档。旧的 `NEXT_PUBLIC_SITE_URL=http://39.105.91.81` 没有代码引用，应从生产 `.env` 删除。
+
+已有服务器可用幂等脚本只替换上述域名相关键，并把包含密钥的备份留在服务器且限制为 `600` 权限：
+
+```bash
+sh /www/oj/deploy/scripts/apply-domain-env.sh /www/oj/.env
+```
 
 AI 密钥按服务商分别放在 `DEEPSEEK_API_KEY`、`ARK_API_KEY`、`AI_CUSTOM_API_KEY`。缺少未使用服务商的密钥不会影响 OJ 启动；管理员页面只显示当前密钥槽是否已配置。
 
@@ -211,59 +221,72 @@ JUDGE_COMPILE_TIMEOUT_MS=45000
 pm2 restart oj --update-env
 ```
 
-## 4. Nginx 反向代理
+## 4. 域名、Certbot 与 Nginx
 
-示例配置：
+正式 Nginx 配置以仓库中的 `deploy/nginx/oj.conf` 为准。根域名保留 A 记录 `39.105.91.81`，并在 DNS 增加：
+
+```text
+www  CNAME  botcode.work
+```
+
+先确认两个域名已经在公网解析，再处理证书。中国大陆阿里云 ECS 还必须先确认域名已完成 ICP 备案：未备案时，公网 HTTP 请求会在到达 Nginx 前被阿里云的 `Server: Beaver` 页面拦截并返回 `403 Non-compliance ICP Filing`，此时 HTTP-01/Webroot 必然失败。不要只从服务器本机 `curl` 验证 ACME 路径；必须再从服务器外部网络访问一次。
+
+如果外部验证返回上述 `403`，应立即停止重复签发并保留当前有效证书。后续只能选择其一：完成 ICP 备案后继续本节的 HTTP-01 流程；或另行使用 DNS-01 自动化，并为阿里云 DNS 创建只允许维护 `_acme-challenge` 所需记录的最小权限 RAM 凭据。禁止使用主账号 AccessKey，凭据只能保存到服务器 root 专用的 `0600` 文件，不得写入项目 `.env`、仓库或日志。
+
+确认外部 HTTP 可达后，切换前备份现有配置并准备 ACME Webroot：
+
+```bash
+stamp=$(date +%Y%m%d-%H%M%S)
+cp /etc/nginx/sites-available/oj /etc/nginx/sites-available/oj.before-certbot-${stamp}
+mkdir -p /var/www/certbot/.well-known/acme-challenge
+```
+
+首次签发前，只在当前 HTTP 域名块中加入 `www.botcode.work` 和下面的 location；当前 443 块及阿里云证书保持不动，避免证书文件尚不存在时中断线上 HTTPS：
 
 ```nginx
-server {
-    listen 80;
-    server_name 39.105.91.81;
-    client_max_body_size 25m;
-
-    # AI 难题允许较长推理；不要沿用 Nginx 默认 60 秒读取超时。
-    location = /api/ai/problem-assist {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_read_timeout 600s;
-        proxy_send_timeout 600s;
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Connection "";
-    }
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        # Nginx 是唯一受信任代理，不能把客户端伪造的 XFF 继续传给应用。
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
+location ^~ /.well-known/acme-challenge/ {
+    root /var/www/certbot;
+    default_type text/plain;
+    try_files $uri =404;
 }
 ```
 
-检查配置：
+当前项目服务器也可以使用仓库脚本生成同等的临时配置；脚本会先备份当前文件，校验或 reload 失败会自动恢复：
 
 ```bash
+sh /www/oj/deploy/scripts/install-domain-nginx-bootstrap.sh \
+  /www/oj/deploy/nginx/oj.conf
+```
+
+执行 `nginx -t` 并 reload 后，用真实通知邮箱签发双域名证书：
+
+```bash
+apt-get update
+apt-get install -y certbot
+certbot certonly --webroot -w /var/www/certbot \
+  -d botcode.work -d www.botcode.work \
+  --email '替换为证书通知邮箱' --agree-tos --no-eff-email
+```
+
+签发失败时先检查外部响应头和正文；看到备案拦截页时不要继续重试。只有 `/etc/letsencrypt/live/botcode.work/fullchain.pem` 与 `privkey.pem` 都已生成，才允许安装引用 Let’s Encrypt 路径的最终 Nginx 配置。
+
+证书成功后再安装最终配置和续期 hook：
+
+```bash
+cp /www/oj/deploy/nginx/oj.conf /etc/nginx/sites-available/oj
+install -m 750 /www/oj/deploy/certbot/reload-nginx.sh \
+  /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 nginx -t
 systemctl reload nginx
+systemctl enable --now certbot.timer
+certbot renew --dry-run
 ```
 
-配置完成后访问：
+最终行为固定为：HTTP 主域名、HTTP IP、HTTP/HTTPS `www` 均 301 到 `https://botcode.work`；只有主域名 HTTPS 代理到 `127.0.0.1:3000`。ACME 路径不跳转，供自动续期使用。AI 路由保留 600 秒上游超时和关闭缓冲，普通健康检查不放宽超时，以免掩盖 Next.js 上游冻结。
 
-```text
-http://39.105.91.81
-```
+初始 HSTS 为一天。连续稳定运行 7 天且 `certbot renew --dry-run` 正常后，可把两个 HTTPS 块的 `max-age=86400` 提升为 `max-age=15552000`；不要增加 `includeSubDomains` 或 preload。
+
+配置失败时恢复 `oj.before-certbot-*`，执行 `nginx -t` 后 reload；确认新证书和续期正常前不要删除原阿里云证书。
 
 ## 5. 健康检查
 
@@ -271,7 +294,7 @@ http://39.105.91.81
 
 ```bash
 curl http://127.0.0.1:3000/api/health
-curl http://39.105.91.81/api/health
+curl https://botcode.work/api/health
 ```
 
 期望返回类似：
@@ -285,7 +308,7 @@ curl http://39.105.91.81/api/health
 基础安全响应头检查：
 
 ```bash
-curl -fsSI http://127.0.0.1:3000/login | grep -Ei 'content-security-policy|x-content-type-options|x-frame-options|referrer-policy|permissions-policy'
+curl -fsSI https://botcode.work/login | grep -Ei 'strict-transport-security|content-security-policy|x-content-type-options|x-frame-options|referrer-policy|permissions-policy'
 ```
 
 ## 6. SQLite 数据备份
@@ -436,7 +459,7 @@ rm -rf -- /www/oj-new
 ```bash
 df -h /
 curl http://127.0.0.1:3000/api/health
-curl http://39.105.91.81/api/health
+curl https://botcode.work/api/health
 pm2 list
 ```
 
@@ -458,15 +481,17 @@ Docker 注意事项：
 - [ ] `node_modules` 没有提交到 Git。
 - [ ] `.next` 没有提交到 Git。
 - [ ] 阿里云安全组关闭公网 `3000` 端口。
-- [ ] 安全组只保留必要端口：`22`、`80`、后续 `443`。
+- [ ] 安全组只保留必要端口：`22`、`80`、`443`。
 - [ ] 后续可以把 `22` 端口限制为固定 IP。
 - [ ] 不开放任何数据库端口。
 - [ ] Docker Judge 使用 `JUDGE_MODE=docker`。
 - [ ] `/api/health` 返回正常。
+- [ ] `botcode.work` 与 `www.botcode.work` 均包含在当前证书中。
+- [ ] `certbot.timer` 已启用，`certbot renew --dry-run` 通过。
+- [ ] HTTP、HTTP IP 和 `www` 均跳转到 `https://botcode.work`。
+- [ ] 登录 Cookie 包含 `Secure`、`HttpOnly`、`SameSite=Lax`。
 - [ ] 登录页响应包含基础安全头：`Content-Security-Policy`、`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy`。
 - [ ] 已完成一次 SQLite 备份。
-- [ ] 后续可以绑定域名。
-- [ ] 后续可以配置 HTTPS。
 
 ## 9. 上课前检查清单
 
@@ -639,7 +664,7 @@ curl -I http://127.0.0.1:3000/_next/static/某个实际 chunk.css
 curl -I http://127.0.0.1:3000/ac-success.png
 ```
 
-浏览器完成一次 Accepted 冒烟后，网络面板应看到 `/ac-success.png`，不应出现针对该图片的 `/_next/image` 请求。
+清空浏览器缓存后完成第一次 Accepted 冒烟：网络面板应在答题页挂载后直接看到 `/ac-success.png`，提交通过后图片从可绘制状态开始完整展示；不应出现针对该图片的 `/_next/image` 请求。再连续提交一次，确认复用浏览器缓存且没有重复的图片优化请求。
 
 如果健康检查失败，立即把最新 `/www/oj-old-*` 恢复为 `/www/oj`。健康检查应保留至少 60 秒的重试窗口，避免服务尚未完全启动时误判失败。
 

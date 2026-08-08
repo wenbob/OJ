@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 const DEFAULT_SESSION_SECRET = "replace-this-with-a-long-random-string";
 
 export type RuntimeEnv = Record<string, string | undefined>;
@@ -22,6 +24,40 @@ function isRelativeSqliteUrl(value: string) {
   return true;
 }
 
+function isPublicHttpsOrigin(value: string) {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+
+    return (
+      url.protocol === "https:" &&
+      url.origin === value &&
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      hostname !== "localhost" &&
+      hostname.includes(".") &&
+      isIP(hostname) === 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function shouldUseSecureSessionCookies(
+  env: RuntimeEnv = process.env,
+) {
+  const configured = env.SESSION_COOKIE_SECURE?.trim().toLowerCase();
+  if (configured === "true") return true;
+  if (configured === "false") return false;
+
+  try {
+    return new URL(env.APP_ORIGIN?.trim() ?? "").protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function getJudgeMode(env: RuntimeEnv = process.env) {
   return (env.JUDGE_MODE ?? "local").trim().toLowerCase();
 }
@@ -35,6 +71,7 @@ export function validateProductionEnv(env: RuntimeEnv = process.env): EnvValidat
   }
 
   const requiredKeys = [
+    "APP_ORIGIN",
     "DATABASE_URL",
     "SESSION_SECRET",
     "JUDGE_MODE",
@@ -55,6 +92,24 @@ export function validateProductionEnv(env: RuntimeEnv = process.env): EnvValidat
     errors.push(
       "生产环境 SQLite DATABASE_URL 必须使用绝对路径，例如 file:/www/oj/prisma/prod.db，避免 standalone 解析到错误目录",
     );
+  }
+
+  const appOrigin = env.APP_ORIGIN?.trim() ?? "";
+  if (appOrigin && !isPublicHttpsOrigin(appOrigin)) {
+    errors.push(
+      "APP_ORIGIN 必须是无路径、参数、片段和端口的公网 HTTPS Origin，例如 https://botcode.work",
+    );
+  }
+
+  const secureCookieSetting = env.SESSION_COOKIE_SECURE?.trim().toLowerCase();
+  if (
+    secureCookieSetting &&
+    secureCookieSetting !== "true" &&
+    secureCookieSetting !== "false"
+  ) {
+    errors.push("SESSION_COOKIE_SECURE 只能设置为 true 或 false");
+  } else if (secureCookieSetting === "false") {
+    errors.push("生产环境禁止设置 SESSION_COOKIE_SECURE=false");
   }
 
   const sessionSecret = env.SESSION_SECRET?.trim() ?? "";

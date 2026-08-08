@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { shouldUseSecureSessionCookies } from "@/lib/env";
 import {
   isSameOriginMutationRequest,
   sameOriginMutationErrorResponse,
@@ -248,7 +249,7 @@ export function clearSessionResponse(response: NextResponse) {
     sameSite: "lax",
     path: "/",
     maxAge: 0,
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureSessionCookies(),
   });
   return response;
 }
@@ -259,14 +260,7 @@ export function attachSessionResponse(response: NextResponse, user: SessionUser)
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureSessionCookies(),
   });
   return response;
-}
-
-function shouldUseSecureCookies() {
-  const configured = process.env.SESSION_COOKIE_SECURE?.trim().toLowerCase();
-  if (configured === "true") return true;
-  if (configured === "false") return false;
-  return process.env.APP_ORIGIN?.trim().toLowerCase().startsWith("https://") ?? false;
 }

@@ -11,6 +11,10 @@ import { ObjectiveSubmissionBreakdown } from "@/components/ObjectiveSubmissionBr
 import { ProblemAiAssist } from "@/components/ProblemAiAssist";
 import { ProblemRunPanel } from "@/components/ProblemRunPanel";
 import { StatusBadge } from "@/components/StatusBadge";
+import {
+  AC_SUCCESS_IMAGE_SRC,
+  preloadAcSuccessImage,
+} from "@/lib/acSuccessImage";
 import { formatRuntime } from "@/lib/format";
 import type { ProblemType } from "@/lib/objectiveProblem";
 import {
@@ -107,6 +111,7 @@ export function ProblemSubmitForm({
   const [showObjectiveExamConfirm, setShowObjectiveExamConfirm] =
     useState(false);
   const [showAcceptedPopup, setShowAcceptedPopup] = useState(false);
+  const [acceptedArtworkReady, setAcceptedArtworkReady] = useState(false);
   const [countedForLearningAssignment, setCountedForLearningAssignment] =
     useState(false);
   const [learningAssignmentDetached, setLearningAssignmentDetached] =
@@ -128,6 +133,7 @@ export function ProblemSubmitForm({
       setError("");
       setShowObjectiveExamConfirm(false);
       setShowAcceptedPopup(false);
+      setAcceptedArtworkReady(false);
       setCountedForLearningAssignment(false);
       setLearningAssignmentDetached(false);
       setCode(initialCode);
@@ -207,6 +213,10 @@ export function ProblemSubmitForm({
   ]);
 
   useEffect(() => {
+    void preloadAcSuccessImage();
+  }, []);
+
+  useEffect(() => {
     if (!examEndsAt) return;
 
     const endTime = new Date(examEndsAt).getTime();
@@ -276,6 +286,7 @@ export function ProblemSubmitForm({
     setResult(null);
     setShowObjectiveExamConfirm(false);
     setShowAcceptedPopup(false);
+    setAcceptedArtworkReady(false);
     setCountedForLearningAssignment(false);
     setLearningAssignmentDetached(false);
 
@@ -329,6 +340,8 @@ export function ProblemSubmitForm({
       );
     }
     if (data.submission?.status === "Accepted") {
+      const artworkReady = await preloadAcSuccessImage();
+      setAcceptedArtworkReady(artworkReady);
       setShowAcceptedPopup(true);
     }
     if (
@@ -370,14 +383,32 @@ export function ProblemSubmitForm({
               >
                 关闭
               </button>
-              <Image
-                alt="你通过了此题，恭喜"
-                className="max-h-[86vh] max-w-[86vw] object-contain"
-                height={1254}
-                src="/ac-success.png"
-                unoptimized
-                width={1254}
-              />
+              {acceptedArtworkReady ? (
+                <Image
+                  alt="你通过了此题，恭喜"
+                  className="max-h-[86vh] max-w-[86vw] object-contain"
+                  height={1254}
+                  onError={() => setAcceptedArtworkReady(false)}
+                  src={AC_SUCCESS_IMAGE_SRC}
+                  unoptimized
+                  width={1254}
+                />
+              ) : (
+                <div className="flex min-h-56 min-w-72 flex-col items-center justify-center border border-emerald-300 bg-white p-8 text-center shadow-2xl">
+                  <span
+                    aria-hidden="true"
+                    className="flex size-16 items-center justify-center rounded-full bg-emerald-100 text-4xl font-black text-emerald-700"
+                  >
+                    ✓
+                  </span>
+                  <strong className="mt-4 text-3xl font-black text-emerald-700">
+                    Accepted
+                  </strong>
+                  <span className="mt-2 text-sm font-bold text-ink-700">
+                    恭喜你通过了此题
+                  </span>
+                </div>
+              )}
             </div>
           </div>,
           document.body,

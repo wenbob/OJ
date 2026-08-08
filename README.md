@@ -67,6 +67,7 @@
 - [2026-08-04 间歇性 504 与 AC 图片优化器修复记录](docs/ops-review-2026-08-04.md)
 - [2026-08-04 学生客观题 AI 与自定义提示词发布记录](docs/ops-review-2026-08-04-ai-student-release.md)
 - [2026-08-05 选择判断答案区高度与滚动体验修正记录](docs/ops-review-2026-08-05.md)
+- [2026-08-08 正式域名同步与首次 AC 图片预加载记录](docs/ops-review-2026-08-08.md)
 
 ## 技术栈
 
@@ -119,6 +120,9 @@ cp .env.example .env
 ```env
 DATABASE_URL="file:./dev.db"
 SESSION_SECRET="replace-this-with-a-long-random-string"
+APP_ORIGIN=http://127.0.0.1:3000
+SESSION_COOKIE_SECURE=false
+OJ_LISTEN_HOST=127.0.0.1
 JUDGE_MODE=local
 JUDGE_DOCKER_IMAGE=oj-cpp-judge
 JUDGE_CONCURRENCY=1
@@ -409,7 +413,7 @@ oj-code-exam-${examId}-problem-${problemId}
 
 编程题提交后的结果卡片会直接展示一个“程序输出”区域，优先显示第一个未通过测试点的用户输出；如果全部通过，则显示第一个测试点输出。选择判断题会直接展开逐题正确/错误及自己的答案。完整结果仍可进入提交详情页查看。
 
-当提交结果为 `Accepted` 时，页面会居中显示透明背景的通过提示图片，带短暂弹入和淡出动效，并在约 1 秒后自动消失。提示图直接从 `/ac-success.png` 加载，不经过 Next.js `/_next/image` 优化器。
+答题组件挂载后会在后台预加载并解码 `/ac-success.png`。当提交结果为 `Accepted` 时，页面从图片真正可绘制后再开始约 1 秒的居中弹入与淡出动效，因此清空浏览器缓存后的首次通过也能显示；加载失败或等待超时会退回简洁的 Accepted 文字反馈，不阻塞评测结果。提示图始终直接请求 `/ac-success.png`，不经过 Next.js `/_next/image` 优化器。
 
 ### 日常提交记录
 
@@ -1352,7 +1356,9 @@ GET /api/admin/problems?page=1&pageSize=50&category=基础语法
 完整部署、回滚、备份和容量操作以 [docs/deploy.md](docs/deploy.md) 为准，README 只保留关键红线：
 
 - 线上 `/www/oj` 使用 SQLite + Docker Judge + `JUDGE_CONCURRENCY=1`，适合小规模长期使用。
+- 正式入口固定为 `https://botcode.work`；`www.botcode.work`、HTTP 和 HTTP IP 访问只做 301 跳转，应用不直接监听公网端口。
 - 生产 `DATABASE_URL` 必须是绝对路径，例如 `file:/www/oj/prisma/prod.db`，禁止使用 `file:./prod.db`。
+- 生产环境必须设置 `APP_ORIGIN=https://botcode.work`、`SESSION_COOKIE_SECURE=true` 和 `OJ_LISTEN_HOST=127.0.0.1`。
 - 常规发布前必须备份 `/www/oj/prisma/prod.db` 到 `/www/backups`，且确认备份文件存在。
 - 常规发布优先在本地 Linux/Docker 环境生成 Next.js standalone 产物并上传；不要把 Windows 本机 `.next/standalone` 当作 Ubuntu 产物。
 - 2GB 服务器上常规发布不要执行 `npm ci` 或全量 Next build；只有应急时才按 `docs/deploy.md` 的单 worker 低内存流程处理。
@@ -1369,6 +1375,10 @@ GET /api/admin/problems?page=1&pageSize=50&category=基础语法
 [ ] NODE_ENV=production
 [ ] JUDGE_MODE=docker
 [ ] SESSION_SECRET 已改成强随机字符串
+[ ] APP_ORIGIN=https://botcode.work
+[ ] SESSION_COOKIE_SECURE=true
+[ ] 大陆服务器域名已备案，或已配置最小权限 DNS-01 自动验证；公网 ACME 路径无 Beaver 403
+[ ] Certbot 双域名证书和自动续期 dry-run 通过
 [ ] npm run check:env 通过
 [ ] 默认管理员密码已修改
 [ ] npm run test 通过
@@ -1377,9 +1387,9 @@ GET /api/admin/problems?page=1&pageSize=50&category=基础语法
 [ ] npm run build 通过
 [ ] npm run db:deploy 已执行
 [ ] 数据库已备份
-[ ] /api/health 返回 ok
+[ ] 直连和 https://botcode.work/api/health 连续检查均返回 ok
 [ ] 运行样例和自定义输入冒烟测试通过，且未新增 Submission
-[ ] Accepted 冒烟测试通过，AC 图片直接请求 /ac-success.png，未经过 /_next/image
+[ ] 清空浏览器缓存后的首次 Accepted 冒烟通过，AC 图片直接请求 /ac-success.png，未经过 /_next/image
 [ ] Wrong Answer 冒烟测试通过
 [ ] Compile Error 冒烟测试通过
 [ ] Runtime Error 冒烟测试通过
@@ -1461,5 +1471,5 @@ GET /api/admin/problems?page=1&pageSize=50&category=基础语法
 - 将内存队列升级为 Redis / BullMQ 或独立 Judge 服务。
 - 隐藏非样例测试点输入输出。
 - 补充端到端权限测试和真实 Docker Judge 冒烟测试脚本。
-- 配置域名、HTTPS、自动备份和更完整的监控告警。
+- 增加异地自动备份和更完整的监控告警。
 - 为考试结果和成绩统计补充更完整的管理视图。

@@ -4,6 +4,14 @@
 
 这是一个 Next.js App Router + Prisma + SQLite 的 C++ 在线 OJ。线上服务位于 `/www/oj`，PM2 进程名为 `oj`，健康检查为 `/api/health`，Judge 使用 Docker。
 
+## 正式域名与 TLS
+
+- 正式入口固定为 `https://botcode.work`；`www.botcode.work`、HTTP 和 HTTP IP 访问只允许 301 跳转到主域名并保留原 URI。`https://IP` 的证书不匹配属于预期，不要把 IP 当作 HTTPS 入口。
+- 生产 `.env` 必须包含 `APP_ORIGIN=https://botcode.work`、`SESSION_COOKIE_SECURE=true` 和 `OJ_LISTEN_HOST=127.0.0.1`；废弃的 `NEXT_PUBLIC_SITE_URL` 不得继续保存旧 IP。
+- 域名完成 ICP 备案且公网 HTTP 不再被阿里云 `Server: Beaver` 返回 403 后，TLS 证书才由 Certbot Webroot `/var/www/certbot` 维护；外部 ACME 路径验证必须通过，不能只用服务器本机 curl。未备案时停止 HTTP-01 重试并保留当前有效证书；如改用 DNS-01，只允许最小权限 RAM 凭据且不得写入项目 `.env`、仓库或日志。正式证书包含 `botcode.work` 与 `www.botcode.work`，续期 hook 必须先通过 `nginx -t` 再 reload。不要让 Certbot 自动改写项目维护的最终 Nginx 结构。
+- 首次 HSTS 只使用 `max-age=86400`；连续稳定 7 天并通过续期 dry-run 后才提高为 `15552000`，禁止启用 `includeSubDomains` 或 preload。
+- 域名或证书变更必须先备份 `/etc/nginx/sites-available/oj`。证书签发、`nginx -t`、双网络 HTTPS、跳转矩阵和连续健康检查未全部通过前，不得删除原证书或宣布完成。
+
 ## 数据安全红线
 
 - 生产数据库为 `/www/oj/prisma/prod.db`。
@@ -41,7 +49,7 @@
 
 ## 提交反馈策略
 
-- AC 透明动效集中在 `ProblemSubmitForm.tsx` 和真实 alpha 图片 `public/ac-success.png`；遮罩必须 portal 到 `document.body`，否则祖先残留的 `transform` 会让 `position: fixed` 在自动滚动后偏离视口中心；图片必须保留 Next Image 的 `unoptimized`（或等价直接静态加载），浏览器只能请求 `/ac-success.png`，禁止重新走 `/_next/image`。
+- AC 透明动效集中在 `ProblemSubmitForm.tsx` 和真实 alpha 图片 `public/ac-success.png`；答题组件挂载后要复用模块级 Promise 后台预加载并等待 `decode()`，收到 Accepted 后从图片就绪时才开始 1 秒动效，失败或有限等待超时则显示文字反馈；遮罩必须 portal 到 `document.body`，否则祖先残留的 `transform` 会让 `position: fixed` 在自动滚动后偏离视口中心；图片必须保留 Next Image 的 `unoptimized`（或等价直接静态加载），浏览器只能请求 `/ac-success.png`，禁止重新走 `/_next/image`。
 
 ## 试运行规则
 
