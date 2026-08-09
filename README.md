@@ -68,6 +68,7 @@
 - [2026-08-04 学生客观题 AI 与自定义提示词发布记录](docs/ops-review-2026-08-04-ai-student-release.md)
 - [2026-08-05 选择判断答案区高度与滚动体验修正记录](docs/ops-review-2026-08-05.md)
 - [2026-08-08 正式域名同步与首次 AC 图片预加载记录](docs/ops-review-2026-08-08.md)
+- [2026-08-09 OJ P0–P2 加固与生产发布记录](docs/ops-review-2026-08-09.md)
 
 ## 技术栈
 
@@ -417,6 +418,8 @@ oj-code-exam-${examId}-problem-${problemId}
 - 用户输出
 - 标准输出
 - 错误信息
+
+上述是数据库和后台排障数据。学生编程提交响应会在服务端统一清空测试点输入和期望输出，只保留学生自己的程序输出、状态与运行时间；管理员和有权老师仍可查看完整信息。
 
 编程题提交后的结果卡片会直接展示一个“程序输出”区域，优先显示第一个未通过测试点的用户输出；如果全部通过，则显示第一个测试点输出。选择判断题会直接展开逐题正确/错误及自己的答案。完整结果仍可进入提交详情页查看。
 
@@ -1038,7 +1041,7 @@ JUDGE_QUEUE_WAIT_TIMEOUT_MS=60000
 - `SubmissionCaseResult`：单个测试点评测结果。
 - `Exam`：模拟考试；`createdById` 记录管理员或老师创建者，列表用关联用户名显示“出卷人”标签；老师只能管理自己的考试，历史空归属考试仅管理员可管理并显示“未记录”。
 - `Exam.examType`：限制整场考试只能包含同类型题目。
-- `ExamProblem`：考试和题目的关联，包含题目顺序和分值。
+- `ExamProblem`：考试和题目的关联，包含题目顺序、分值，以及发布时固化的标题、题型、客观题内容和分值快照；历史计分优先使用快照。
 - `ExamRecord`：学生参加某场考试的记录，包含开始时间、交卷时间、状态和总分。
 - `LearningAssignment`：教师下发给学生的专项练习，保存标题、说明、截止日期和归档状态。
 - `LearningAssignmentProblem`：专项练习题目及顺序、题目信息快照和 `completedAt`；编辑任务时保留行会保留完成状态，新加题创建新快照。
@@ -1101,6 +1104,7 @@ npm run seed
 0013_ai_profiles_and_cooldowns
 0014_student_objective_ai_access
 0015_ai_custom_prompts
+0016_exam_integrity_hardening
 ```
 
 本地开发创建新迁移：
@@ -1269,6 +1273,7 @@ GET  /api/exam-submissions/my
 ```text
 GET    /api/admin/problems
 POST   /api/admin/problems
+GET    /api/admin/problems/[id]
 PUT    /api/admin/problems/[id]
 DELETE /api/admin/problems/[id]
 POST   /api/admin/problems/bulk-delete
@@ -1423,7 +1428,7 @@ GET /api/admin/problems?page=1&pageSize=50&category=基础语法
 - Docker Judge 仍不是完整竞赛级沙箱，建议继续增强隔离能力。
 - 当前账号体系使用签名 Cookie 和数据库会话版本；学生新登录会替换旧会话，管理员仍可多设备登录。系统已具备登录失败限流、会话有效期和同源变更请求校验，但还没有验证码、找回密码、操作审计和多因素认证等完整账号安全能力。
 - SQLite 适合 Demo，不适合高并发正式场景。
-- 学生提交详情会隐藏非样例测试点的输入、期望输出和实际输出；管理员与有权教师仍可查看完整评测信息用于排障。
+- 学生编程提交详情会隐藏全部测试点的输入和期望输出，但保留学生自己的实际输出；管理员与有权教师仍可查看完整评测信息用于排障。
 
 工程限制：
 

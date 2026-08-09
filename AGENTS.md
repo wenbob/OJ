@@ -1,151 +1,107 @@
 # OJ 项目协作规则
 
-## 项目概览
+## 项目速查
 
-这是一个 Next.js App Router + Prisma + SQLite 的 C++ 在线 OJ。线上服务位于 `/www/oj`，PM2 进程名为 `oj`，健康检查为 `/api/health`，Judge 使用 Docker。
+Next.js App Router + Prisma + SQLite 的 C++ 在线 OJ。生产目录 `/www/oj`，PM2 进程 `oj`，健康检查 `/api/health`，正式评测使用 Docker。
 
-## 正式域名与 TLS
+| 内容 | 权威文档 |
+|---|---|
+| 架构、数据模型、API、开发命令 | `README.md` |
+| 生产发布、回滚、证书、故障排查 | `docs/deploy.md` |
+| 学生、老师、管理员操作 | `docs/student-guide.md`、`docs/teacher-guide.md`、`docs/admin-guide.md` |
+| 历史发布与事故证据 | `docs/ops-review-*.md` |
 
-- 正式入口固定为 `https://botcode.work`；`www.botcode.work`、HTTP 和 HTTP IP 访问只允许 301 跳转到主域名并保留原 URI。`https://IP` 的证书不匹配属于预期，不要把 IP 当作 HTTPS 入口。
-- 生产 `.env` 必须包含 `APP_ORIGIN=https://botcode.work`、`SESSION_COOKIE_SECURE=true` 和 `OJ_LISTEN_HOST=127.0.0.1`；废弃的 `NEXT_PUBLIC_SITE_URL` 不得继续保存旧 IP。
-- 域名完成 ICP 备案且公网 HTTP 不再被阿里云 `Server: Beaver` 返回 403 后，TLS 证书才由 Certbot Webroot `/var/www/certbot` 维护；外部 ACME 路径验证必须通过，不能只用服务器本机 curl。未备案时停止 HTTP-01 重试并保留当前有效证书；如改用 DNS-01，只允许最小权限 RAM 凭据且不得写入项目 `.env`、仓库或日志。正式证书包含 `botcode.work` 与 `www.botcode.work`，续期 hook 必须先通过 `nginx -t` 再 reload。不要让 Certbot 自动改写项目维护的最终 Nginx 结构。
-- 首次 HSTS 只使用 `max-age=86400`；连续稳定 7 天并通过续期 dry-run 后才提高为 `15552000`，禁止启用 `includeSubDomains` 或 preload。
-- 域名或证书变更必须先备份 `/etc/nginx/sites-available/oj`。证书签发、`nginx -t`、双网络 HTTPS、跳转矩阵和连续健康检查未全部通过前，不得删除原证书或宣布完成。
+## 生产与数据红线
 
-## 数据安全红线
+- 正式入口固定为 `https://botcode.work`；HTTP、HTTP IP 和 `www` 只做保留 URI 的 301。`https://IP` 证书不匹配属于预期。
+- 生产 `.env` 必须有 `APP_ORIGIN=https://botcode.work`、`SESSION_COOKIE_SECURE=true`、`OJ_LISTEN_HOST=127.0.0.1`，并使用绝对 `DATABASE_URL=file:/www/oj/prisma/prod.db`；删除废弃的旧 IP 站点变量。
+- 发布前先把 `/www/oj/prisma/prod.db` 备份到 `/www/backups` 并确认非空；常规发布禁止 `npm run seed`、`npm run db:init`。
+- 不提交 `.env`、数据库、备份、`.next`、根 `node_modules`、发布压缩包或密钥；删旧备份前先确认保留备份真实存在。
+- 2 核 2GB 生产机不承担常规 `npm ci` 或 Next 构建。用本地 Linux/Docker 生成 Ubuntu standalone；Windows `.next/standalone` 不能上传。
+- Linux 构建需安装 OpenSSL 3；包内 Prisma 引擎必须是 `libquery_engine-debian-openssl-3.0.x.so.node`。若容器加载生产环境，使用 `npm ci --include=dev`。
+- 发布包逐条目排除所有层级 `.env`、数据库、备份、`.next/cache` 和嵌套压缩包；把 `.next/static`、`public` 复制进 `.next/standalone`。启动必须走 `npm run start`，不得裸跑 standalone server。
+- 依赖未变可复用服务器根 `node_modules`；依赖变化时上传 Linux 依赖或安排停机窗口。不要在 `/www/oj-new` 迁移绝对路径生产库；停 PM2、备份/复制最新 DB、切换目录后再在新 `/www/oj` 执行 `db:deploy`。
+- 只有无法本地构建时才按 `docs/deploy.md` 停 PM2 并用单 worker、`--max-old-space-size=768` 应急构建。
+- OJ 清理只允许 `/www/oj-old-*`、失败残留 `/www/oj-new` 和 OJ 发布包；前后检查当前目录、PM2 与健康接口。不得动其它站点、股票系统或未经确认执行 Docker 全局 prune。
+- 域名/证书变更先备份 Nginx。大陆公网 HTTP 被阿里云 `Server: Beaver` 403 时停止 HTTP-01；DNS-01 仅用最小权限 RAM 凭据且不得写入项目、`.env` 或日志。
+- 证书必须覆盖根域名与 `www`，续期 hook 先 `nginx -t` 再 reload。首次 HSTS 为 `86400`；稳定 7 天且 dry-run 通过后才升至 `15552000`，不启用子域或 preload。完整跳转、双网络 HTTPS、连续健康检查未通过前不得删旧证书或宣布完成。
 
-- 生产数据库为 `/www/oj/prisma/prod.db`。
-- 生产 `.env` 的 `DATABASE_URL` 必须是 `file:/www/oj/prisma/prod.db` 这种绝对 SQLite 路径；禁止使用 `file:./prod.db`，standalone 会解析到错误目录。
-- 常规代码发布前必须先备份生产数据库到 `/www/backups`，并确认备份文件存在。
-- 常规发布禁止执行 `npm run seed` 或 `npm run db:init`。
-- 不要提交 `.env`、数据库文件、备份文件、`.next`、`node_modules` 或压缩包。
-- 删除旧备份前，先确认要保留的最新备份路径真实存在。
+## Judge、提交与可见性
 
-## 低内存服务器发布
+- 生产只能使用 Docker Judge；保留无网络、内存/CPU/PID、capability、`no-new-privileges` 和只读根文件系统限制。运行阶段工作目录只读，编译阶段限制产物大小，超时清理必须等待完成。
+- 学生编程提交响应必须由 `sanitizeSubmissionForStudent` 清空每个测试点的 `input` 与 `expectedOutput`，但保留学生自己的 `actualOutput`；管理员和有权老师继续读取完整数据。不要用前端隐藏或 `isSample` 判断替代服务端脱敏。
+- `POST /api/problems/[id]/run` 只运行编程题公开样例或自定义输入，不创建 `Submission`，不影响积分、错题本、考试成绩或专项进度。样例输入/答案只由服务端读取，自定义输入不判 Accepted/WA。
+- 试运行与正式提交共用队列；正式提交优先于未开始的试运行但不中断运行中任务。服务端限制每账号一个试运行和结束后 5 秒冷却。
+- 学生考试试运行必须验证发布状态、题目归属、已开始且未交卷/超时；后台校题不创建 `ExamRecord`。
+- 队列满、排队超时和 Docker/编译器基础设施故障返回带 `Retry-After` 的可重试 `503`；不得把基础设施故障保存为学生 Compile Error。
+- `src/components/CodeEditor.tsx` 统一管理 Monaco。自动建议、单词建议、Tab 补全、参数提示和内联建议默认关闭；字号设置也只在此实现。
+- AC 动效集中在 `ProblemSubmitForm.tsx` 与透明图 `public/ac-success.png`：模块级预加载并等待 `decode()`，遮罩 portal 到 `document.body`，失败/限时超时退回文字；图片必须直取 `/ac-success.png`，保留 `unoptimized`，禁止进入 `/_next/image`。
 
-线上服务器为 2 核 CPU、2GB 内存、4GB swap。即使只修改一个页面，Next.js 仍会全量构建。常规发布优先在本地 Linux/Docker 环境生成 Next.js standalone 产物并上传，不要把 Windows 本机 `.next/standalone` 当作 Ubuntu 服务器产物。
+## 账号与后台权限
 
-发布包必须排除任何层级的 `.env`（包括可能被 Next 追踪进 `.next/standalone/.env` 的副本）、数据库文件、备份文件、`.next/cache` 和压缩包；服务器继续使用 `/www/oj/.env` 和 `/www/oj/prisma/prod.db`。Next standalone 包必须把 `.next/static` 复制到 `.next/standalone/.next/static`，把 `public` 复制到 `.next/standalone/public`，否则页面会无样式且无前端交互。`npm run start` 通过 `scripts/load-env.mjs` 预加载 `.env` 后启动 `.next/standalone/server.js`，不要改成裸跑 `node .next/standalone/server.js`。
+- `User.role` 只允许 `student`、`teacher`、`admin`。学生登录递增 `sessionVersion`，仅最后设备有效；新登录前结算其全部 `in_progress` 考试。老师和管理员允许多设备，但改密或改角色仍废除旧会话。
+- 密码只存不可逆哈希，查询不得返回 `passwordHash`。管理员新建/改密至少 8 位并二次确认；老师创建或重置学生时由服务端固定使用 `12345678`。
+- 删除或降级管理员必须在应用事务和 SQLite 触发器两层保证至少保留一个管理员；不要绕过 `LAST_ADMIN_REQUIRED`。
+- 老师只可枚举/创建学生、分别调整两项学生 AI 权限、重置固定密码；禁止改用户名、角色、头衔或删除学生，也禁止读取/维护老师和管理员。
+- 老师不能访问系统设置、AI 模型、题目管理/导入/上下架/排序；页面隐藏不能替代 API 管理员鉴权。
+- `Exam.createdById` 决定老师考试所有权；老师对他人或空归属考试的列表、详情、编辑、组卷、发布、练习、记录和删除统一得到 404。管理员可管理全部；删除老师或将其降为学生时清空归属但保留考试。
+- 老师可看全部学生学情，但只能修改、归档、删除自己创建的任务；他人任务写接口返回 404。老师可看全部学生提交和自己的校题提交，不得读取其他后台账号的校题代码。
+- 管理员移除题目只写 `Problem.archivedAt`，不得物理删除；下架题不再进入题库、组卷、专项推荐、提交、试运行或 AI，历史提交和积分必须保留。
 
-本地 Linux 构建容器要先安装与生产机一致的 OpenSSL；当前生产机使用 OpenSSL 3，发布前必须确认 standalone 内 Prisma 引擎为 `libquery_engine-debian-openssl-3.0.x.so.node`，不能使用构建警告后回退生成的 OpenSSL 1.1 引擎。
+## AI 安全与幂等
 
-构建容器若加载了 `NODE_ENV=production`，安装构建依赖必须使用 `npm ci --include=dev`，否则 Tailwind、TypeScript 等构建期依赖会被省略；发布包上传前必须按归档条目再次检查所有层级的 `.env` 和数据库文件，不能只检查仓库根目录。
+- 密钥仅使用 `.env` 中的 `DEEPSEEK_API_KEY`、`ARK_API_KEY`、`AI_CUSTOM_API_KEY`；不得进入 `SystemSetting`、浏览器、Git、日志、测试快照或文档示例。
+- 管理员只保存两套非敏感服务商/URL/模型/思考配置与五项教学提示词。提示词为 1–4000 字，只调表达，不得覆盖题面不可信边界、完整代码/隐藏测试保护、数据库答案或结构化输出规则，也不影响教师学情摘要。
+- DeepSeek/豆包 Base URL 固定；生产自定义 OpenAI-compatible 只允许公共 HTTPS，执行 DNS 全量校验与固定，阻止私网/保留地址、凭据型 URL、重定向和超大响应。模型列表上限 1MB、超时 15 秒。
+- 浏览器只能调用本站服务端 API，不得直连上游；模型发现也不得返回密钥、请求头或上游正文。AI 配置数据库读取失败必须 fail closed；仅成功读取到空配置时允许旧环境变量兜底。
+- 学生编程 AI 同时校验个人权限和日常/考试开关。考试范围必须从服务端有效 `ExamRecord` 推导；客户端省略或伪造 `examId` 不能绕过本场开关。
+- 学生选择判断 AI 另校验主开关、学生总开关、个人权限和当前大题的一次日常提交；只开放日常/专项。账号存在任意有效进行中正式考试时接口必须拒绝，考试页及结果页不得出现入口。
+- 后台编程助手只受 `aiStaffProgrammingAssistEnabled` 控制并校验考试归属，不读取学生权限，不混入学生 AI 看板。
+- 学生浏览器最多保留 20 条、请求携带 12 条。审计只存学生可见问答、清洗回复和统计；严禁代码快照、完整 Prompt、隐藏测试、完整错误、内部推理、密钥或请求头。
+- `requestId` 重放必须匹配账号、题目、考试、scope、mode、AI profile 与客观题小题序号；冲突统一拒绝且不泄露原上下文。有效缓存/幂等重放计使用但模型调用和 Token 为 0。
+- 冷却按账号、角色入口和题型隔离，范围 5–600 秒；只有真正开始上游调用时计时，上游失败仍计时，有效缓存和幂等重放绕过冷却。
+- 输出不得含完整代码、可复制代码语句、最终答案或隐藏测试；代码检查最多三个问题和行号。SSE 必须完整清洗后分片，禁止透传原始 token，并兼容旧 JSON 客户端。
+- 教师 AI 摘要只发送分类级聚合统计，不得发送学生用户名、题目标题、源码、AI 对话、隐藏测试或完整错误；配置/上游失败不阻断规则诊断和任务下发，配置指纹必须进入缓存哈希。
+- `ObjectiveAiExplanation` 按题目和小题跨角色共享；数据库答案唯一权威，`isCorrect` 服务端生成。同一小题跨角色加锁，失败不覆盖旧缓存，题面/选项/答案/配置/提示词变化使缓存失效。
 
-2GB 服务器上常规发布也不要执行 `npm ci`。依赖未变时复用当前 `/www/oj/node_modules`；依赖变更时应在本地 Linux/Docker 环境生成可用于 Ubuntu 的根 `node_modules` 并随包上传，或安排维护窗口停 PM2 后再处理。切换前不要在 `/www/oj-new` 直接执行 `npm run db:deploy`，因为生产 `.env` 使用绝对 `DATABASE_URL=file:/www/oj/prisma/prod.db`，会迁移旧目录数据库；应停 PM2、备份并复制最新 DB、切换目录后在新的 `/www/oj` 执行迁移。
+## 学情与专项练习
 
-## 服务器磁盘清理边界
+- 学情只分析编程提交，周期固定 `7d`、`30d`、`all`；有界窗口查询不得加载全部历史失败记录。
+- 详情页只展示主要问题、持续卡题、最近失败、AI 摘要和推荐题；不要恢复分类掌握率、错误状态分布或题库缺口模块。
+- 拼音排序在服务端生成 `sortKey`/首字母，浏览器不得打包拼音词库；搜索只过滤学生列表，切换周期重置搜索。
+- 单份任务为 1–10 道不重复编程题；未归档任务仅管理员或创建老师可一次性保存题目、顺序、标题、说明、截止时间。保留行保留快照和 `completedAt`，新增行不继承历史 AC。
+- 批量发布限 1–100 名学生，必须在单事务内预读账号、题目和未完成冲突；任一失败整批零写入，成功后每人独立任务。
+- 同一道题不能出现在同一学生两份未完成任务中。移除已完成题只清空相关提交的 `learningAssignmentId` 并重算进度；不得删除提交或代码。进行中任务不能硬删，归档后才可永久删除。
+- 只有携带合法 `learningAssignmentId` 的日常 Accepted 更新进度；普通日常、考试和历史 AC 不计。Judge 写库前重新确认任务题仍有效，评测中被移除则保存为普通练习并明确提示。
+- 首页通过 `document.body` portal 汇总提醒有效未完成任务；无关闭/Escape 绕过，唯一入口 `/student/assignments`。按学生和任务版本静默 60 分钟，不新增服务端已读状态。
 
-- 常规清理只允许动 OJ 明确路径：`/www/oj-old-*`、失败发布残留的 `/www/oj-new`、OJ 发布压缩包 `/www/oj-release.tgz` 或历史 `/www/oj.zip`。
-- 清理前先确认当前 `/www/oj` 存在、PM2 进程 `oj` 在线、`/api/health` 正常；清理后再次检查健康状态。
-- 不要为了 OJ 清理去删除其它站点目录、股票系统目录，或 `stock-fund-advisor*` Docker 容器/镜像。
-- `docker system df` 只读可用；`docker system prune`、`docker builder prune` 属于全局清理，可能影响股票系统构建缓存，除非用户明确确认，否则不要执行。
+## 题型、考试与计分
 
-只有无法本地生成 Linux standalone 时，才按 `docs/deploy.md` 在服务器备份数据库、停 PM2，并用 `NEXT_PRIVATE_BUILD_WORKER_COUNT=1`、`NODE_OPTIONS='--max-old-space-size=768'` 构建；重启后必须检查 `/api/health`。
+- `Problem.problemType`、`Exam.examType` 仅 `programming`、`objective`；一场考试只能包含同类型题目，搜索、导入、增题和发布都校验。
+- 客观题答案只存 `Problem.objectiveItems`；学生题目和考试 API 不返回 `answer`。后台校题默认隐藏答案并用统一按钮显隐，切题/刷新后恢复隐藏。
+- 发布考试时必须写入 `ExamProblem` 的标题、题型、客观题内容和分值快照。已发布/已结束考试计分与结果优先使用快照，禁止题库后续修改改写历史。
+- 只有草稿考试可修改核心信息、题目集合、顺序和分值。已发布考试只允许切换 AI 或结束；仅在没有 `ExamRecord` 时可取消发布并清空快照。草稿不能直接结束，已结束不能修改、取消或重新发布。
+- 学生考试页使用锁定布局；离开考试路由、后退、刷新、关闭或退出调用幂等交卷。同场切题与切换浏览器标签不交卷；关键异步按钮必须在网络/解析失败后恢复 pending 状态并显示安全错误。
+- 客观题不进入 Docker；每行一题，逐题结果写 `SubmissionCaseResult`。考试按单次提交的小题分值合计取最高分；同分按创建时间降序、提交 ID 降序选复盘记录。
+- 三种角色提交客观题后可看题号、对错和自己的答案；学生永不因此看到标准答案。考试结果只在交卷/结束后展示计分提交逐题结果。
+- 客观题小题分值为正整数，`ExamProblem.score` 为小题总和。Markdown 选项必须单行 `A. 内容`，题干代码用代码块，选项代码用行内代码。
+- 富文本集中在 `ProblemRichText.tsx`；递归解析每次创建独立的带 `g` 正则，禁止共享会改变 `lastIndex` 的模块级实例。
+- 单大题选择判断考试和后台考试练习隐藏左侧题单，多题保留；交卷确认文案不要写死方向。
+- 学生题库“已通过”读取全部历史 Accepted，日常/考试、编程/客观题均计入，后续失败不取消。后台校题同理，并链接当前账号最近一次 Accepted。
+- 积分实时按唯一 Accepted 题数 × 10，不新增缓存表；排序为积分、唯一 AC、AC 总次数、用户名、用户 ID。只有管理员改自定义头衔，头衔不影响积分和排名。
+- `Problem.sortOrder` 和 `ProblemCategoryOrder` 仅管理员维护；标题/时间排序默认预览，保存时写一次性自定义快照，学生和老师只读跟随。
 
-## 编辑器策略
+## 共享界面约束
 
-- `src/components/CodeEditor.tsx` 是全站共用 Monaco 编辑器。自动代码提示、单词建议、Tab 补全、参数提示和内联建议默认关闭；不要在未明确要求时重新开启。
-- 编辑器字号调节也集中在 `src/components/CodeEditor.tsx`，会写入浏览器 `localStorage`，不要为单个页面重复实现。
-
-## 提交反馈策略
-
-- AC 透明动效集中在 `ProblemSubmitForm.tsx` 和真实 alpha 图片 `public/ac-success.png`；答题组件挂载后要复用模块级 Promise 后台预加载并等待 `decode()`，收到 Accepted 后从图片就绪时才开始 1 秒动效，失败或有限等待超时则显示文字反馈；遮罩必须 portal 到 `document.body`，否则祖先残留的 `transform` 会让 `position: fixed` 在自动滚动后偏离视口中心；图片必须保留 Next Image 的 `unoptimized`（或等价直接静态加载），浏览器只能请求 `/ac-success.png`，禁止重新走 `/_next/image`。
-
-## 试运行规则
-
-- `POST /api/problems/[id]/run` 只用于编程题的公开样例和自定义输入，不得创建 `Submission`，也不得影响积分、错题本、考试成绩或专项练习进度。
-- 样例模式只能由服务端读取 `TestCase.isSample = true` 或旧版公开样例字段；禁止接收客户端提供的样例标准答案，禁止读取或返回隐藏测试点。
-- 自定义输入只展示实际输出和运行错误，不产生 Accepted、Wrong Answer 或标准答案判断。
-- 试运行和正式提交必须共用 Judge 队列；正式提交优先于尚未开始的试运行，但不要中断正在执行的任务。
-- 服务端必须保持每账号一个试运行任务和结束后 5 秒冷却，不能只靠前端禁用按钮。
-- 学生考试试运行必须验证考试已发布、题目归属、学生已开始且未交卷/超时；管理员校题不创建 `ExamRecord`。
-
-## 浏览器标签设置
-
-- 标签名称与图标保存在 `SystemSetting.browserTitle`、`browserIcon`，空标题回退 `siteName`；图标仅接受服务端校验的 256KB 内 PNG/ICO Data URL。全站只通过 `BrowserIdentity.tsx` 同步，禁止单页重复修改标题、favicon 或改用随发布目录丢失的上传文件。
-
-## 头衔与天梯规则
-
-- 学生段位积分实时从 `Submission` 计算，不要新增积分缓存表；规则为唯一 Accepted 题数 × 10。
-- 同一用户同一题多次 `Accepted` 只计入 1 道唯一 AC 题；日常刷题和考试提交都计入统计。
-- 只有管理员可以设置 `StudentProfile.customTitle`；管理员或老师可以调整 `StudentProfile.aiAccessEnabled`。头衔只覆盖展示文案，不影响积分、自动段位和排名。
-- 天梯排序固定为：积分降序 → 唯一 AC 题数降序 → AC 总次数降序 → 用户名升序 → 用户 ID 升序。
-- 管理员移除题目必须写入 `Problem.archivedAt` 做下架，禁止物理删除 `Problem`；下架题目不再出现在题库、组卷、专项推荐、提交、试运行或 AI 入口，但历史 `Submission` 必须保留用于积分和排名。
-
-## 老师端权限边界
-
-- `User.role` 只允许 `student`、`teacher`、`admin`；老师登录后进入独立 `/teacher`，直接访问 `/admin` 页面应重定向到老师首页。
-- 管理员可以管理全部角色；老师只能枚举和创建学生、分别调整学生编程 AI 与选择判断 AI 权限，以及把学生密码重置为固定初始值 `12345678`。老师禁止修改学生用户名、角色或自定义头衔，禁止删除学生，也禁止读取和维护老师或管理员。
-- 用户密码只能保存不可逆哈希，任何用户查询不得返回 `passwordHash`。管理员编辑账号时不能展示原密码，新建或改密必须二次确认且至少 8 位；老师新增学生和重置学生密码时由服务端固定使用 `12345678`，客户端不得提交自定义密码。
-- 老师不能访问系统设置、AI 服务商与模型配置、题目管理、题目导入、上下架、题序或分类排序；隐藏菜单不能替代 API 的管理员鉴权。
-- `Exam.createdById` 保存考试创建者。管理员可管理全部考试；老师的考试列表、详情、编辑、组卷、发布、练习、记录和删除必须同时校验 `createdById`，他人考试统一返回 404。
-- 历史 `createdById = null` 的考试仅管理员可管理；删除老师或把老师改成学生时清空其考试归属并保留考试。
-- 管理员和老师考试列表必须显示创建人/归属账号标签；`createdById = null` 或账号已删除时显示“出卷人：未记录”，不要误称为最后发布人。
-- 老师可以查看全部学生学情，但只能修改、归档和删除自己创建的 `LearningAssignment`；其他老师任务仅查看，写接口统一返回 404。
-- 老师可以查看全部学生提交和自己的校题提交；不得泄露其他老师或管理员的校题代码。
-- 老师和管理员允许多设备登录；修改密码或角色仍须递增 `sessionVersion` 废除旧会话。
-
-## AI 助手规则
-
-- AI 密钥分别使用 `DEEPSEEK_API_KEY`、`ARK_API_KEY`、`AI_CUSTOM_API_KEY`，只能保存在本地或生产 `.env`；不得进入 `SystemSetting`、前端、Git、日志、测试快照或文档示例。
-- 管理员只在系统设置中保存两套非敏感的服务商、Base URL、模型和思考模式，以及编程题四种模式和选择判断解析的教学提示词；学生端和老师端不得出现调整入口。编程提示词只影响题目助手，不得影响教师学情摘要。
-- 自定义提示词只能调整教学表达，不得替换服务端固定的安全外壳、题面不可信边界、完整代码与隐藏测试点保护、数据库答案权威性或结构化输出约束。五项提示词必须为 1–4000 字，不开放动态模板变量，也不得进入学生审计、日志或浏览器存储。
-- DeepSeek 与豆包使用固定官方 Base URL；自定义 OpenAI-compatible 服务在生产环境只允许公共 HTTPS，必须执行 DNS 全量校验和固定、阻止私网/保留网络与重定向，模型列表响应上限 1MB、超时 15 秒。
-- AI 请求必须走服务端 API；浏览器不得直接调用任何上游模型服务。管理员模型发现接口同样不得返回密钥、请求头或上游响应正文。
-- 学生编程 AI 助手采用个人权限加日常/考试开关的双重校验。学生选择判断 AI 使用独立个人权限和两个总开关，只允许在日常刷题或专项练习中、当前大题至少提交过一次日常答案后逐题获取；正式考试答题及结果页不得显示入口，考试进行中接口也必须拒绝。
-- 学生尚未提交客观题时不得显示空白 AI 回答面板，答题区保持居中；首次日常提交后才切换解析布局。提交结果必须跨该次服务端刷新保留，并自动定位到逐题结果，明确显示答对、答错和总题数。
-- 管理员和老师可在编程题校题与归属考试练习中使用后台编程助手；只受 `aiStaffProgrammingAssistEnabled` 控制，不得读取学生个人权限，也不得混入学生 AI 使用看板。
-- 学生端仅在 `localStorage` 保留最近 20 条消息，请求最多携带 12 条；服务端只审计学生实际可见问答、清洗后回复和调用统计，严禁保存代码快照、完整 Prompt、隐藏测试点、完整错误、内部推理、密钥或请求头。
-- AI 审计默认保留 180 天，可配置为 30、90、180、365 天或永久；`requestId` 必须幂等，缓存命中计使用次数但模型调用和 Token 为 0。
-- AI 触发间隔由管理员按学生/老师/管理员和编程/客观题实际入口分别配置 5–600 秒；学生客观题、老师客观题和管理员客观题的间隔同时约束首次生成与主动刷新。冷却桶按账号与题型配置隔离，编程和客观题互不影响。只有真正开始上游调用时才记录时间，有效缓存和幂等重放绕过冷却但仍遵守原有使用统计；上游调用后的超时或失败仍计时。同一逻辑请求的自动重试只记录一次。
-- AI 输出不得包含完整代码、可复制代码语句、最终答案或隐藏测试点；代码检查最多指出三个问题及所在行。SSE 只能在完整清洗后分片展示安全文本，禁止透传上游 token，并保留旧 JSON 客户端兼容。
-
-## 学情看板与专项练习规则
-
-- 学情诊断只分析编程题提交，日常和考试都纳入；分析周期为 `7d`、`30d`、`all`。
-- 教师 AI 摘要只能接收聚合统计，不得发送学生源码、AI 对话、隐藏测试点或完整错误日志；AI 失败不得阻断规则诊断和任务下发。服务商配置指纹必须进入摘要缓存哈希，切换模型或思考模式后旧摘要自动过期。
-- 教师学情详情页只展示主要问题、持续卡题、最近失败、AI 摘要和推荐练习题；不要恢复分类掌握率、错误状态分布或题库缺口模块，除非用户重新明确要求。
-- 学情学生列表按服务端生成的拼音排序键固定分为 `A–Z #`，浏览器只接收 `sortKey`/首字母结果，不得把拼音词库带入客户端。用户名搜索只过滤下方学生列表，不改变全体统计；切换分析周期时重置搜索。
-- 专项练习每份 1–10 道编程题；未归档任务可由管理员或任务创建老师统一保存题目增删、顺序、标题、说明和截止日期。保留的任务题必须保留快照与 `completedAt`，新增题创建新快照且不得继承历史 AC。
-- 批量作业一次只允许 1–100 名学生，公共题和个性化题合并后的每人最终题单仍须为 1–10 道不重复编程题。批量创建必须在单事务内预读账号、题目和未完成任务，任一学生冲突时整批零写入；成功后每名学生得到独立 `LearningAssignment`，后续不跨学生同步。个性化编辑默认隐藏，只能通过学生行按钮展开并自动定位；桌面端学生筛选面板在视口内跟随，移动端保持自然文档流。
-- 移除已完成题必须强提醒，只清空相关提交的 `learningAssignmentId` 并重新计算进度，禁止删除历史提交或代码。进行中任务禁止硬删除，归档后才可由管理员或任务创建老师永久删除。
-- 同一道题不能同时存在于同一学生两份未完成任务中。
-- 只有携带合法 `learningAssignmentId` 的日常 `Accepted` 才更新 `completedAt`；普通日常、考试和历史 AC 均不计入专项进度。Judge 完成写库前必须重新确认任务题仍有效；若评测期间被移除，本次提交保存为普通练习并向页面返回明确说明。
-- `active`、非空且有未完成题的专项练习只在学生首页通过 `document.body` portal 汇总强提醒；不得用关闭键、遮罩或 Escape 跳过，唯一按钮进入 `/student/assignments`。按学生保存 `任务 ID → updatedAt + remindedAt`，确认后静默 60 分钟且登录、退出不清空；到期只在首页刷新任务状态，新任务或版本变化立即重新提醒，不新增服务端已读状态。
-
-## 题型与考试规则
-
-- 学生账号使用 `User.sessionVersion` 保证只保留最后一次登录会话；老师和管理员允许多设备登录。修改密码或角色必须递增会话版本。
-- 学生新设备登录前必须先结算该学生所有 `in_progress` 考试；旧设备 API 返回 401，并在页面聚焦或每 30 秒检查时退出。
-- 学生考试答题页必须使用锁定布局；离开考试路由、后退、刷新、关闭页面或退出账号调用现有幂等交卷接口，同场切题和切换浏览器标签不交卷。
-- 日常题库的“已通过”实时读取该学生全部历史 `Accepted`，日常和考试、编程和客观题都计入；不得因后续失败取消标记。
-- 题库自定义题序保存在 `Problem.sortOrder`，分类标签顺序保存在 `ProblemCategoryOrder`；只有管理员题目管理页可以拖动或上下调整顺序。标题/时间查看排序默认只预览，但管理员可以把当前题型或分类的全部结果保存为一次性自定义题序快照；学生题库、管理员与老师练习、组卷搜索只读跟随保存后的顺序，不得向学生或老师开放排序入口。
-
-- `Problem.problemType` 和 `Exam.examType` 只允许 `programming`、`objective`。
-- 一场考试只能包含与 `Exam.examType` 相同的题目，题目搜索、Markdown 导入、添加题目和发布接口都必须校验。
-- 客观题标准答案保存在 `Problem.objectiveItems`，学生题目接口和考试答题接口不得返回 `answer` 字段。
-- 管理员和老师的题目练习页、考试练习页用于校题，客观题标准答案默认隐藏，只能通过题目标题区的统一按钮显示或再次隐藏，切题和刷新后恢复隐藏；学生端不得展示。
-- 选择判断 AI 解析由 `aiObjectiveExplanationEnabled` 主开关控制且默认关闭；学生还需 `aiStudentObjectiveExplanationEnabled` 和个人 `objectiveAiAccessEnabled` 同时开启。浏览器只能提交题目 ID 与小题序号，题干、选项和标准答案必须由服务端读取。
-- `ObjectiveAiExplanation` 按 `problemId + itemIndex` 在学生、老师、管理员之间共享结构化解析。三种角色都可按各自间隔主动重新生成并覆盖共享版本；生成失败不得覆盖已有解析，题面、选项、数据库答案、AI 配置指纹或管理员解析提示词变化时缓存自动失效。
-- 数据库标准答案是唯一判定依据，`isCorrect` 必须由服务端生成，不能信任模型判断。解析缓存不得保存 API Key、完整 Prompt、内部推理或上游原始响应，也不得写入学生 AI 使用统计。
-- 选择判断解析的非缓存生成与主动刷新按管理员配置的当前角色间隔执行，并与编程 AI 请求共享全局并发限制；同一小题生成期间必须跨角色加锁。有效缓存读取不消耗间隔；学生缓存读取仍要记录一次审计使用，但模型调用和 Token 为 0。
-- 桌面端选择判断 AI 页面按“解析在上、答案输入在下”排列；AI 长内容可以在解析面板内滚动，答案编辑器统一使用 `clamp(360px, 44dvh, 520px)` 并完整展开，答案区外层禁止再设置横向或纵向内部滚动，统一跟随主页面滚动。移动端按题目、解析、答案输入自然排列；功能关闭或编程题页面保持原布局。
-- 后台校题的“已通过”按当前管理员或老师账号全部历史 `Accepted` 实时计算，后续失败不得取消；题目练习列表、题目详情和考试练习题单必须统一显示，并链接到当前账号最近一次 Accepted 的提交详情。
-- 客观题提交不进入 Docker Judge；每行对应一道小题，逐题结果写入 `SubmissionCaseResult`，考试分数取单次提交的最高小题分值合计。
-- 学生、老师和管理员提交客观题后必须能查看当前提交的题号、正确/错误和自己的答案，并能进入完整提交详情；学生端不得因此返回或渲染标准答案。考试结果页只在交卷或结束后展示计分提交的逐题结果；最高分相同时按创建时间降序、提交 ID 降序选择复盘记录。
-- 客观题小题分值必须是正整数，`ExamProblem.score` 使用小题分值总和。
-- 客观题 Markdown 导入选项必须是单行 `A. 选项内容`；题干可用代码块，选项内代码或输出用行内代码，不要支持或生成 `A.` 后接代码块的格式。
-- 题面与导入预览的 Markdown/KaTeX 渲染集中在 `src/components/ProblemRichText.tsx`，编程题和客观题必须复用；递归解析行内内容时，每次调用都要新建带 `g` 标志的正则，禁止共享会改变 `lastIndex` 的模块级正则。
-- 单大题选择判断考试和管理员考试练习页隐藏左侧“考试题目”导航以扩大题面；同场多题时必须保留导航。
-- 选择判断考试通过“提交答案”二次确认后交卷，提示文案不要写死“右侧”，避免布局变化后失真。
+- 浏览器标题/图标只由 `BrowserIdentity.tsx` 同步 `SystemSetting.browserTitle/browserIcon`；图标只接受服务端校验、256KB 内 PNG/ICO Data URL。
+- 选择判断 AI 桌面端为“解析在上、答案在下”；解析可内部滚动，答案编辑器使用 `clamp(360px, 44dvh, 520px)`，答案外层不增加滚动；移动端自然排列。
 
 ## 本地质量检查
 
 ```bash
 npm run test
+npm run test:e2e
 npx tsc --noEmit
 npm run lint
 npm run build
 ```
-
-深入说明与当前操作手册索引见 `README.md`。
