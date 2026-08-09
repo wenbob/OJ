@@ -21,9 +21,11 @@ const constrainedBuildWorkers =
   Number.isInteger(requestedBuildWorkers) && requestedBuildWorkers > 0
     ? requestedBuildWorkers
     : undefined;
+const distDir = process.env.NEXT_DIST_DIR === ".next-e2e" ? ".next-e2e" : ".next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  distDir,
   experimental: constrainedBuildWorkers
     ? { cpus: constrainedBuildWorkers }
     : undefined,

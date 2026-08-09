@@ -124,7 +124,7 @@ vi.mock("@/lib/aiUsageAudit", async () => {
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    examRecord: { findFirst: vi.fn() },
+    examRecord: { findMany: vi.fn() },
     objectiveAiExplanation: {
       findUnique: vi.fn(),
       upsert: vi.fn(),
@@ -169,7 +169,7 @@ describe("POST /api/problems/:id/objective-explanation", () => {
       objectiveAiAccessEnabled: true,
     } as never);
     vi.mocked(prisma.submission.findFirst).mockResolvedValue({ id: 91 } as never);
-    vi.mocked(prisma.examRecord.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.examRecord.findMany).mockResolvedValue([]);
     vi.mocked(prisma.problem.findFirst).mockResolvedValue(problem as never);
     vi.mocked(prisma.objectiveAiExplanation.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.objectiveAiExplanation.upsert).mockResolvedValue({
@@ -207,6 +207,16 @@ describe("POST /api/problems/:id/objective-explanation", () => {
         studentId: 8,
       }),
     );
+    expect(findExistingAiUsageTurn).toHaveBeenCalledWith({
+      aiProfile: "objective",
+      examId: null,
+      mode: "objective_explanation",
+      objectiveItemIndex: 1,
+      problemId: 10,
+      requestId: "request_12345678",
+      scope: "practice",
+      studentId: 8,
+    });
     expect(completeAiUsageTurn).toHaveBeenCalledWith(
       expect.objectContaining({ cached: false, providerCallCount: 1 }),
     );
@@ -225,8 +235,14 @@ describe("POST /api/problems/:id/objective-explanation", () => {
     expect(prisma.problem.findFirst).not.toHaveBeenCalled();
   });
 
-  it("rejects use while an exam containing the problem is in progress", async () => {
-    vi.mocked(prisma.examRecord.findFirst).mockResolvedValueOnce({ id: 7 } as never);
+  it("rejects use while any formal exam is in progress", async () => {
+    vi.mocked(prisma.examRecord.findMany).mockResolvedValueOnce([
+      {
+        id: 7,
+        startedAt: new Date(),
+        exam: { durationMin: 60, status: "published" },
+      },
+    ] as never);
     const response = await POST(
       request({ itemIndex: 1 }) as never,
       context(),
@@ -237,6 +253,43 @@ describe("POST /api/problems/:id/objective-explanation", () => {
       error: expect.stringContaining("正式考试"),
     });
     expect(prisma.problem.findFirst).not.toHaveBeenCalled();
+    expect(prisma.examRecord.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { status: "in_progress", userId: 8 },
+      }),
+    );
+  });
+
+  it("does not keep an expired exam row as an AI lock", async () => {
+    vi.mocked(prisma.examRecord.findMany).mockResolvedValueOnce([
+      {
+        id: 7,
+        startedAt: new Date(Date.now() - 61 * 60 * 1000),
+        exam: { durationMin: 60, status: "published" },
+      },
+    ] as never);
+
+    const response = await POST(
+      request({ itemIndex: 1, requestId: "request_expired_exam" }) as never,
+      context(),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it("rejects a reused request id from a different AI context", async () => {
+    vi.mocked(findExistingAiUsageTurn).mockResolvedValueOnce({ kind: "conflict" });
+
+    const response = await POST(
+      request({ itemIndex: 1, requestId: "request_context_conflict" }) as never,
+      context(),
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "AI 请求标识与当前请求不匹配",
+    });
+    expect(createPendingAiUsageTurn).not.toHaveBeenCalled();
   });
 
   it("requires both global switches and the personal permission", async () => {

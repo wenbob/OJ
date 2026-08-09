@@ -72,6 +72,7 @@ vi.mock("@/lib/prisma", () => ({
       })),
     },
     systemSetting: {
+      findMany: vi.fn(async () => []),
       findUnique: vi.fn(
         async ({ where }: { where: { key: string } }) => ({
           value:
@@ -87,6 +88,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(async () => null),
     },
     examRecord: {
+      findFirst: vi.fn(async () => null),
       findUnique: vi.fn(async () => null),
     },
     studentProfile: {
@@ -428,6 +430,52 @@ describe("POST /api/ai/problem-assist", () => {
     expect(response.status).toBe(200);
     expect(body.replayed).toBe(true);
     expect(body.advice).toBe("已经完成的回复");
+    expect(findExistingAiUsageTurn).toHaveBeenCalledWith({
+      aiProfile: "programming",
+      examId: null,
+      mode: "overview",
+      objectiveItemIndex: null,
+      problemId: 10,
+      requestId: "request-fixed",
+      scope: "practice",
+      studentId: 1,
+    });
+    expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
+    expect(createPendingAiUsageTurn).not.toHaveBeenCalled();
+  });
+
+  it("rejects a reused request id from a different programming context", async () => {
+    vi.mocked(findExistingAiUsageTurn).mockResolvedValueOnce({ kind: "conflict" });
+
+    const response = await POST(
+      request({
+        conversationId: "conversation-fixed",
+        requestId: "request-fixed",
+        problemId: 10,
+        mode: "overview",
+      }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("AI 请求标识与当前请求不匹配");
+    expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
+    expect(createPendingAiUsageTurn).not.toHaveBeenCalled();
+  });
+
+  it("returns a safe 503 when AI configuration storage is unavailable", async () => {
+    vi.mocked(prisma.systemSetting.findMany).mockRejectedValueOnce(
+      new Error("database busy"),
+    );
+
+    const response = await POST(
+      request({ problemId: 10, mode: "overview" }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toBe("AI 服务配置暂时不可用，请稍后再试");
+    expect(JSON.stringify(body)).not.toContain("database");
     expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
     expect(createPendingAiUsageTurn).not.toHaveBeenCalled();
   });
@@ -538,6 +586,69 @@ describe("POST /api/ai/problem-assist", () => {
     );
 
     expect(disabled.status).toBe(403);
+    expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
+  });
+
+  it("derives a disabled active exam even when the client omits examId", async () => {
+    vi.mocked(prisma.examRecord.findFirst).mockResolvedValueOnce({
+      examId: 5,
+      exam: {
+        aiEnabled: false,
+        status: "published",
+        title: "期中考试",
+      },
+    } as never);
+
+    const response = await POST(
+      request({ problemId: 10, mode: "overview" }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe("本场考试 AI 已关闭");
+    expect(prisma.exam.findUnique).not.toHaveBeenCalled();
+    expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
+  });
+
+  it("rejects a client examId that conflicts with the active exam", async () => {
+    vi.mocked(prisma.examRecord.findFirst).mockResolvedValueOnce({
+      examId: 6,
+      exam: {
+        aiEnabled: true,
+        status: "published",
+        title: "正在进行的考试",
+      },
+    } as never);
+
+    const response = await POST(
+      request({ examId: 5, problemId: 10, mode: "overview" }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toContain("不一致");
+    expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
+  });
+
+  it("rejects an active exam record after its server-side deadline", async () => {
+    vi.mocked(prisma.examRecord.findFirst).mockResolvedValueOnce({
+      examId: 6,
+      startedAt: new Date("2026-08-01T00:00:00.000Z"),
+      exam: {
+        aiEnabled: true,
+        durationMin: 30,
+        status: "published",
+        title: "已经超时的考试",
+      },
+    } as never);
+
+    const response = await POST(
+      request({ problemId: 10, mode: "overview" }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toContain("超时");
     expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
   });
 

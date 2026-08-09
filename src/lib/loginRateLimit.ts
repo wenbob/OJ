@@ -1,29 +1,90 @@
-const MAX_LOGIN_FAILURES = 5;
+const MAX_ACCOUNT_FAILURES = 5;
+const MAX_IP_FAILURES = 20;
 const LOGIN_FAILURE_WINDOW_MS = 5 * 60 * 1000;
 const LOGIN_BLOCK_MS = 10 * 60 * 1000;
+const LOGIN_BUCKET_IDLE_TTL_MS = 20 * 60 * 1000;
+const DEFAULT_MAX_BUCKETS = 10_000;
 
 type LoginFailureBucket = {
   blockedUntil: number;
   failedAt: number[];
+  lastTouchedAt: number;
 };
 
 const buckets = new Map<string, LoginFailureBucket>();
 
-function currentBucket(key: string) {
-  const bucket = buckets.get(key) ?? { blockedUntil: 0, failedAt: [] };
-  buckets.set(key, bucket);
-  return bucket;
+function readMaxBuckets() {
+  const parsed = Number(process.env.LOGIN_RATE_LIMIT_MAX_BUCKETS);
+  return Number.isInteger(parsed) && parsed > 0
+    ? Math.min(parsed, 100_000)
+    : DEFAULT_MAX_BUCKETS;
 }
 
 function prune(bucket: LoginFailureBucket, now: number) {
   bucket.failedAt = bucket.failedAt.filter(
     (timestamp) => now - timestamp <= LOGIN_FAILURE_WINDOW_MS,
   );
+  if (bucket.blockedUntil <= now) bucket.blockedUntil = 0;
+}
+
+function isExpired(bucket: LoginFailureBucket, now: number) {
+  return (
+    bucket.blockedUntil === 0 &&
+    bucket.failedAt.length === 0 &&
+    now - bucket.lastTouchedAt > LOGIN_BUCKET_IDLE_TTL_MS
+  );
+}
+
+function getExistingBucket(key: string, now: number) {
+  const bucket = buckets.get(key);
+  if (!bucket) return null;
+  prune(bucket, now);
+  if (isExpired(bucket, now)) {
+    buckets.delete(key);
+    return null;
+  }
+  return bucket;
+}
+
+function makeCapacityForNewBucket(now: number) {
+  for (const [key, bucket] of buckets) {
+    prune(bucket, now);
+    if (isExpired(bucket, now)) buckets.delete(key);
+  }
+
+  const maxBuckets = readMaxBuckets();
+  while (buckets.size >= maxBuckets) {
+    let oldestKey: string | null = null;
+    let oldestTouchedAt = Number.POSITIVE_INFINITY;
+    for (const [key, bucket] of buckets) {
+      if (bucket.lastTouchedAt < oldestTouchedAt) {
+        oldestKey = key;
+        oldestTouchedAt = bucket.lastTouchedAt;
+      }
+    }
+    if (!oldestKey) break;
+    buckets.delete(oldestKey);
+  }
+}
+
+function recordFailure(key: string, maxFailures: number, now: number) {
+  let bucket = getExistingBucket(key, now);
+  if (!bucket) {
+    makeCapacityForNewBucket(now);
+    bucket = { blockedUntil: 0, failedAt: [], lastTouchedAt: now };
+    buckets.set(key, bucket);
+  }
+  bucket.lastTouchedAt = now;
+  bucket.failedAt.push(now);
+
+  if (bucket.failedAt.length >= maxFailures) {
+    bucket.blockedUntil = now + LOGIN_BLOCK_MS;
+  }
 }
 
 export function getLoginRateLimitStatus(key: string, now = Date.now()) {
-  const bucket = currentBucket(key);
-  prune(bucket, now);
+  const bucket = getExistingBucket(key, now);
+  if (!bucket) return { limited: false, retryAfterSeconds: 0 };
 
   if (bucket.blockedUntil > now) {
     return {
@@ -36,17 +97,23 @@ export function getLoginRateLimitStatus(key: string, now = Date.now()) {
 }
 
 export function recordFailedLogin(key: string, now = Date.now()) {
-  const bucket = currentBucket(key);
-  prune(bucket, now);
-  bucket.failedAt.push(now);
+  recordFailure(key, MAX_ACCOUNT_FAILURES, now);
+}
 
-  if (bucket.failedAt.length >= MAX_LOGIN_FAILURES) {
-    bucket.blockedUntil = now + LOGIN_BLOCK_MS;
-  }
+export function recordFailedLoginForIp(key: string, now = Date.now()) {
+  recordFailure(key, MAX_IP_FAILURES, now);
 }
 
 export function clearLoginFailures(key: string) {
   buckets.delete(key);
+}
+
+export function clearAllLoginFailures() {
+  buckets.clear();
+}
+
+export function getLoginRateLimitBucketCount() {
+  return buckets.size;
 }
 
 export function getLoginClientIp(request: Request) {
@@ -63,4 +130,8 @@ export function getLoginClientIp(request: Request) {
 
 export function loginRateLimitKey(request: Request, username: string) {
   return `${getLoginClientIp(request)}:${username.trim().toLowerCase()}`;
+}
+
+export function loginIpRateLimitKey(request: Request) {
+  return `ip:${getLoginClientIp(request)}`;
 }

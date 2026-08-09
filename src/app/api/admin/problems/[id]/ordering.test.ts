@@ -86,4 +86,43 @@ describe("admin problem type-change ordering", () => {
       },
     });
   });
+
+  it("rejects edits while the problem belongs to a published exam", async () => {
+    const tx = {
+      examProblem: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            exam: {
+              examType: "objective",
+              status: "published",
+              title: "正在考试",
+            },
+          },
+        ]),
+        updateMany: vi.fn(),
+      },
+      objectiveAiExplanation: { deleteMany: vi.fn() },
+      problem: {
+        findUnique: vi.fn().mockResolvedValue({
+          archivedAt: null,
+          problemType: "programming",
+        }),
+        update: vi.fn(),
+      },
+      testCase: { deleteMany: vi.fn() },
+    };
+    mocks.prisma.$transaction.mockImplementation(
+      async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+    );
+
+    const response = await PUT(request(), {
+      params: Promise.resolve({ id: "12" }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("正在考试");
+    expect(tx.testCase.deleteMany).not.toHaveBeenCalled();
+    expect(tx.problem.update).not.toHaveBeenCalled();
+  });
 });

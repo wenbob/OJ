@@ -1,10 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { judgeCppCode } from "@/lib/judge";
+import { JudgeInfrastructureError } from "@/lib/judgeErrors";
+import {
+  enqueueJudgeTask,
+  JudgeQueueFullError,
+  JudgeQueueTimeoutError,
+} from "@/lib/judgeQueue";
 import { prisma } from "@/lib/prisma";
 import { POST } from "./route";
 
 const mocks = vi.hoisted(() => ({
   createSubmission: vi.fn(),
+  enqueue: vi.fn(),
   findAssignment: vi.fn(),
   findCurrentAssignmentProblem: vi.fn(),
   updateAssignmentProblem: vi.fn(),
@@ -38,9 +45,15 @@ vi.mock("@/lib/judge", () => ({
   })),
 }));
 
-vi.mock("@/lib/judgeQueue", () => ({
-  enqueueJudgeTask: vi.fn(async (task: () => Promise<unknown>) => task()),
-}));
+vi.mock("@/lib/judgeQueue", () => {
+  class MockJudgeQueueFullError extends Error {}
+  class MockJudgeQueueTimeoutError extends Error {}
+  return {
+    enqueueJudgeTask: mocks.enqueue,
+    JudgeQueueFullError: MockJudgeQueueFullError,
+    JudgeQueueTimeoutError: MockJudgeQueueTimeoutError,
+  };
+});
 
 vi.mock("@/lib/settings", () => ({
   getJudgeDefaultSettings: vi.fn(async () => ({ memoryLimitMb: 128, timeLimitMs: 1000 })),
@@ -98,6 +111,9 @@ describe("learning assignment submission attribution", () => {
       status: "Accepted",
       totalCount: 1,
     });
+    mocks.enqueue.mockImplementation(async (task: () => Promise<unknown>) =>
+      task(),
+    );
   });
 
   it("marks a correct assignment-linked practice Accepted in the same transaction", async () => {
@@ -186,5 +202,41 @@ describe("learning assignment submission attribution", () => {
     );
     expect(response.status).toBe(400);
     expect(prisma.problem.findUnique).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["queue full", () => new JudgeQueueFullError()],
+    ["queue timeout", () => new JudgeQueueTimeoutError()],
+  ])("returns retryable 503 without saving on %s", async (_label, createError) => {
+    mocks.enqueue.mockRejectedValueOnce(createError());
+
+    const response = await POST(request({}) as never, {
+      params: Promise.resolve({ id: "12" }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("5");
+    expect(body.retryAfterSeconds).toBe(5);
+    expect(body.error).toContain("队列繁忙");
+    expect(mocks.createSubmission).not.toHaveBeenCalled();
+    expect(enqueueJudgeTask).toHaveBeenCalled();
+  });
+
+  it("returns retryable 503 without recording an infrastructure failure", async () => {
+    vi.mocked(judgeCppCode).mockRejectedValueOnce(
+      new JudgeInfrastructureError("raw Docker detail"),
+    );
+
+    const response = await POST(request({}) as never, {
+      params: Promise.resolve({ id: "12" }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("5");
+    expect(body.error).toBe("评测服务暂时不可用，请稍后再试");
+    expect(JSON.stringify(body)).not.toContain("Docker");
+    expect(mocks.createSubmission).not.toHaveBeenCalled();
   });
 });

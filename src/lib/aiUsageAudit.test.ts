@@ -5,6 +5,7 @@ import {
   createPendingAiUsageTurn,
   findExistingAiUsageTurn,
   isValidAiClientId,
+  type AiUsageReplayContext,
 } from "./aiUsageAudit";
 
 vi.mock("@/lib/settings", () => ({
@@ -45,18 +46,74 @@ describe("AI usage audit", () => {
 
   it("does not replay another student's request", async () => {
     vi.mocked(prisma.aiConversationTurn.findUnique).mockResolvedValueOnce({
+      aiProfile: "programming",
+      mode: "overview",
+      objectiveItemIndex: null,
       status: "success",
       assistantContent: "提示",
       errorMessage: null,
       conversation: {
         clientConversationId: "conversation_123456",
+        examId: null,
+        problemId: 113,
+        scope: "practice",
         studentId: 99,
       },
     } as never);
 
     await expect(
-      findExistingAiUsageTurn({ requestId: "request_12345678", studentId: 2 }),
+      findExistingAiUsageTurn({
+        aiProfile: "programming",
+        examId: null,
+        mode: "overview",
+        objectiveItemIndex: null,
+        problemId: 113,
+        requestId: "request_12345678",
+        scope: "practice",
+        studentId: 2,
+      }),
     ).resolves.toEqual({ kind: "forbidden" });
+  });
+
+  const contextOverrides: Array<[string, Partial<AiUsageReplayContext>]> = [
+    ["problem", { problemId: 114 }],
+    ["exam", { examId: 7, scope: "exam" }],
+    ["scope", { scope: "exam" }],
+    ["mode", { mode: "next_step" }],
+    ["AI profile", { aiProfile: "objective" }],
+    ["objective item", { objectiveItemIndex: 2 }],
+  ];
+
+  it.each(contextOverrides)("does not replay a request id in a different %s context", async (_label, patch) => {
+    vi.mocked(prisma.aiConversationTurn.findUnique).mockResolvedValueOnce({
+      aiProfile: "programming",
+      mode: "overview",
+      objectiveItemIndex: null,
+      status: "success",
+      assistantContent: "原请求回复",
+      errorMessage: null,
+      conversation: {
+        clientConversationId: "conversation_123456",
+        examId: null,
+        problemId: 113,
+        scope: "practice",
+        studentId: 2,
+      },
+    } as never);
+
+    await expect(
+      findExistingAiUsageTurn({
+        aiProfile: "programming",
+        examId: null,
+        mode: "overview",
+        objectiveItemIndex: null,
+        problemId: 113,
+        requestId: "request_12345678",
+        scope: "practice",
+        studentId: 2,
+        ...patch,
+      }),
+    ).resolves.toEqual({ kind: "conflict" });
   });
 
   it("stores only the visible question and audit metadata in a pending turn", async () => {

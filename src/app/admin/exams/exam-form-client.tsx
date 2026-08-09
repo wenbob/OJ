@@ -36,6 +36,22 @@ export function ExamFormClient({
   const [form, setForm] = useState(initialValue);
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
+  const coreLocked = mode === "edit" && initialValue.status !== "draft";
+  const endedLocked = mode === "edit" && initialValue.status === "ended";
+  const statusOptions =
+    mode === "create"
+      ? [{ label: "draft 草稿", value: "draft" }]
+      : initialValue.status === "draft"
+        ? [
+            { label: "draft 草稿", value: "draft" },
+            { label: "published 已发布", value: "published" },
+          ]
+        : initialValue.status === "published"
+          ? [
+              { label: "published 已发布", value: "published" },
+              { label: "ended 已结束", value: "ended" },
+            ]
+          : [{ label: "ended 已结束", value: "ended" }];
 
   function update(field: keyof ExamFormValue, value: string | boolean) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -56,33 +72,38 @@ export function ExamFormClient({
     setMessage("");
     const url =
       mode === "create" ? "/api/admin/exams" : `/api/admin/exams/${form.id}`;
-    const response = await fetch(url, {
-      method: mode === "create" ? "POST" : "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: form.title,
-        description: form.description,
-        durationMin: form.durationMin,
-        status: form.status,
-        examType: form.examType,
-        aiEnabled: form.aiEnabled,
-      }),
-    });
-    const data = await response.json().catch(() => ({}));
-    setPending(false);
+    try {
+      const response = await fetch(url, {
+        method: mode === "create" ? "POST" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: form.title,
+          description: form.description,
+          durationMin: form.durationMin,
+          status: form.status,
+          examType: form.examType,
+          aiEnabled: form.aiEnabled,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      setMessage(data.error ?? "保存失败");
-      return;
+      if (!response.ok) {
+        setMessage(data.error ?? "保存失败");
+        return;
+      }
+
+      const examId = data.exam?.id ?? form.id;
+      router.push(
+        mode === "create"
+          ? `${basePath}/exams/${examId}/edit`
+          : `${basePath}/exams`,
+      );
+      router.refresh();
+    } catch {
+      setMessage("网络异常，保存失败，请检查连接后重试");
+    } finally {
+      setPending(false);
     }
-
-    const examId = data.exam?.id ?? form.id;
-    router.push(
-      mode === "create"
-        ? `${basePath}/exams/${examId}/edit`
-        : `${basePath}/exams`,
-    );
-    router.refresh();
   }
 
   return (
@@ -97,6 +118,7 @@ export function ExamFormClient({
           考试名称
           <input
             className="field"
+            disabled={coreLocked}
             onChange={(event) => update("title", event.target.value)}
             value={form.title}
           />
@@ -105,6 +127,7 @@ export function ExamFormClient({
           考试说明
           <textarea
             className="field min-h-28"
+            disabled={coreLocked}
             onChange={(event) => update("description", event.target.value)}
             value={form.description}
           />
@@ -114,7 +137,7 @@ export function ExamFormClient({
             考试类型
             <select
               className="field"
-              disabled={lockExamType}
+              disabled={lockExamType || coreLocked}
               onChange={(event) =>
                 update("examType", event.target.value as ProblemType)
               }
@@ -133,6 +156,7 @@ export function ExamFormClient({
             考试时长（分钟）
             <input
               className="field"
+              disabled={coreLocked}
               min={1}
               onChange={(event) => update("durationMin", event.target.value)}
               type="number"
@@ -143,18 +167,29 @@ export function ExamFormClient({
             状态
             <select
               className="field"
+              disabled={endedLocked}
               onChange={(event) => update("status", event.target.value)}
               value={form.status}
             >
-              <option value="draft">draft 草稿</option>
-              <option value="published">published 已发布</option>
-              <option value="ended">ended 已结束</option>
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
         </div>
+        {coreLocked ? (
+          <p className="text-xs font-semibold text-ink-600">
+            {endedLocked
+              ? "考试已经结束，内容和开关均不可再修改。"
+              : "已发布考试只能调整 AI 开关或结束考试；若尚无学生记录，可先在列表取消发布后再编辑内容。"}
+          </p>
+        ) : null}
         <label className="inline-flex items-center gap-3 text-sm font-bold text-ink-800">
           <input
             checked={form.aiEnabled}
+            disabled={endedLocked}
             type="checkbox"
             onChange={(event) => update("aiEnabled", event.target.checked)}
           />
@@ -165,11 +200,17 @@ export function ExamFormClient({
         </p>
         <button
           className="btn btn-primary justify-center"
-          disabled={pending}
+          disabled={pending || endedLocked}
           onClick={submit}
           type="button"
         >
-          {pending ? "保存中..." : mode === "create" ? "创建考试" : "保存考试"}
+          {pending
+            ? "保存中..."
+            : endedLocked
+              ? "考试已结束"
+              : mode === "create"
+                ? "创建考试"
+                : "保存考试"}
         </button>
       </div>
     </section>

@@ -53,18 +53,25 @@ export async function StaffStudentLearningPage({
   );
   const insightInput = createTeacherInsightInput({
     analytics: detail.analytics,
-    username: detail.student.username,
   });
-  const aiProviderConfig = await getEffectiveAiProviderConfig("programming");
-  const currentHash = hashTeacherInsightInput(
-    insightInput,
-    createAiProviderFingerprint(aiProviderConfig),
-  );
+  let currentHash: string | null = null;
+  try {
+    const aiProviderConfig = await getEffectiveAiProviderConfig("programming");
+    currentHash = hashTeacherInsightInput(
+      insightInput,
+      createAiProviderFingerprint(aiProviderConfig),
+    );
+  } catch {
+    // Rule-based diagnosis and assignment tools must stay available when the
+    // optional AI provider configuration cannot be read.
+  }
   const snapshot = await prisma.learningInsightSnapshot.findUnique({
     where: { studentId_window: { studentId, window } },
   });
   const initialSummary = snapshot?.summary ?? null;
-  const initialStale = Boolean(snapshot && snapshot.inputHash !== currentHash);
+  const initialStale = Boolean(
+    snapshot && (currentHash === null || snapshot.inputHash !== currentHash),
+  );
   const suggestedTitle = "课后练习";
 
   return (

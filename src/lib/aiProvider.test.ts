@@ -104,6 +104,16 @@ describe("effective AI provider configuration", () => {
     expect(JSON.stringify(status)).not.toContain("secret-not-for-client");
   });
 
+  it("fails closed when the database configuration read fails", async () => {
+    process.env.DEEPSEEK_API_KEY = "legacy-key-must-not-be-used";
+    mocks.findMany.mockRejectedValueOnce(new Error("database busy"));
+
+    await expect(getEffectiveAiProviderConfig()).rejects.toMatchObject({
+      kind: "invalid-config",
+      message: "AI 配置暂时无法读取，请稍后再试",
+    });
+  });
+
   it("maps saved providers to fixed official URLs and their own key slots", async () => {
     process.env.ARK_API_KEY = "ark-secret";
     mocks.findMany.mockResolvedValueOnce(

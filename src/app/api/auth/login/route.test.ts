@@ -6,6 +6,9 @@ const mocks = vi.hoisted(() => ({
   attachSessionResponse: vi.fn((response) => response),
   examRecordFindMany: vi.fn(),
   finishExamRecord: vi.fn(),
+  getLoginRateLimitStatus: vi.fn(),
+  recordFailedLogin: vi.fn(),
+  recordFailedLoginForIp: vi.fn(),
   userFindUnique: vi.fn(),
   userUpdate: vi.fn(),
   verifyPassword: vi.fn(),
@@ -21,9 +24,11 @@ vi.mock("@/lib/examScoring", () => ({
 }));
 vi.mock("@/lib/loginRateLimit", () => ({
   clearLoginFailures: vi.fn(),
-  getLoginRateLimitStatus: () => ({ limited: false, retryAfterSeconds: 0 }),
+  getLoginRateLimitStatus: mocks.getLoginRateLimitStatus,
+  loginIpRateLimitKey: () => "test-ip-key",
   loginRateLimitKey: () => "test-key",
-  recordFailedLogin: vi.fn(),
+  recordFailedLogin: mocks.recordFailedLogin,
+  recordFailedLoginForIp: mocks.recordFailedLoginForIp,
 }));
 vi.mock("@/lib/password", () => ({ verifyPassword: mocks.verifyPassword }));
 vi.mock("@/lib/prisma", () => ({
@@ -54,6 +59,10 @@ describe("login session rotation", () => {
     mocks.verifyPassword.mockResolvedValue(true);
     mocks.examRecordFindMany.mockResolvedValue([]);
     mocks.finishExamRecord.mockResolvedValue({ status: "submitted" });
+    mocks.getLoginRateLimitStatus.mockReturnValue({
+      limited: false,
+      retryAfterSeconds: 0,
+    });
   });
 
   it("finishes active exams before issuing a new student session", async () => {
@@ -140,5 +149,27 @@ describe("login session rotation", () => {
       response,
       expect.objectContaining({ role: "teacher", sessionVersion: 3 }),
     );
+  });
+
+  it("rejects an aggregate IP block before querying a username", async () => {
+    mocks.getLoginRateLimitStatus
+      .mockReturnValueOnce({ limited: false, retryAfterSeconds: 0 })
+      .mockReturnValueOnce({ limited: true, retryAfterSeconds: 90 });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("90");
+    expect(mocks.userFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("records failed credentials in both account and aggregate IP buckets", async () => {
+    mocks.userFindUnique.mockResolvedValue(null);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(401);
+    expect(mocks.recordFailedLogin).toHaveBeenCalledWith("test-key");
+    expect(mocks.recordFailedLoginForIp).toHaveBeenCalledWith("test-ip-key");
   });
 });

@@ -4,6 +4,7 @@ import {
   parseObjectiveItems,
   validateObjectiveItems,
 } from "@/lib/objectiveProblem";
+import { snapshotExamProblems } from "@/lib/examSnapshot";
 import { prisma } from "@/lib/prisma";
 import {
   getExamAccessWhere,
@@ -45,6 +46,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   if (!existingExam) {
     return NextResponse.json({ error: "考试不存在" }, { status: 404 });
+  }
+  if (existingExam.status !== "draft") {
+    return NextResponse.json(
+      {
+        error:
+          existingExam.status === "ended"
+            ? "已结束的考试不能重新发布"
+            : "考试已经发布",
+      },
+      { status: 409 },
+    );
   }
   if (!existingExam.title.trim()) {
     return NextResponse.json({ error: "考试标题不能为空" }, { status: 400 });
@@ -103,9 +115,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
   }
 
-  const exam = await prisma.exam.update({
-    where: { id: examId },
-    data: { status: "published" },
+  const exam = await prisma.$transaction(async (tx) => {
+    await snapshotExamProblems(tx, examId);
+    return tx.exam.update({
+      where: { id: examId },
+      data: { status: "published" },
+    });
   });
 
   return NextResponse.json({ exam });

@@ -3,7 +3,15 @@ import { PROBLEM_RUN_COOLDOWN_MS, reserveProblemRun } from "@/lib/problemRunRate
 import { requireApiUser } from "@/lib/auth";
 import { isExamSubmissionOnTime } from "@/lib/examScoring";
 import { runCppCode } from "@/lib/judge";
-import { enqueueJudgeTask, JudgeQueueFullError } from "@/lib/judgeQueue";
+import {
+  JUDGE_RETRY_AFTER_SECONDS,
+  JudgeInfrastructureError,
+} from "@/lib/judgeErrors";
+import {
+  enqueueJudgeTask,
+  JudgeQueueFullError,
+  JudgeQueueTimeoutError,
+} from "@/lib/judgeQueue";
 import { normalizeProblemType } from "@/lib/objectiveProblem";
 import { getDisplaySamples } from "@/lib/problemSamples";
 import { prisma } from "@/lib/prisma";
@@ -23,10 +31,6 @@ type RouteContext = {
 
 function readMode(value: unknown) {
   return value === "samples" || value === "custom" ? value : null;
-}
-
-function judgeUnavailable(errorMessage: string | undefined) {
-  return Boolean(errorMessage?.includes("评测服务暂时没有启动"));
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
@@ -258,23 +262,25 @@ export async function POST(request: NextRequest, context: RouteContext) {
       { priority: "trial" },
     );
 
-    if (judgeUnavailable(run.errorMessage)) {
-      return NextResponse.json(
-        { error: run.errorMessage },
-        { status: 503 },
-      );
-    }
-
     return NextResponse.json({
       cooldownSeconds: Math.ceil(PROBLEM_RUN_COOLDOWN_MS / 1000),
       run,
     });
   } catch (error) {
     const message =
-      error instanceof JudgeQueueFullError
+      error instanceof JudgeQueueFullError ||
+      error instanceof JudgeQueueTimeoutError
         ? "评测队列繁忙，请稍后再试"
-        : "试运行服务暂时不可用，请稍后再试";
-    return NextResponse.json({ error: message }, { status: 503 });
+        : error instanceof JudgeInfrastructureError
+          ? "评测服务暂时不可用，请稍后再试"
+          : "试运行服务暂时不可用，请稍后再试";
+    return NextResponse.json(
+      { error: message, retryAfterSeconds: JUDGE_RETRY_AFTER_SECONDS },
+      {
+        headers: { "Retry-After": String(JUDGE_RETRY_AFTER_SECONDS) },
+        status: 503,
+      },
+    );
   } finally {
     if (started) {
       reservation.complete();

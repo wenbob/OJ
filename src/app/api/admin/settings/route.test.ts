@@ -15,6 +15,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     $transaction: vi.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
     systemSetting: {
+      findMany: vi.fn(async () => []),
       upsert: vi.fn(async () => ({})),
     },
   },

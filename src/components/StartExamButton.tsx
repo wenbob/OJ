@@ -27,23 +27,28 @@ export function StartExamButton({
     setPending(true);
     setError("");
 
-    const response = await fetch(`/api/exams/${examId}/start`, {
-      method: "POST",
-    });
-    const data = await response.json().catch(() => ({}));
-    setPending(false);
+    try {
+      const response = await fetch(`/api/exams/${examId}/start`, {
+        method: "POST",
+      });
+      const data = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      if (data.resultHref) {
-        router.push(data.resultHref);
+      if (!response.ok) {
+        if (data.resultHref) {
+          router.push(data.resultHref);
+          return;
+        }
+        setError(data.error ?? "开始考试失败");
         return;
       }
-      setError(data.error ?? "开始考试失败");
-      return;
-    }
 
-    router.push(data.redirectTo ?? `/student/exams/${examId}/take`);
-    router.refresh();
+      router.push(data.redirectTo ?? `/student/exams/${examId}/take`);
+      router.refresh();
+    } catch {
+      setError("网络异常，无法开始考试，请检查连接后重试");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (

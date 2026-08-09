@@ -46,16 +46,29 @@ export async function POST(request: NextRequest) {
   if (!detail) return NextResponse.json({ error: "学生不存在" }, { status: 404 });
   const input = createTeacherInsightInput({
     analytics: detail.analytics,
-    username: detail.student.username,
   });
-  const aiProviderConfig = await getEffectiveAiProviderConfig("programming");
+  const existing = await prisma.learningInsightSnapshot.findUnique({
+    where: { studentId_window: { studentId, window } },
+  });
+  let aiProviderConfig: Awaited<
+    ReturnType<typeof getEffectiveAiProviderConfig>
+  >;
+  try {
+    aiProviderConfig = await getEffectiveAiProviderConfig("programming");
+  } catch {
+    return NextResponse.json(
+      {
+        error: "AI 服务配置暂时不可用，规则诊断仍可正常使用",
+        rules: input,
+        stale: Boolean(existing),
+      },
+      { status: 503 },
+    );
+  }
   const inputHash = hashTeacherInsightInput(
     input,
     createAiProviderFingerprint(aiProviderConfig),
   );
-  const existing = await prisma.learningInsightSnapshot.findUnique({
-    where: { studentId_window: { studentId, window } },
-  });
   if (!force && existing?.inputHash === inputHash) {
     return NextResponse.json({
       aiSummary: existing.summary,

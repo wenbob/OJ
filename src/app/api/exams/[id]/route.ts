@@ -20,7 +20,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
     where: { id: examId },
     include: {
       problems: {
-        include: {
+        select: {
+          id: true,
+          problemId: true,
+          order: true,
+          score: true,
           problem: {
             select: {
               id: true,

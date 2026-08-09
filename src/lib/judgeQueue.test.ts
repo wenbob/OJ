@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { enqueueJudgeTask } from "./judgeQueue";
+import {
+  enqueueJudgeTask,
+  JudgeQueueTimeoutError,
+} from "./judgeQueue";
 
 describe("enqueueJudgeTask", () => {
   it("limits concurrent judge tasks", async () => {
@@ -152,6 +155,43 @@ describe("enqueueJudgeTask", () => {
         delete process.env.JUDGE_MAX_QUEUE_SIZE;
       } else {
         process.env.JUDGE_MAX_QUEUE_SIZE = previousMaxQueueSize;
+      }
+    }
+  });
+
+  it("removes and rejects a task that waits in the queue too long", async () => {
+    const previousConcurrency = process.env.JUDGE_CONCURRENCY;
+    const previousWaitTimeout = process.env.JUDGE_QUEUE_WAIT_TIMEOUT_MS;
+    process.env.JUDGE_CONCURRENCY = "1";
+    process.env.JUDGE_QUEUE_WAIT_TIMEOUT_MS = "10";
+    let releaseRunning: (() => void) | undefined;
+    let timedTaskStarted = false;
+
+    const running = enqueueJudgeTask(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseRunning = resolve;
+        }),
+    );
+    const timedTask = enqueueJudgeTask(async () => {
+      timedTaskStarted = true;
+    });
+
+    try {
+      await expect(timedTask).rejects.toBeInstanceOf(JudgeQueueTimeoutError);
+      expect(timedTaskStarted).toBe(false);
+    } finally {
+      releaseRunning?.();
+      await running;
+      if (previousConcurrency === undefined) {
+        delete process.env.JUDGE_CONCURRENCY;
+      } else {
+        process.env.JUDGE_CONCURRENCY = previousConcurrency;
+      }
+      if (previousWaitTimeout === undefined) {
+        delete process.env.JUDGE_QUEUE_WAIT_TIMEOUT_MS;
+      } else {
+        process.env.JUDGE_QUEUE_WAIT_TIMEOUT_MS = previousWaitTimeout;
       }
     }
   });

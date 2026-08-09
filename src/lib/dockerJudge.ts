@@ -14,10 +14,19 @@ import {
   DEFAULT_PROCESS_OUTPUT_LIMIT_BYTES,
   createLimitedOutputCollector,
 } from "@/lib/processOutputLimit";
+import { JudgeInfrastructureError } from "@/lib/judgeErrors";
 
 function readPositiveInt(value: string | undefined, fallback: number) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function readBoundedPositiveInt(
+  value: string | undefined,
+  fallback: number,
+  maximum: number,
+) {
+  return Math.min(readPositiveInt(value, fallback), maximum);
 }
 
 function dockerImage() {
@@ -30,6 +39,7 @@ const dockerUnavailableMessage =
 function isDockerUnavailableMessage(value: string) {
   const message = value.toLowerCase();
   return (
+    message.includes(dockerUnavailableMessage.toLowerCase()) ||
     message.includes("enoent") ||
     message.includes("spawn docker") ||
     message.includes("docker api") ||
@@ -38,12 +48,50 @@ function isDockerUnavailableMessage(value: string) {
     message.includes("error during connect") ||
     message.includes("is the docker daemon running") ||
     message.includes("npipe:////./pipe/docker") ||
-    message.includes("//./pipe/docker")
+    message.includes("//./pipe/docker") ||
+    message.includes("unable to find image") ||
+    message.includes("pull access denied") ||
+    message.includes("no such image") ||
+    message.includes("error response from daemon") ||
+    message.includes("permission denied while trying to connect") ||
+    message.includes("oci runtime") ||
+    message.includes("docker: error") ||
+    message.includes("executable file not found")
   );
 }
 
 export function normalizeDockerErrorMessage(value: string) {
   return isDockerUnavailableMessage(value) ? dockerUnavailableMessage : value;
+}
+
+export function isDockerInfrastructureResult(
+  result: CppProcessResult,
+  phase: "compile" | "run",
+) {
+  const details = [result.errorMessage, result.stderr, result.stdout]
+    .filter(Boolean)
+    .join("\n");
+  const infrastructureExit =
+    result.exitCode === 125 ||
+    (phase === "compile" &&
+      (result.exitCode === 126 || result.exitCode === 127));
+  if (infrastructureExit) return true;
+  return (
+    result.exitCode === null &&
+    !result.timedOut &&
+    isDockerUnavailableMessage(details)
+  );
+}
+
+function getDockerInfrastructureError(
+  result: CppProcessResult,
+  phase: "compile" | "run",
+) {
+  if (!isDockerInfrastructureResult(result, phase)) return null;
+  const details = [result.errorMessage, result.stderr, result.stdout]
+    .filter(Boolean)
+    .join("\n");
+  return new JudgeInfrastructureError(dockerUnavailableMessage, details);
 }
 
 function createContainerName() {
@@ -71,7 +119,7 @@ function runProcess({
     const stderr = createLimitedOutputCollector(outputLimitBytes);
     let settled = false;
     let timedOut = false;
-    let cleanupStarted = false;
+    let cleanupPromise: Promise<void> | null = null;
 
     const child = spawn("docker", args, {
       windowsHide: true,
@@ -79,33 +127,48 @@ function runProcess({
     });
 
     const cleanupContainer = () => {
-      if (cleanupStarted) return;
-      cleanupStarted = true;
-      const cleanup = spawn("docker", ["rm", "-f", containerName], {
-        windowsHide: true,
-        stdio: "ignore",
+      if (cleanupPromise) return cleanupPromise;
+      cleanupPromise = new Promise<void>((cleanupDone) => {
+        const cleanup = spawn("docker", ["rm", "-f", containerName], {
+          windowsHide: true,
+          stdio: "ignore",
+        });
+        let cleanupSettled = false;
+        const finishCleanup = () => {
+          if (cleanupSettled) return;
+          cleanupSettled = true;
+          clearTimeout(cleanupTimer);
+          cleanupDone();
+        };
+        const cleanupTimer = setTimeout(() => {
+          cleanup.kill();
+          finishCleanup();
+        }, 5_000);
+        cleanup.once("error", finishCleanup);
+        cleanup.once("close", finishCleanup);
       });
-      cleanup.on("error", () => {});
+      return cleanupPromise;
     };
 
-    const finish = (result: Omit<CppProcessResult, "runtimeMs">) => {
+    const finish = async (result: Omit<CppProcessResult, "runtimeMs">) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (cleanupPromise) await cleanupPromise;
       resolve({ ...result, runtimeMs: Date.now() - startedAt });
     };
 
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill();
-      cleanupContainer();
+      void cleanupContainer();
     }, timeoutMs);
 
     child.stdout.on("data", (chunk) => {
       stdout.append(chunk);
       if (stdout.exceeded()) {
         child.kill();
-        cleanupContainer();
+        void cleanupContainer();
       }
     });
 
@@ -113,7 +176,7 @@ function runProcess({
       stderr.append(chunk);
       if (stderr.exceeded()) {
         child.kill();
-        cleanupContainer();
+        void cleanupContainer();
       }
     });
 
@@ -122,7 +185,7 @@ function runProcess({
     });
 
     child.on("error", (error) => {
-      finish({
+      void finish({
         stdout: stdout.value(),
         stderr: stderr.value(),
         exitCode: null,
@@ -133,7 +196,7 @@ function runProcess({
 
     child.on("close", (exitCode) => {
       const outputExceeded = stdout.exceeded() || stderr.exceeded();
-      finish({
+      void finish({
         stdout: stdout.value(),
         stderr: stderr.value(),
         exitCode,
@@ -149,13 +212,17 @@ function runProcess({
 
 export function buildDockerRunArgs({
   command,
+  fileSizeLimitBytes,
   containerName,
   memoryLimitMb,
+  workspaceReadOnly = false,
   workDir,
 }: {
   command: string[];
+  fileSizeLimitBytes?: number;
   containerName: string;
   memoryLimitMb: number;
+  workspaceReadOnly?: boolean;
   workDir: string;
 }) {
   return [
@@ -181,12 +248,15 @@ export function buildDockerRunArgs({
     "ALL",
     "--security-opt",
     "no-new-privileges",
+    ...(fileSizeLimitBytes
+      ? ["--ulimit", `fsize=${fileSizeLimitBytes}:${fileSizeLimitBytes}`]
+      : []),
     "--user",
     "65534:65534",
     "--tmpfs",
     "/tmp:rw,noexec,nosuid,size=64m",
     "-v",
-    `${workDir}:/workspace`,
+    `${workDir}:/workspace:${workspaceReadOnly ? "ro" : "rw"}`,
     "-w",
     "/workspace",
     dockerImage(),
@@ -205,6 +275,19 @@ export async function dockerRunCppCode({
     process.env.JUDGE_COMPILE_TIMEOUT_MS,
     30000,
   );
+  const compileMemoryLimitMb = readBoundedPositiveInt(
+    process.env.JUDGE_COMPILE_MEMORY_LIMIT_MB,
+    Math.max(memoryLimitMb, 512),
+    1024,
+  );
+  const compileFileLimitBytes =
+    readBoundedPositiveInt(
+      process.env.JUDGE_COMPILE_FILE_LIMIT_MB,
+      64,
+      256,
+    ) *
+    1024 *
+    1024;
   const workDir = await mkdtemp(path.join(tmpdir(), "cpp-oj-docker-"));
   const sourcePath = path.join(workDir, "main.cpp");
   const executableName = "main";
@@ -219,14 +302,21 @@ export async function dockerRunCppCode({
     const compile = await runProcess({
       args: buildDockerRunArgs({
         command: ["g++", "main.cpp", "-std=c++17", "-O2", "-o", executableName],
+        fileSizeLimitBytes: compileFileLimitBytes,
         containerName: compileContainerName,
-        memoryLimitMb,
+        memoryLimitMb: compileMemoryLimitMb,
         workDir,
       }),
       containerName: compileContainerName,
       input: "",
       timeoutMs: Math.max(compileTimeoutMs, timeLimitMs + 5000),
     });
+
+    const compileInfrastructureError = getDockerInfrastructureError(
+      compile,
+      "compile",
+    );
+    if (compileInfrastructureError) throw compileInfrastructureError;
 
     if (compile.errorMessage) {
       return compileErrorRunResult({
@@ -259,12 +349,15 @@ export async function dockerRunCppCode({
           command: [`./${executableName}`],
           containerName: runContainerName,
           memoryLimitMb,
+          workspaceReadOnly: true,
           workDir,
         }),
         containerName: runContainerName,
         input,
         timeoutMs: timeLimitMs,
       });
+      const runInfrastructureError = getDockerInfrastructureError(run, "run");
+      if (runInfrastructureError) throw runInfrastructureError;
       cases.push(
         buildRunCaseResult({
           caseIndex: index + 1,

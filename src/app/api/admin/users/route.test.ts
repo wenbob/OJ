@@ -77,6 +77,8 @@ function createTx() {
       upsert: vi.fn().mockResolvedValue({}),
     },
     user: {
+      count: vi.fn().mockResolvedValue(2),
+      delete: vi.fn().mockResolvedValue({}),
       findUnique: vi.fn().mockResolvedValue({ role: "student" }),
       findUniqueOrThrow: vi.fn().mockResolvedValue({
         createdAt: new Date("2026-06-28T00:00:00.000Z"),
@@ -104,6 +106,9 @@ describe("admin users API custom title handling", () => {
     mocks.hashPassword.mockResolvedValue("hashed-password");
     mocks.prisma.user.delete.mockResolvedValue({});
     mocks.prisma.user.updateMany.mockResolvedValue({ count: 1 });
+    mocks.prisma.$transaction.mockImplementation(async (callback) =>
+      callback(createTx()),
+    );
     mocks.requireApiUser.mockResolvedValue({
       response: null,
       user: { id: 1, role: "admin", username: "admin" },
@@ -649,12 +654,61 @@ describe("admin users API custom title handling", () => {
   });
 
   it("keeps administrator user deletion available", async () => {
+    const tx = createTx();
+    mocks.prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+
     const response = await DELETE(emptyRequest(), routeContext("2"));
 
     expect(response.status).toBe(200);
-    expect(mocks.prisma.user.delete).toHaveBeenCalledWith({
+    expect(tx.user.delete).toHaveBeenCalledWith({
       where: { id: 2 },
     });
+  });
+
+  it("rejects demoting the last administrator", async () => {
+    const tx = createTx();
+    tx.user.findUnique.mockResolvedValueOnce({ role: "admin" });
+    tx.user.count.mockResolvedValueOnce(1);
+    mocks.prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+
+    const response = await PUT(
+      jsonRequest({
+        customTitle: "",
+        password: "",
+        role: "teacher",
+        username: "root",
+      }),
+      routeContext("2"),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("至少保留一个管理员");
+    expect(tx.user.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects deleting the last administrator", async () => {
+    const tx = createTx();
+    tx.user.findUnique.mockResolvedValueOnce({ role: "admin" });
+    tx.user.count.mockResolvedValueOnce(1);
+    mocks.prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+
+    const response = await DELETE(emptyRequest(), routeContext("2"));
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("至少保留一个管理员");
+    expect(tx.user.delete).not.toHaveBeenCalled();
+  });
+
+  it("maps the database last-admin trigger to a stable conflict response", async () => {
+    mocks.prisma.$transaction.mockRejectedValueOnce(
+      new Error("constraint failed: LAST_ADMIN_REQUIRED"),
+    );
+
+    const response = await DELETE(emptyRequest(), routeContext("2"));
+
+    expect(response.status).toBe(409);
   });
 
   it("resets a student password to the fixed value and revokes sessions", async () => {

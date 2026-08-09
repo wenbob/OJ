@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { requireApiUser } from "@/lib/auth";
 import { isExamSubmissionOnTime } from "@/lib/examScoring";
 import { runCppCode } from "@/lib/judge";
-import { enqueueJudgeTask, JudgeQueueFullError } from "@/lib/judgeQueue";
+import {
+  enqueueJudgeTask,
+  JudgeQueueFullError,
+  JudgeQueueTimeoutError,
+} from "@/lib/judgeQueue";
 import { reserveProblemRun } from "@/lib/problemRunRateLimit";
 import { prisma } from "@/lib/prisma";
 import { POST } from "./route";
@@ -28,8 +32,10 @@ vi.mock("@/lib/examScoring", () => ({
 vi.mock("@/lib/judge", () => ({ runCppCode: mocks.runCpp }));
 vi.mock("@/lib/judgeQueue", () => {
   class MockJudgeQueueFullError extends Error {}
+  class MockJudgeQueueTimeoutError extends Error {}
   return {
     JudgeQueueFullError: MockJudgeQueueFullError,
+    JudgeQueueTimeoutError: MockJudgeQueueTimeoutError,
     enqueueJudgeTask: mocks.enqueue,
   };
 });
@@ -274,6 +280,16 @@ describe("problem trial run API", () => {
 
     expect(response.status).toBe(503);
     expect(reserveProblemRun).toHaveBeenCalled();
+    expect(mocks.cancelReservation).toHaveBeenCalledOnce();
+  });
+
+  it("returns Retry-After when a trial run waits in the queue too long", async () => {
+    mocks.enqueue.mockRejectedValueOnce(new JudgeQueueTimeoutError());
+
+    const response = await POST(request({ mode: "samples" }) as never, context());
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("5");
     expect(mocks.cancelReservation).toHaveBeenCalledOnce();
   });
 

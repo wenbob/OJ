@@ -78,9 +78,9 @@ export async function POST(request: NextRequest) {
   const payload = readExamPayload(body);
   const error = validateExamPayload(payload);
   if (error) return NextResponse.json({ error }, { status: 400 });
-  if (payload.status === "published") {
+  if (payload.status !== "draft") {
     return NextResponse.json(
-      { error: "考试至少需要添加 1 道题后才能发布" },
+      { error: "新考试必须先保存为草稿，完成组卷后再发布" },
       { status: 400 },
     );
   }

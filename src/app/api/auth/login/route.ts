@@ -3,8 +3,10 @@ import { attachSessionResponse, roleHome } from "@/lib/auth";
 import {
   clearLoginFailures,
   getLoginRateLimitStatus,
+  loginIpRateLimitKey,
   loginRateLimitKey,
   recordFailedLogin,
+  recordFailedLoginForIp,
 } from "@/lib/loginRateLimit";
 import { verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
@@ -44,15 +46,25 @@ export async function POST(request: NextRequest) {
   }
 
   const rateLimitKey = loginRateLimitKey(request, username);
-  const rateLimitStatus = getLoginRateLimitStatus(rateLimitKey);
-  if (rateLimitStatus.limited) {
+  const ipRateLimitKey = loginIpRateLimitKey(request);
+  const rateLimitStatuses = [
+    getLoginRateLimitStatus(rateLimitKey),
+    getLoginRateLimitStatus(ipRateLimitKey),
+  ];
+  const retryAfterSeconds = Math.max(
+    ...rateLimitStatuses
+      .filter((status) => status.limited)
+      .map((status) => status.retryAfterSeconds),
+    0,
+  );
+  if (retryAfterSeconds > 0) {
     return NextResponse.json(
       {
-        error: `登录尝试过于频繁，请 ${rateLimitStatus.retryAfterSeconds} 秒后再试`,
-        retryAfterSeconds: rateLimitStatus.retryAfterSeconds,
+        error: `登录尝试过于频繁，请 ${retryAfterSeconds} 秒后再试`,
+        retryAfterSeconds,
       },
       {
-        headers: { "Retry-After": String(rateLimitStatus.retryAfterSeconds) },
+        headers: { "Retry-After": String(retryAfterSeconds) },
         status: 429,
       },
     );
@@ -61,6 +73,7 @@ export async function POST(request: NextRequest) {
   const user = await prisma.user.findUnique({ where: { username } });
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
     recordFailedLogin(rateLimitKey);
+    recordFailedLoginForIp(ipRateLimitKey);
     return NextResponse.json({ error: "用户名或密码错误" }, { status: 401 });
   }
 

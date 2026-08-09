@@ -24,6 +24,7 @@ import {
   normalizeAiClientId,
 } from "@/lib/aiUsageAudit";
 import { requireApiUser } from "@/lib/auth";
+import { isExamSubmissionOnTime } from "@/lib/examScoring";
 import { prisma } from "@/lib/prisma";
 import {
   PayloadTooLargeError,
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     studentSetting,
     profile,
     priorSubmission,
-    activeExamRecord,
+    inProgressExamRecords,
   ] =
     await Promise.all([
       getSetting("aiObjectiveExplanationEnabled"),
@@ -145,13 +146,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
         },
         select: { id: true },
       }),
-      prisma.examRecord.findFirst({
+      prisma.examRecord.findMany({
         where: {
           status: "in_progress",
           userId: auth.user.id,
-          exam: { problems: { some: { problemId } } },
         },
-        select: { id: true },
+        select: {
+          id: true,
+          startedAt: true,
+          exam: {
+            select: {
+              durationMin: true,
+              status: true,
+            },
+          },
+        },
       }),
     ]);
   if (!boolSetting(masterSetting) || !boolSetting(studentSetting)) {
@@ -166,9 +175,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
       { status: 403 },
     );
   }
+  const now = new Date();
+  const activeExamRecord = inProgressExamRecords.find(
+    (examRecord) =>
+      examRecord.exam.status === "published" &&
+      isExamSubmissionOnTime({
+        createdAt: now,
+        durationMin: examRecord.exam.durationMin,
+        startedAt: examRecord.startedAt,
+      }),
+  );
   if (activeExamRecord) {
     return NextResponse.json(
-      { error: "正式考试进行中不能查看该题 AI 解析" },
+      { error: "正式考试进行中不能查看选择判断题 AI 解析" },
       { status: 403 },
     );
   }
@@ -198,7 +217,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
   let existingTurn: Awaited<ReturnType<typeof findExistingAiUsageTurn>>;
   try {
     existingTurn = await findExistingAiUsageTurn({
+      aiProfile: "objective",
+      examId: null,
+      mode: "objective_explanation",
+      objectiveItemIndex: itemIndex,
+      problemId,
       requestId,
+      scope: "practice",
       studentId: auth.user.id,
     });
   } catch {
@@ -209,6 +234,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
   if (existingTurn.kind === "forbidden") {
     return NextResponse.json({ error: "AI 请求标识无权使用" }, { status: 403 });
+  }
+  if (existingTurn.kind === "conflict") {
+    return NextResponse.json(
+      { error: "AI 请求标识与当前请求不匹配" },
+      { status: 409 },
+    );
   }
   if (existingTurn.kind === "pending") {
     return NextResponse.json(

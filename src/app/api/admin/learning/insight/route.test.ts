@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createAiProviderFingerprint,
+  getEffectiveAiProviderConfig,
   type AiProviderRuntimeConfig,
 } from "@/lib/aiProvider";
 import { requireApiUser } from "@/lib/auth";
@@ -146,7 +147,6 @@ describe("POST /api/admin/learning/insight", () => {
   it("returns a matching database snapshot without calling DeepSeek", async () => {
     const input = createTeacherInsightInput({
       analytics,
-      username: "student",
     });
     vi.mocked(prisma.learningInsightSnapshot.findUnique).mockResolvedValueOnce({
       generatedAt: new Date("2026-07-15T08:30:00Z"),
@@ -171,6 +171,23 @@ describe("POST /api/admin/learning/insight", () => {
     expect(response.status).toBe(502);
     expect(body.error).toContain("AI 服务异常");
     expect(body.rules.summary.submissionCount).toBe(3);
+  });
+
+  it("keeps rule data available when AI configuration storage fails", async () => {
+    vi.mocked(getEffectiveAiProviderConfig).mockRejectedValueOnce(
+      new Error("database busy"),
+    );
+
+    const response = await POST(
+      request({ studentId: 7, window: "30d" }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toContain("规则诊断仍可正常使用");
+    expect(body.rules.summary.submissionCount).toBe(3);
+    expect(JSON.stringify(body.rules)).not.toContain("student");
+    expect(requestTeacherLearningInsight).not.toHaveBeenCalled();
   });
 
   it("applies the configured cooldown after an upstream failure", async () => {

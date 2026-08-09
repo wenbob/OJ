@@ -13,19 +13,24 @@ export function ExamSubmitButton({ examId }: { examId: number }) {
 
     setPending(true);
     setError("");
-    const response = await fetch(`/api/exams/${examId}/submit`, {
-      method: "POST",
-    });
-    const data = await response.json().catch(() => ({}));
-    setPending(false);
+    try {
+      const response = await fetch(`/api/exams/${examId}/submit`, {
+        method: "POST",
+      });
+      const data = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      setError(data.error ?? "交卷失败");
-      return;
+      if (!response.ok) {
+        setError(data.error ?? "交卷失败");
+        return;
+      }
+
+      router.push(data.resultHref ?? `/student/exams/${examId}/result`);
+      router.refresh();
+    } catch {
+      setError("网络异常，交卷失败，请检查连接后重试");
+    } finally {
+      setPending(false);
     }
-
-    router.push(data.resultHref ?? `/student/exams/${examId}/result`);
-    router.refresh();
   }
 
   return (

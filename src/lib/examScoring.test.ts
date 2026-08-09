@@ -142,6 +142,65 @@ describe("exam deadline scoring", () => {
     );
   });
 
+  it("uses published snapshot values after the reusable problem changes", async () => {
+    const publishedItems = [
+      {
+        answer: "A",
+        kind: "choice" as const,
+        options: [
+          { label: "A", text: "旧选项 A" },
+          { label: "B", text: "旧选项 B" },
+        ],
+        score: 2,
+        stem: "旧题干",
+      },
+    ];
+    const db = {
+      examProblem: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            problemId: 3,
+            score: 100,
+            snapshotObjectiveItems: JSON.stringify(publishedItems),
+            snapshotProblemType: "objective",
+            snapshotScore: 2,
+            snapshotTitle: "发布时标题",
+            problem: {
+              id: 3,
+              title: "后来修改的标题",
+              problemType: "programming",
+              objectiveItems: null,
+            },
+          },
+        ]),
+      },
+      submission: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 9,
+            problemId: 3,
+            status: "Accepted",
+            createdAt: new Date("2026-07-10T00:01:00.000Z"),
+            caseResults: [{ caseIndex: 1, status: "Accepted" }],
+          },
+        ]),
+      },
+    };
+
+    const result = await calculateExamScore({
+      db: db as never,
+      examId: 1,
+      userId: 2,
+    });
+
+    expect(result.totalScore).toBe(2);
+    expect(result.problemResults[0]).toMatchObject({
+      maxScore: 2,
+      score: 2,
+      title: "发布时标题",
+    });
+  });
+
   it("refreshes a finished exam after an on-time judge result arrives late", async () => {
     const startedAt = new Date("2026-07-10T00:00:00.000Z");
     const tx = {

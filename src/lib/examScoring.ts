@@ -160,13 +160,18 @@ export async function calculateExamScore({
   const problemResults = examProblems.map((examProblem) => {
     const problemSubmissions =
       submissionsByProblem.get(examProblem.problemId) ?? [];
-    const isObjective = examProblem.problem.problemType === "objective";
+    const problemType =
+      examProblem.snapshotProblemType ?? examProblem.problem.problemType;
+    const isObjective = problemType === "objective";
     const objectiveItems = isObjective
-      ? parseObjectiveItems(examProblem.problem.objectiveItems)
+      ? parseObjectiveItems(
+          examProblem.snapshotObjectiveItems ??
+            examProblem.problem.objectiveItems,
+        )
       : [];
-    const maxScore = isObjective
-      ? getObjectiveTotalScore(objectiveItems)
-      : examProblem.score;
+    const maxScore =
+      examProblem.snapshotScore ??
+      (isObjective ? getObjectiveTotalScore(objectiveItems) : examProblem.score);
     const bestObjectiveSubmission = isObjective
       ? selectBestObjectiveSubmission({
           items: objectiveItems,
@@ -174,9 +179,9 @@ export async function calculateExamScore({
         })
       : null;
     const score = isObjective
-      ? bestObjectiveSubmission?.score ?? 0
+      ? Math.min(bestObjectiveSubmission?.score ?? 0, maxScore)
       : problemSubmissions.some((submission) => submission.status === "Accepted")
-        ? examProblem.score
+        ? maxScore
         : 0;
     const accepted =
       problemSubmissions.some((submission) => submission.status === "Accepted") ||
@@ -184,7 +189,7 @@ export async function calculateExamScore({
 
     return {
       problemId: examProblem.problemId,
-      title: examProblem.problem.title,
+      title: examProblem.snapshotTitle ?? examProblem.problem.title,
       score,
       maxScore,
       bestStatus: accepted

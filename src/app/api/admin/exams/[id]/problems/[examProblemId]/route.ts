@@ -49,10 +49,16 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
   const exam = await prisma.exam.findFirst({
     where: getExamAccessWhere(auth.user, examId),
-    select: { id: true },
+    select: { id: true, status: true },
   });
   if (!exam) {
     return NextResponse.json({ error: "考试不存在" }, { status: 404 });
+  }
+  if (exam.status !== "draft") {
+    return NextResponse.json(
+      { error: "只有草稿考试可以调整题目" },
+      { status: 409 },
+    );
   }
   if (payload.order !== null && (!Number.isInteger(payload.order) || payload.order < 0)) {
     return NextResponse.json({ error: "排序值不合法" }, { status: 400 });
@@ -128,10 +134,16 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   }
   const exam = await prisma.exam.findFirst({
     where: getExamAccessWhere(auth.user, examId),
-    select: { id: true },
+    select: { id: true, status: true },
   });
   if (!exam) {
     return NextResponse.json({ error: "考试不存在" }, { status: 404 });
+  }
+  if (exam.status !== "draft") {
+    return NextResponse.json(
+      { error: "只有草稿考试可以增删题目" },
+      { status: 409 },
+    );
   }
 
   await prisma.examProblem.deleteMany({ where: { id: examProblemId, examId } });

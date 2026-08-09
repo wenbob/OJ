@@ -64,7 +64,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const [exam, foundProblems, existingProblems] = await Promise.all([
     prisma.exam.findFirst({
       where: getExamAccessWhere(auth.user, examId),
-      select: { id: true, examType: true },
+      select: { id: true, examType: true, status: true },
     }),
     prisma.problem.findMany({
       where: { archivedAt: null, id: { in: problemIds } },
@@ -82,6 +82,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
   ]);
 
   if (!exam) return NextResponse.json({ error: "考试不存在" }, { status: 404 });
+  if (exam.status !== "draft") {
+    return NextResponse.json(
+      { error: "只有草稿考试可以增删题目" },
+      { status: 409 },
+    );
+  }
   if (foundProblems.length !== problemIds.length) {
     return NextResponse.json({ error: "存在不存在的题目" }, { status: 404 });
   }

@@ -109,7 +109,9 @@ model Submission {
   caseResults          SubmissionCaseResult[]
 
   @@index([userId, createdAt])
+  @@index([userId, problemId, createdAt])
   @@index([problemId, createdAt])
+  @@index([createdAt])
   @@index([submissionType, userId, createdAt])
   @@index([submissionType, createdAt])
   @@index([examId, userId, problemId])
@@ -222,13 +224,18 @@ model ExamRecord {
 }
 
 model ExamProblem {
-  id        Int     @id @default(autoincrement())
-  examId    Int
-  problemId Int
-  order     Int     @default(0)
-  score     Int     @default(100)
-  exam      Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
-  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  id                     Int       @id @default(autoincrement())
+  examId                 Int
+  problemId              Int
+  order                  Int       @default(0)
+  score                  Int       @default(100)
+  snapshotTitle          String?
+  snapshotProblemType    String?
+  snapshotObjectiveItems String?
+  snapshotScore          Int?
+  snapshotAt             DateTime?
+  exam                   Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  problem                Problem   @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   @@unique([examId, problemId])
   @@index([examId, order])

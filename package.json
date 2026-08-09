@@ -19,7 +19,9 @@
     "check:env": "tsx scripts/check-env.ts",
     "admin:password": "tsx scripts/change-admin-password.ts",
     "seed": "tsx scripts/guard-destructive-db.ts && tsx prisma/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "node scripts/run-e2e.mjs",
+    "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -34,6 +36,7 @@
     "react-dom": "^19.2.5"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.0",
     "@types/katex": "^0.16.8",
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
@@ -49,7 +52,8 @@
     "vitest": "^4.1.5"
   },
   "overrides": {
-    "dompurify": "3.4.12",
+    "dompurify": "3.4.13",
+    "nanoid": "3.3.18",
     "postcss": "8.5.25",
     "sharp": "0.35.3"
   }

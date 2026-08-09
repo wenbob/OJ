@@ -252,7 +252,10 @@ export async function getEffectiveAiProviderConfig(
       select: { key: true, value: true },
     });
   } catch {
-    return createLegacyDeepSeekConfig();
+    throw new AiProviderError(
+      "invalid-config",
+      "AI 配置暂时无法读取，请稍后再试",
+    );
   }
 
   const values = new Map(rows.map((row) => [row.key, row.value]));

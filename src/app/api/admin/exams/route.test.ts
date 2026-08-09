@@ -86,4 +86,20 @@ describe("staff exam collection access", () => {
       },
     });
   });
+
+  it("does not create an exam directly in a published or ended state", async () => {
+    for (const status of ["published", "ended"]) {
+      const response = await POST(
+        postRequest({
+          durationMin: 60,
+          examType: "programming",
+          status,
+          title: "非法状态考试",
+        }),
+      );
+
+      expect(response.status).toBe(400);
+    }
+    expect(mocks.examCreate).not.toHaveBeenCalled();
+  });
 });

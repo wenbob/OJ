@@ -29,6 +29,25 @@ CREATE TABLE "User" (
 
 CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
 
+CREATE TRIGGER "User_keep_last_admin_on_delete"
+BEFORE DELETE ON "User"
+FOR EACH ROW
+WHEN OLD."role" = 'admin'
+  AND (SELECT COUNT(*) FROM "User" WHERE "role" = 'admin') <= 1
+BEGIN
+  SELECT RAISE(ABORT, 'LAST_ADMIN_REQUIRED');
+END;
+
+CREATE TRIGGER "User_keep_last_admin_on_role_update"
+BEFORE UPDATE OF "role" ON "User"
+FOR EACH ROW
+WHEN OLD."role" = 'admin'
+  AND NEW."role" <> 'admin'
+  AND (SELECT COUNT(*) FROM "User" WHERE "role" = 'admin') <= 1
+BEGIN
+  SELECT RAISE(ABORT, 'LAST_ADMIN_REQUIRED');
+END;
+
 CREATE TABLE "StudentProfile" (
   "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
   "userId" INTEGER NOT NULL,
@@ -182,6 +201,11 @@ CREATE TABLE "ExamProblem" (
   "problemId" INTEGER NOT NULL,
   "order" INTEGER NOT NULL DEFAULT 0,
   "score" INTEGER NOT NULL DEFAULT 100,
+  "snapshotTitle" TEXT,
+  "snapshotProblemType" TEXT,
+  "snapshotObjectiveItems" TEXT,
+  "snapshotScore" INTEGER,
+  "snapshotAt" DATETIME,
   CONSTRAINT "ExamProblem_examId_fkey" FOREIGN KEY ("examId") REFERENCES "Exam"("id") ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "ExamProblem_problemId_fkey" FOREIGN KEY ("problemId") REFERENCES "Problem"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -261,7 +285,9 @@ CREATE TABLE "Submission" (
 );
 
 CREATE INDEX "Submission_userId_createdAt_idx" ON "Submission"("userId", "createdAt");
+CREATE INDEX "Submission_userId_problemId_createdAt_idx" ON "Submission"("userId", "problemId", "createdAt");
 CREATE INDEX "Submission_problemId_createdAt_idx" ON "Submission"("problemId", "createdAt");
+CREATE INDEX "Submission_createdAt_idx" ON "Submission"("createdAt");
 CREATE INDEX "Submission_submissionType_userId_createdAt_idx" ON "Submission"("submissionType", "userId", "createdAt");
 CREATE INDEX "Submission_submissionType_createdAt_idx" ON "Submission"("submissionType", "createdAt");
 CREATE INDEX "Submission_examId_userId_problemId_idx" ON "Submission"("examId", "userId", "problemId");

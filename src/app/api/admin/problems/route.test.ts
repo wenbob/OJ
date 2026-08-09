@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DELETE } from "./[id]/route";
+import { DELETE, GET as getProblemDetails } from "./[id]/route";
 import { POST as bulkArchive } from "./bulk-delete/route";
 import { GET } from "./route";
 
@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
       count: vi.fn(),
       create: vi.fn(),
       findMany: vi.fn(),
+      findUnique: vi.fn(),
       updateMany: vi.fn(),
     },
     problemCategoryOrder: { findMany: vi.fn() },
@@ -65,6 +66,45 @@ describe("admin problem archiving", () => {
       data: { archivedAt: expect.any(Date) },
       where: { archivedAt: null, id: 12 },
     });
+  });
+
+  it("returns full hidden test data only from the authenticated detail endpoint", async () => {
+    mocks.prisma.problem.findUnique.mockResolvedValue({
+      archivedAt: null,
+      category: "基础",
+      dataRange: "1 <= n <= 10",
+      description: "完整题面",
+      difficulty: "入门",
+      id: 12,
+      inputDescription: "输入",
+      objectiveItems: null,
+      outputDescription: "输出",
+      problemType: "programming",
+      sampleInput: "1",
+      sampleOutput: "1",
+      testCases: [
+        { id: 8, input: "hidden-input", isSample: false, output: "hidden-output" },
+      ],
+      title: "测试题",
+    });
+
+    const response = await getProblemDetails(request("GET"), context());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.problem.testCases[0]).toMatchObject({
+      input: "hidden-input",
+      output: "hidden-output",
+    });
+    expect(mocks.prisma.problem.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          testCases: expect.objectContaining({
+            select: { id: true, input: true, isSample: true, output: true },
+          }),
+        }),
+      }),
+    );
   });
 
   it("refuses to archive a problem from a published exam", async () => {
@@ -142,6 +182,48 @@ describe("admin problem archiving", () => {
         orderBy: [{ sortOrder: "desc" }, { id: "desc" }],
       }),
     );
+  });
+
+  it("returns summary rows without statements, answers, or hidden test bodies", async () => {
+    mocks.prisma.problem.findMany
+      .mockResolvedValueOnce([{ category: "基础" }])
+      .mockResolvedValueOnce([
+        {
+          _count: { testCases: 3 },
+          category: "基础",
+          description: "must-not-leak-description",
+          difficulty: "入门",
+          id: 12,
+          objectiveItems: null,
+          problemType: "programming",
+          testCases: [
+            { input: "must-not-leak-input", output: "must-not-leak-output" },
+          ],
+          title: "A+B",
+        },
+      ]);
+    mocks.prisma.problem.count.mockResolvedValue(1);
+
+    const response = await GET(
+      new NextRequest(
+        "http://local.test/api/admin/problems?problemType=programming",
+      ),
+    );
+    const body = await response.json();
+    const serialized = JSON.stringify(body);
+
+    expect(response.status).toBe(200);
+    expect(body.items[0]).toMatchObject({ itemCount: 3, title: "A+B" });
+    expect(serialized).not.toContain("must-not-leak");
+    expect(mocks.prisma.problem.findMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        select: expect.any(Object),
+      }),
+    );
+    expect(
+      mocks.prisma.problem.findMany.mock.calls[1]?.[0],
+    ).not.toHaveProperty("include");
   });
 
   it("sorts titles naturally before applying pagination", async () => {

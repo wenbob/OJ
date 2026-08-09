@@ -16,6 +16,7 @@ import {
   DEFAULT_PROCESS_OUTPUT_LIMIT_BYTES,
   createLimitedOutputCollector,
 } from "@/lib/processOutputLimit";
+import { JudgeInfrastructureError } from "@/lib/judgeErrors";
 import type { SubmissionStatus } from "@/lib/status";
 
 export type JudgeTestCase = {
@@ -164,6 +165,12 @@ export async function localRunCppCode({
     );
 
     if (compile.errorMessage) {
+      if (compile.errorMessage !== "程序输出超过限制") {
+        throw new JudgeInfrastructureError(
+          "本机评测编译器暂时不可用，请稍后再试",
+          compile.errorMessage,
+        );
+      }
       return compileErrorRunResult({
         errorMessage: `无法启动 g++：${compile.errorMessage}`,
         runtimeMs: compile.runtimeMs,
@@ -269,11 +276,16 @@ export async function localJudgeCppCode(input: JudgeInput): Promise<JudgeResult>
 
 export async function runCppCode(input: RunCppInput): Promise<RunCppResult> {
   validateRunInput(input);
-  assertProductionJudgeMode();
-  if (getJudgeMode() === "docker") {
-    return dockerRunCppCode(input);
+  try {
+    assertProductionJudgeMode();
+    if (getJudgeMode() === "docker") {
+      return await dockerRunCppCode(input);
+    }
+    return await localRunCppCode(input);
+  } catch (error) {
+    if (error instanceof JudgeInfrastructureError) throw error;
+    throw new JudgeInfrastructureError(undefined, error);
   }
-  return localRunCppCode(input);
 }
 
 export async function judgeCppCode(input: JudgeInput): Promise<JudgeResult> {

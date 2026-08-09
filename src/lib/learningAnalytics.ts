@@ -75,7 +75,7 @@ export type LearningRecommendations = {
   targetCategories: string[];
 };
 
-function getWindowStartedAt(window: LearningWindow, now: Date) {
+export function getLearningWindowStartedAt(window: LearningWindow, now: Date) {
   if (window === "all") return null;
   const days = window === "7d" ? 7 : 30;
   return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
@@ -115,7 +115,7 @@ export function buildLearningAnalytics({
   const relevantSubmissions = submissions
     .filter((submission) => programmingProblems.has(submission.problemId))
     .sort(compareSubmission);
-  const windowStartedAt = getWindowStartedAt(window, now);
+  const windowStartedAt = getLearningWindowStartedAt(window, now);
   const windowSubmissions = relevantSubmissions.filter(
     (submission) => !windowStartedAt || submission.createdAt >= windowStartedAt,
   );

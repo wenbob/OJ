@@ -114,15 +114,35 @@ describe("production environment validation", () => {
   it("rejects invalid positive integer settings", () => {
     const result = validateProductionEnv({
       ...validProductionEnv,
+      JUDGE_COMPILE_FILE_LIMIT_MB: "0",
+      JUDGE_COMPILE_MEMORY_LIMIT_MB: "-1",
       JUDGE_CONCURRENCY: "0",
+      JUDGE_MAX_QUEUE_SIZE: "-1",
       JUDGE_MEMORY_LIMIT_MB: "-1",
+      JUDGE_QUEUE_WAIT_TIMEOUT_MS: "none",
       JUDGE_TIME_LIMIT_MS: "abc",
+      LOGIN_RATE_LIMIT_MAX_BUCKETS: "0",
     });
 
     expect(result.ok).toBe(false);
     expect(result.errors).toContain("JUDGE_CONCURRENCY 必须是大于等于 1 的整数");
     expect(result.errors).toContain("JUDGE_TIME_LIMIT_MS 必须是大于 0 的整数");
     expect(result.errors).toContain("JUDGE_MEMORY_LIMIT_MB 必须是大于 0 的整数");
+    expect(result.errors).toContain(
+      "JUDGE_COMPILE_MEMORY_LIMIT_MB 必须是大于 0 的整数",
+    );
+    expect(result.errors).toContain(
+      "JUDGE_COMPILE_FILE_LIMIT_MB 必须是大于 0 的整数",
+    );
+    expect(result.errors).toContain(
+      "JUDGE_MAX_QUEUE_SIZE 必须是大于等于 0 的整数",
+    );
+    expect(result.errors).toContain(
+      "JUDGE_QUEUE_WAIT_TIMEOUT_MS 必须是大于 0 的整数",
+    );
+    expect(result.errors).toContain(
+      "LOGIN_RATE_LIMIT_MAX_BUCKETS 必须是大于 0 的整数",
+    );
   });
 
   it("rejects unsafe public listen hosts and invalid AI concurrency", () => {

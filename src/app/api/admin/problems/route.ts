@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
+import {
+  adminProblemSummarySelect,
+  toAdminProblemSummary,
+} from "@/lib/adminProblemSummary";
 import { isProblemType } from "@/lib/objectiveProblem";
 import {
   buildPaginationMeta,
@@ -68,13 +72,13 @@ export async function GET(request: NextRequest) {
       );
       const pageProblems = await prisma.problem.findMany({
         where: { ...where, id: { in: orderedIds } },
-        include: { testCases: { orderBy: { id: "asc" } } },
+        select: adminProblemSummarySelect,
       });
       return orderProblemsByIds(pageProblems, orderedIds);
     }
     return prisma.problem.findMany({
       where,
-      include: { testCases: { orderBy: { id: "asc" } } },
+      select: adminProblemSummarySelect,
       orderBy: getProblemOrderBy(listSort),
       skip,
       take: pageSize,
@@ -84,7 +88,7 @@ export async function GET(request: NextRequest) {
     problemIds: problems.map((problem) => problem.id),
   });
   const items = problems.map((problem, index) => ({
-    ...problem,
+    ...toAdminProblemSummary(problem),
     submissions: submissionCounts.get(problem.id) ?? 0,
     sortPosition: skip + index + 1,
     canMoveUp: skip + index > 0,

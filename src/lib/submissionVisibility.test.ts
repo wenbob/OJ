@@ -30,7 +30,7 @@ describe("sanitizeSubmissionForStudent", () => {
     });
   });
 
-  it("keeps programming expected output visible for normal judge feedback", () => {
+  it("hides programming test input and expected output from students", () => {
     const submission = {
       id: 2,
       language: "C++17",
@@ -38,12 +38,26 @@ describe("sanitizeSubmissionForStudent", () => {
         {
           id: 20,
           caseIndex: 1,
+          input: "21 21",
           expectedOutput: "42",
           actualOutput: "41",
         },
       ],
     };
 
-    expect(sanitizeSubmissionForStudent(submission)).toEqual(submission);
+    expect(sanitizeSubmissionForStudent(submission)).toEqual({
+      id: 2,
+      language: "C++17",
+      caseResults: [
+        {
+          id: 20,
+          caseIndex: 1,
+          input: "",
+          expectedOutput: "",
+          actualOutput: "41",
+          studentDetailsHidden: true,
+        },
+      ],
+    });
   });
 });

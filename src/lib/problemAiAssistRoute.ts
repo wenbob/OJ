@@ -43,6 +43,7 @@ import {
 } from "@/lib/aiAssistRateLimit";
 import { getAiCooldownSeconds } from "@/lib/aiRuntimeSettings";
 import { requireApiUser } from "@/lib/auth";
+import { isExamSubmissionOnTime } from "@/lib/examScoring";
 import { normalizeProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
 import {
@@ -464,7 +465,7 @@ export async function handleProblemAssist(
   const record =
     typeof body === "object" && body ? (body as Record<string, unknown>) : {};
   const problemId = Number(record.problemId);
-  const examId =
+  const requestedExamId =
     record.examId === undefined || record.examId === null || record.examId === ""
       ? null
       : Number(record.examId);
@@ -503,7 +504,7 @@ export async function handleProblemAssist(
       { status: 400 },
     );
   }
-  if (examId !== null && !Number.isInteger(examId)) {
+  if (requestedExamId !== null && !Number.isInteger(requestedExamId)) {
     return NextResponse.json({ error: "考试 ID 不合法" }, { status: 400 });
   }
   if (!mode) {
@@ -586,7 +587,72 @@ export async function handleProblemAssist(
     );
   }
 
+  let examId = requestedExamId;
   let examTitle: string | null = null;
+  let activeExamResolved = false;
+  if (options.audience === "student") {
+    const activeExamRecord = await prisma.examRecord.findFirst({
+      where: {
+        userId: auth.user.id,
+        status: "in_progress",
+        exam: { problems: { some: { problemId } } },
+      },
+      orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+      select: {
+        examId: true,
+        startedAt: true,
+        exam: {
+          select: {
+            aiEnabled: true,
+            durationMin: true,
+            status: true,
+            title: true,
+          },
+        },
+      },
+    });
+
+    if (activeExamRecord) {
+      if (
+        requestedExamId !== null &&
+        requestedExamId !== activeExamRecord.examId
+      ) {
+        return NextResponse.json(
+          { error: "请求考试与当前进行中的考试不一致" },
+          { status: 403 },
+        );
+      }
+      if (activeExamRecord.exam.status !== "published") {
+        return NextResponse.json(
+          { error: "考试未发布或已经结束" },
+          { status: 403 },
+        );
+      }
+      if (
+        !isExamSubmissionOnTime({
+          createdAt: new Date(),
+          durationMin: activeExamRecord.exam.durationMin,
+          startedAt: activeExamRecord.startedAt,
+        })
+      ) {
+        return NextResponse.json(
+          { error: "考试已超时，不能继续使用 AI" },
+          { status: 403 },
+        );
+      }
+      if (!activeExamRecord.exam.aiEnabled) {
+        return NextResponse.json(
+          { error: "本场考试 AI 已关闭" },
+          { status: 403 },
+        );
+      }
+
+      examId = activeExamRecord.examId;
+      examTitle = activeExamRecord.exam.title;
+      activeExamResolved = true;
+    }
+  }
+
   if (examId === null) {
     const enabled =
       options.audience === "staff" ||
@@ -594,7 +660,7 @@ export async function handleProblemAssist(
     if (!enabled) {
       return NextResponse.json({ error: "日常练习 AI 已关闭" }, { status: 403 });
     }
-  } else {
+  } else if (!activeExamResolved) {
     const [exam, examRecord] = await Promise.all([
       prisma.exam.findUnique({
         where: { id: examId },
@@ -674,7 +740,17 @@ export async function handleProblemAssist(
     },
     question: mode === "question" ? question : "",
   });
-  const aiProviderConfig = await getEffectiveAiProviderConfig("programming");
+  let aiProviderConfig: Awaited<
+    ReturnType<typeof getEffectiveAiProviderConfig>
+  >;
+  try {
+    aiProviderConfig = await getEffectiveAiProviderConfig("programming");
+  } catch {
+    return NextResponse.json(
+      { error: "AI 服务配置暂时不可用，请稍后再试" },
+      { status: 503 },
+    );
+  }
   const providerFingerprint =
     createAiProviderFingerprint(aiProviderConfig);
 
@@ -691,7 +767,13 @@ export async function handleProblemAssist(
   let existingTurn: Awaited<ReturnType<typeof findExistingAiUsageTurn>>;
   try {
     existingTurn = await findExistingAiUsageTurn({
+      aiProfile: "programming",
+      examId,
+      mode,
+      objectiveItemIndex: null,
+      problemId,
       requestId,
+      scope: examId === null ? "practice" : "exam",
       studentId: auth.user.id,
     });
   } catch {
@@ -702,6 +784,12 @@ export async function handleProblemAssist(
   }
   if (existingTurn.kind === "forbidden") {
     return NextResponse.json({ error: "AI 请求标识无权使用" }, { status: 403 });
+  }
+  if (existingTurn.kind === "conflict") {
+    return NextResponse.json(
+      { error: "AI 请求标识与当前请求不匹配" },
+      { status: 409 },
+    );
   }
   if (existingTurn.kind === "pending") {
     return NextResponse.json(

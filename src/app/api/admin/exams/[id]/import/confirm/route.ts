@@ -73,10 +73,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const parsed = readProblemPayload(body, defaults);
     const exam = await prisma.exam.findUnique({
       where: { id: examId },
-      select: { id: true, examType: true },
+      select: { id: true, examType: true, status: true },
     });
     if (!exam) {
       return NextResponse.json({ error: "考试不存在" }, { status: 404 });
+    }
+    if (exam.status !== "draft") {
+      return NextResponse.json(
+        { error: "只有草稿考试可以导入题目" },
+        { status: 409 },
+      );
     }
     const typeErrors = parsed.problems
       .filter((problem) => problem.problemType !== exam.examType)

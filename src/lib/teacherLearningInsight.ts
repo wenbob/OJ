@@ -22,34 +22,46 @@ export type TeacherInsightInput = {
   }>;
   issueLabels: string[];
   statusCounts: Record<string, number>;
-  stuckProblems: Array<{
+  stuckCategories: Array<{
     category: string;
-    failedCount: number;
-    title: string;
+    maxFailedCount: number;
+    problemCount: number;
   }>;
   summary: LearningAnalytics["summary"];
-  username: string;
   window: LearningWindow;
 };
 
 export function createTeacherInsightInput({
   analytics,
-  username,
 }: {
   analytics: LearningAnalytics;
-  username: string;
 }): TeacherInsightInput {
+  const stuckCategoryMap = new Map<
+    string,
+    { category: string; maxFailedCount: number; problemCount: number }
+  >();
+  for (const problem of analytics.stuckProblems) {
+    const current = stuckCategoryMap.get(problem.category) ?? {
+      category: problem.category,
+      maxFailedCount: 0,
+      problemCount: 0,
+    };
+    current.maxFailedCount = Math.max(
+      current.maxFailedCount,
+      problem.failedAfterLastAccepted,
+    );
+    current.problemCount += 1;
+    stuckCategoryMap.set(problem.category, current);
+  }
+
   return {
     categories: analytics.categories.map((category) => ({ ...category })),
     issueLabels: [...analytics.issueLabels],
     statusCounts: { ...analytics.statusCounts },
-    stuckProblems: analytics.stuckProblems.map((problem) => ({
-      category: problem.category,
-      failedCount: problem.failedAfterLastAccepted,
-      title: problem.title,
-    })),
+    stuckCategories: Array.from(stuckCategoryMap.values()).sort((left, right) =>
+      left.category.localeCompare(right.category, "zh-CN"),
+    ),
     summary: { ...analytics.summary },
-    username,
     window: analytics.window,
   };
 }
@@ -74,9 +86,12 @@ export function buildTeacherInsightPrompt(input: TeacherInsightInput) {
         )
         .join("\n")
     : "暂无分类数据";
-  const stuckText = input.stuckProblems.length
-    ? input.stuckProblems
-        .map((item) => `${item.title}（${item.category}，最近一次通过后失败 ${item.failedCount} 次）`)
+  const stuckText = input.stuckCategories.length
+    ? input.stuckCategories
+        .map(
+          (item) =>
+            `${item.category}：持续卡题 ${item.problemCount} 道，单题最高连续失败 ${item.maxFailedCount} 次`,
+        )
         .join("\n")
     : "无";
 
@@ -87,7 +102,6 @@ export function buildTeacherInsightPrompt(input: TeacherInsightInput) {
 必须严格包含四个标题：主要问题、数据依据、教学建议、专项练习重点。
 每个标题下写 1 到 3 句。没有足够数据时要明确写“数据不足”，不能硬下结论。
 
-分析对象：${input.username}
 分析周期：${windowLabel}
 周期提交数：${input.summary.submissionCount}
 周期唯一通过题数：${input.summary.uniqueAcceptedInWindow}
@@ -101,7 +115,7 @@ export function buildTeacherInsightPrompt(input: TeacherInsightInput) {
 分类掌握情况：
 ${categoryText}
 
-持续卡题：
+持续卡题分类统计：
 ${stuckText}`;
 }
 

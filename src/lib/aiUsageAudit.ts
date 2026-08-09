@@ -8,6 +8,17 @@ const INTERRUPTED_AFTER_MS = 10 * 60 * 1000;
 const MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export type AiUsageMode = AiAssistMode | "objective_explanation";
+export type AiUsageProfile = "programming" | "objective";
+export type AiUsageScope = "practice" | "exam";
+
+export type AiUsageReplayContext = {
+  aiProfile: AiUsageProfile;
+  examId: number | null;
+  mode: AiUsageMode;
+  objectiveItemIndex?: number | null;
+  problemId: number;
+  scope: AiUsageScope;
+};
 
 let lastMaintenanceAt = 0;
 
@@ -20,6 +31,7 @@ export type AiUsageExecution = {
 export type ExistingAiUsageTurn =
   | { kind: "none" }
   | { kind: "forbidden" }
+  | { kind: "conflict" }
   | { kind: "pending"; conversationId: string; requestId: string }
   | {
       kind: "completed";
@@ -46,9 +58,15 @@ export function isValidAiClientId(value: unknown) {
 }
 
 export async function findExistingAiUsageTurn({
+  aiProfile,
+  examId,
+  mode,
+  objectiveItemIndex = null,
+  problemId,
   requestId,
+  scope,
   studentId,
-}: {
+}: AiUsageReplayContext & {
   requestId: string;
   studentId: number;
 }): Promise<ExistingAiUsageTurn> {
@@ -56,12 +74,28 @@ export async function findExistingAiUsageTurn({
     where: { requestId },
     include: {
       conversation: {
-        select: { clientConversationId: true, studentId: true },
+        select: {
+          clientConversationId: true,
+          examId: true,
+          problemId: true,
+          scope: true,
+          studentId: true,
+        },
       },
     },
   });
   if (!turn) return { kind: "none" };
   if (turn.conversation.studentId !== studentId) return { kind: "forbidden" };
+  if (
+    turn.aiProfile !== aiProfile ||
+    turn.conversation.examId !== examId ||
+    turn.mode !== mode ||
+    turn.objectiveItemIndex !== objectiveItemIndex ||
+    turn.conversation.problemId !== problemId ||
+    turn.conversation.scope !== scope
+  ) {
+    return { kind: "conflict" };
+  }
 
   const base = {
     conversationId: turn.conversation.clientConversationId,
@@ -100,7 +134,7 @@ export async function createPendingAiUsageTurn({
   studentId,
   userContent,
 }: {
-  aiProfile?: "programming" | "objective";
+  aiProfile?: AiUsageProfile;
   clientConversationId: string;
   examId: number | null;
   examTitle: string | null;
@@ -109,7 +143,7 @@ export async function createPendingAiUsageTurn({
   problemId: number;
   problemTitle: string;
   requestId: string;
-  scope: "practice" | "exam";
+  scope: AiUsageScope;
   studentId: number;
   userContent: string;
 }) {

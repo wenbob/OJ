@@ -126,9 +126,13 @@ OJ_LISTEN_HOST=127.0.0.1
 JUDGE_MODE=local
 JUDGE_DOCKER_IMAGE=oj-cpp-judge
 JUDGE_CONCURRENCY=1
+JUDGE_MAX_QUEUE_SIZE=50
+JUDGE_QUEUE_WAIT_TIMEOUT_MS=60000
 JUDGE_TIME_LIMIT_MS=2000
 JUDGE_MEMORY_LIMIT_MB=128
 JUDGE_COMPILE_TIMEOUT_MS=30000
+JUDGE_COMPILE_MEMORY_LIMIT_MB=512
+JUDGE_COMPILE_FILE_LIMIT_MB=64
 DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-pro
@@ -200,10 +204,13 @@ http://127.0.0.1:3000/login
 
 ```bash
 npm run test
+npm run test:e2e
 npx tsc --noEmit
 npm run lint
 npm run build
 ```
+
+`npm run test:e2e` 会在隔离的 `prisma/e2e.db` 和 3100 端口运行关键浏览器流程，结束后自动清理测试数据库和构建目录。首次运行若本机缺少 Playwright Chrome，可先执行 `npm run test:e2e:install`。
 
 生产环境上线前还建议执行：
 
@@ -988,7 +995,9 @@ Docker Judge 会在容器中编译和运行学生代码，并尽量使用以下�
 - `--cap-drop ALL`：移除 Linux capabilities。
 - `--security-opt no-new-privileges`：禁止提权。
 - `--tmpfs /tmp:rw,noexec,nosuid,size=64m`：提供临时编译空间。
-- `-v 临时目录:/workspace`：每次提交使用独立临时目录，结束后清理。
+- `--ulimit fsize`：限制编译器生成文件的大小。
+- `-v 临时目录:/workspace:rw`：编译阶段只开放单次提交目录写入。
+- `-v 临时目录:/workspace:ro`：运行学生程序时把工作目录切换为只读。
 
 注意：Docker Judge 比本机直接运行更安全，但仍不是完整竞赛级沙箱。后续可以继续接入 nsjail、isolate、seccomp、Kubernetes Job 或独立评测服务。
 
@@ -998,6 +1007,8 @@ Docker Judge 会在容器中编译和运行学生代码，并尽量使用以下�
 
 ```env
 JUDGE_CONCURRENCY=1
+JUDGE_MAX_QUEUE_SIZE=50
+JUDGE_QUEUE_WAIT_TIMEOUT_MS=60000
 ```
 
 说明：
@@ -1007,6 +1018,8 @@ JUDGE_CONCURRENCY=1
 - 正式提交是高优先级，能够排在尚未开始的试运行之前，但不会强行中断正在执行的任务。
 - 每个账号同时只能占用一个试运行请求，试运行结束后服务端强制冷却 5 秒。
 - 一个任务失败不会卡住后续任务。
+- 等待队列有容量上限，排队超过 60 秒会返回带 `Retry-After` 的可重试 503。
+- Docker/编译器等基础设施故障不会保存成学生的“编译错误”提交。
 - 当前是 Demo 级内存队列，服务重启后等待中的任务会丢失。
 - 正式多实例部署建议替换为 Redis、消息队列或独立评测服务。
 
@@ -1382,6 +1395,7 @@ GET /api/admin/problems?page=1&pageSize=50&category=基础语法
 [ ] npm run check:env 通过
 [ ] 默认管理员密码已修改
 [ ] npm run test 通过
+[ ] npm run test:e2e 通过
 [ ] npx tsc --noEmit 通过
 [ ] npm run lint 通过
 [ ] npm run build 通过
@@ -1409,13 +1423,13 @@ GET /api/admin/problems?page=1&pageSize=50&category=基础语法
 - Docker Judge 仍不是完整竞赛级沙箱，建议继续增强隔离能力。
 - 当前账号体系使用签名 Cookie 和数据库会话版本；学生新登录会替换旧会话，管理员仍可多设备登录。系统已具备登录失败限流、会话有效期和同源变更请求校验，但还没有验证码、找回密码、操作审计和多因素认证等完整账号安全能力。
 - SQLite 适合 Demo，不适合高并发正式场景。
-- 提交详情会展示所有测试点输入输出，正式 OJ 通常需要隐藏非样例测试点。
+- 学生提交详情会隐藏非样例测试点的输入、期望输出和实际输出；管理员与有权教师仍可查看完整评测信息用于排障。
 
 工程限制：
 
 - 当前同时维护 Prisma Migrate、`prisma/schema.prisma` 和首次安装使用的 `prisma/init.sql`；结构变更必须让三者保持同步。
 - 内存提交队列不适合多实例部署。
-- 自动化测试已覆盖核心计算、主要 API、权限边界、AI、学情和试运行队列，但完整浏览器端到端权限与考试流程仍需补强。
+- 自动化测试已覆盖核心计算、主要 API、权限边界、AI、学情和试运行队列，并用 Playwright 覆盖学生权限跳转、隐藏测试点脱敏、考试幂等、AI 边界和关键按钮异常恢复；跨浏览器与更长业务链路仍需继续扩展。
 
 业务限制：
 
@@ -1448,7 +1462,7 @@ GET /api/admin/problems?page=1&pageSize=50&category=基础语法
 第 4 阶段：工程化
 
 - 为 Prisma migration、schema 和 `init.sql` 增加自动一致性检查。
-- 补充端到端测试。
+- 扩展跨浏览器和更多长业务链路的端到端测试。
 - 补充接口权限测试。
 - 增加操作审计日志。
 
@@ -1469,7 +1483,7 @@ GET /api/admin/problems?page=1&pageSize=50&category=基础语法
 
 - 将 SQLite 迁移到 PostgreSQL。
 - 将内存队列升级为 Redis / BullMQ 或独立 Judge 服务。
-- 隐藏非样例测试点输入输出。
-- 补充端到端权限测试和真实 Docker Judge 冒烟测试脚本。
+- 将关键端到端权限测试接入持续集成，并扩展跨浏览器覆盖。
+- 补充真实 Docker Judge 冒烟测试脚本。
 - 增加异地自动备份和更完整的监控告警。
 - 为考试结果和成绩统计补充更完整的管理视图。

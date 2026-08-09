@@ -16,6 +16,18 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+const LAST_ADMIN_ERROR = "系统必须至少保留一个管理员账号";
+
+class LastAdminRequiredError extends Error {}
+class UserNotFoundError extends Error {}
+
+function isLastAdminRequiredError(error: unknown) {
+  return (
+    error instanceof LastAdminRequiredError ||
+    (error instanceof Error && error.message.includes("LAST_ADMIN_REQUIRED"))
+  );
+}
+
 function readRole(value: unknown) {
   if (value === "admin" || value === "teacher" || value === "student") {
     return value;
@@ -93,6 +105,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         select: { role: true },
       });
       if (!existingUser) throw new Error("用户不存在");
+      if (existingUser.role === "admin" && role !== "admin") {
+        const adminCount = await tx.user.count({ where: { role: "admin" } });
+        if (adminCount <= 1) throw new LastAdminRequiredError();
+      }
       const shouldRevokeSessions = Boolean(password) || existingUser.role !== role;
 
       await tx.user.update({
@@ -155,7 +171,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       });
     });
     return NextResponse.json({ user });
-  } catch {
+  } catch (error) {
+    if (isLastAdminRequiredError(error)) {
+      return NextResponse.json({ error: LAST_ADMIN_ERROR }, { status: 409 });
+    }
     return NextResponse.json({ error: "更新用户失败，可能用户名已存在" }, { status: 400 });
   }
 }
@@ -289,8 +308,29 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "不能删除当前登录账号" }, { status: 400 });
   }
 
-  await prisma.user.delete({ where: { id: userId } });
-  return NextResponse.json({ ok: true });
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existingUser = await tx.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+      if (!existingUser) throw new UserNotFoundError();
+      if (existingUser.role === "admin") {
+        const adminCount = await tx.user.count({ where: { role: "admin" } });
+        if (adminCount <= 1) throw new LastAdminRequiredError();
+      }
+      await tx.user.delete({ where: { id: userId } });
+    });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof UserNotFoundError) {
+      return NextResponse.json({ error: "用户不存在" }, { status: 404 });
+    }
+    if (isLastAdminRequiredError(error)) {
+      return NextResponse.json({ error: LAST_ADMIN_ERROR }, { status: 409 });
+    }
+    return NextResponse.json({ error: "删除用户失败" }, { status: 400 });
+  }
 }
 
 class StudentUserNotFoundError extends Error {}

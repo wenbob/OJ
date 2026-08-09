@@ -7,9 +7,12 @@ node_modules
 
 /generated/prisma
 .next
+.next-e2e
 dist
 build
 coverage
+playwright-report
+test-results
 backups
 *.db
 *.db-journal

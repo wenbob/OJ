@@ -1,7 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import {
   buildLearningAnalytics,
   buildLearningRecommendations,
+  getLearningWindowStartedAt,
   type LearningProblemInput,
   type LearningSubmissionInput,
   type LearningWindow,
@@ -18,7 +20,131 @@ const programmingProblemSelect = {
   title: true,
 } as const;
 
+type LearningSubmissionRow = LearningSubmissionInput & { userId: number };
+type RawLearningSubmissionRow = {
+  createdAt: Date | string;
+  id: bigint | number;
+  problemId: bigint | number;
+  status: string;
+  submissionType: string;
+  userId: bigint | number;
+};
+
+function normalizeRawLearningSubmission(
+  row: RawLearningSubmissionRow,
+): LearningSubmissionRow {
+  return {
+    createdAt:
+      row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt),
+    id: Number(row.id),
+    problemId: Number(row.problemId),
+    status: row.status,
+    submissionType: row.submissionType,
+    userId: Number(row.userId),
+  };
+}
+
+async function findHistoricalLearningBaselines({
+  studentId,
+  windowStartedAt,
+}: {
+  studentId?: number;
+  windowStartedAt: Date;
+}) {
+  const studentFilter =
+    studentId === undefined
+      ? Prisma.sql`AND u."role" = 'student'`
+      : Prisma.sql`AND s."userId" = ${studentId}`;
+  const rows = await prisma.$queryRaw<RawLearningSubmissionRow[]>(Prisma.sql`
+    WITH latest_before AS (
+      SELECT
+        s."createdAt",
+        s."id",
+        s."problemId",
+        s."status",
+        s."submissionType",
+        s."userId",
+        ROW_NUMBER() OVER (
+          PARTITION BY s."userId", s."problemId"
+          ORDER BY s."createdAt" DESC, s."id" DESC
+        ) AS row_rank
+      FROM "Submission" s
+      INNER JOIN "Problem" p ON p."id" = s."problemId"
+      INNER JOIN "User" u ON u."id" = s."userId"
+      WHERE p."problemType" = 'programming'
+        AND s."createdAt" < ${windowStartedAt}
+        ${studentFilter}
+    ),
+    accepted_before AS (
+      SELECT
+        s."createdAt",
+        s."id",
+        s."problemId",
+        s."status",
+        s."submissionType",
+        s."userId",
+        ROW_NUMBER() OVER (
+          PARTITION BY s."userId", s."problemId"
+          ORDER BY s."createdAt" DESC, s."id" DESC
+        ) AS row_rank
+      FROM "Submission" s
+      INNER JOIN "Problem" p ON p."id" = s."problemId"
+      INNER JOIN "User" u ON u."id" = s."userId"
+      WHERE p."problemType" = 'programming'
+        AND s."status" = 'Accepted'
+        AND s."createdAt" < ${windowStartedAt}
+        ${studentFilter}
+    )
+    SELECT "createdAt", "id", "problemId", "status", "submissionType", "userId"
+    FROM latest_before
+    WHERE row_rank = 1
+    UNION
+    SELECT "createdAt", "id", "problemId", "status", "submissionType", "userId"
+    FROM accepted_before
+    WHERE row_rank = 1
+  `);
+  return rows.map(normalizeRawLearningSubmission);
+}
+
+async function findLearningSubmissions({
+  now,
+  studentId,
+  window,
+}: {
+  now: Date;
+  studentId?: number;
+  window: LearningWindow;
+}) {
+  const windowStartedAt = getLearningWindowStartedAt(window, now);
+  const currentRows = await prisma.submission.findMany({
+    where: {
+      ...(studentId === undefined
+        ? { user: { role: "student" } }
+        : { userId: studentId }),
+      problem: { problemType: "programming" },
+      ...(windowStartedAt ? { createdAt: { gte: windowStartedAt } } : {}),
+    },
+    select: {
+      createdAt: true,
+      id: true,
+      problemId: true,
+      status: true,
+      submissionType: true,
+      userId: true,
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+  if (!windowStartedAt) return currentRows;
+
+  const baselines = await findHistoricalLearningBaselines({
+    studentId,
+    windowStartedAt,
+  });
+  return [...baselines, ...currentRows];
+}
+
 export async function getTeacherLearningDashboard(window: LearningWindow) {
+  const now = new Date();
   const [students, problems, submissions, assignments] = await Promise.all([
     prisma.user.findMany({
       where: { role: "student" },
@@ -30,21 +156,7 @@ export async function getTeacherLearningDashboard(window: LearningWindow) {
       select: programmingProblemSelect,
       orderBy: { id: "asc" },
     }),
-    prisma.submission.findMany({
-      where: {
-        user: { role: "student" },
-        problem: { problemType: "programming" },
-      },
-      select: {
-        createdAt: true,
-        id: true,
-        problemId: true,
-        status: true,
-        submissionType: true,
-        userId: true,
-      },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    }),
+    findLearningSubmissions({ now, window }),
     prisma.learningAssignment.findMany({
       where: { status: "active" },
       include: { problems: { orderBy: { order: "asc" } } },
@@ -71,6 +183,7 @@ export async function getTeacherLearningDashboard(window: LearningWindow) {
       (assignment) => !getAssignmentProgress(assignment.problems).completed,
     );
     const analytics = buildLearningAnalytics({
+      now,
       problems,
       submissions: submissionsByStudent.get(student.id) ?? [],
       window,
@@ -115,6 +228,7 @@ export async function getTeacherLearningStudentDetail(
   studentId: number,
   window: LearningWindow,
 ) {
+  const now = new Date();
   const [student, problems, submissions, assignments, activeRows] = await Promise.all([
     prisma.user.findFirst({
       where: { id: studentId, role: "student" },
@@ -125,17 +239,7 @@ export async function getTeacherLearningStudentDetail(
       select: programmingProblemSelect,
       orderBy: { id: "asc" },
     }),
-    prisma.submission.findMany({
-      where: { userId: studentId, problem: { problemType: "programming" } },
-      select: {
-        createdAt: true,
-        id: true,
-        problemId: true,
-        status: true,
-        submissionType: true,
-      },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    }),
+    findLearningSubmissions({ now, studentId, window }),
     prisma.learningAssignment.findMany({
       where: { studentId },
       include: {
@@ -154,7 +258,12 @@ export async function getTeacherLearningStudentDetail(
     }),
   ]);
   if (!student) return null;
-  const analytics = buildLearningAnalytics({ problems, submissions, window });
+  const analytics = buildLearningAnalytics({
+    now,
+    problems,
+    submissions,
+    window,
+  });
   const activeProblems = problems.filter((problem) => problem.archivedAt === null);
   const activeProblemIds = activeRows.flatMap(({ problemId }) =>
     problemId === null ? [] : [problemId],

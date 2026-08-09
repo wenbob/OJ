@@ -7,7 +7,15 @@ import {
 } from "@/lib/examScoring";
 import type { JudgeResult } from "@/lib/judge";
 import { judgeCppCode } from "@/lib/judge";
-import { enqueueJudgeTask } from "@/lib/judgeQueue";
+import {
+  JUDGE_RETRY_AFTER_SECONDS,
+  JudgeInfrastructureError,
+} from "@/lib/judgeErrors";
+import {
+  enqueueJudgeTask,
+  JudgeQueueFullError,
+  JudgeQueueTimeoutError,
+} from "@/lib/judgeQueue";
 import {
   judgeObjectiveSubmission,
   parseObjectiveItems,
@@ -286,8 +294,32 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
   } catch (error) {
+    if (
+      error instanceof JudgeQueueFullError ||
+      error instanceof JudgeQueueTimeoutError ||
+      error instanceof JudgeInfrastructureError
+    ) {
+      const message =
+        error instanceof JudgeInfrastructureError
+          ? "评测服务暂时不可用，请稍后再试"
+          : "评测队列繁忙，请稍后再试";
+      return NextResponse.json(
+        { error: message, retryAfterSeconds: JUDGE_RETRY_AFTER_SECONDS },
+        {
+          headers: {
+            "Retry-After": String(JUDGE_RETRY_AFTER_SECONDS),
+          },
+          status: 503,
+        },
+      );
+    }
+    console.error("[JUDGE_SUBMISSION_ERROR]", {
+      message: error instanceof Error ? error.message : "unknown",
+      problemId,
+      userId: auth.user.id,
+    });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "评测任务执行失败" },
+      { error: "评测任务执行失败" },
       { status: 500 },
     );
   }

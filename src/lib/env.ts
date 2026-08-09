@@ -132,6 +132,20 @@ export function validateProductionEnv(env: RuntimeEnv = process.env): EnvValidat
     errors.push("JUDGE_CONCURRENCY 必须是大于等于 1 的整数");
   }
 
+  if (env.JUDGE_MAX_QUEUE_SIZE) {
+    const maxQueueSize = Number(env.JUDGE_MAX_QUEUE_SIZE);
+    if (!Number.isInteger(maxQueueSize) || maxQueueSize < 0) {
+      errors.push("JUDGE_MAX_QUEUE_SIZE 必须是大于等于 0 的整数");
+    }
+  }
+
+  if (
+    env.JUDGE_QUEUE_WAIT_TIMEOUT_MS &&
+    readPositiveInt(env.JUDGE_QUEUE_WAIT_TIMEOUT_MS) === null
+  ) {
+    errors.push("JUDGE_QUEUE_WAIT_TIMEOUT_MS 必须是大于 0 的整数");
+  }
+
   if (env.JUDGE_TIME_LIMIT_MS && readPositiveInt(env.JUDGE_TIME_LIMIT_MS) === null) {
     errors.push("JUDGE_TIME_LIMIT_MS 必须是大于 0 的整数");
   }
@@ -141,10 +155,31 @@ export function validateProductionEnv(env: RuntimeEnv = process.env): EnvValidat
   }
 
   if (
+    env.JUDGE_COMPILE_MEMORY_LIMIT_MB &&
+    readPositiveInt(env.JUDGE_COMPILE_MEMORY_LIMIT_MB) === null
+  ) {
+    errors.push("JUDGE_COMPILE_MEMORY_LIMIT_MB 必须是大于 0 的整数");
+  }
+
+  if (
+    env.JUDGE_COMPILE_FILE_LIMIT_MB &&
+    readPositiveInt(env.JUDGE_COMPILE_FILE_LIMIT_MB) === null
+  ) {
+    errors.push("JUDGE_COMPILE_FILE_LIMIT_MB 必须是大于 0 的整数");
+  }
+
+  if (
     env.AI_ASSIST_MAX_CONCURRENCY &&
     readPositiveInt(env.AI_ASSIST_MAX_CONCURRENCY) === null
   ) {
     errors.push("AI_ASSIST_MAX_CONCURRENCY 必须是大于 0 的整数");
+  }
+
+  if (
+    env.LOGIN_RATE_LIMIT_MAX_BUCKETS &&
+    readPositiveInt(env.LOGIN_RATE_LIMIT_MAX_BUCKETS) === null
+  ) {
+    errors.push("LOGIN_RATE_LIMIT_MAX_BUCKETS 必须是大于 0 的整数");
   }
 
   const listenHost = env.OJ_LISTEN_HOST?.trim();

@@ -36,17 +36,22 @@ export function ExamListClient({
   async function mutate(url: string, options?: RequestInit) {
     setMessage("");
     setPendingId(Number(url.match(/exams\/(\d+)/)?.[1] ?? 0) || null);
-    const response = await fetch(url, options);
-    const data = await response.json().catch(() => ({}));
-    setPendingId(null);
+    try {
+      const response = await fetch(url, options);
+      const data = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      setMessage(data.error ?? "操作失败");
-      return;
+      if (!response.ok) {
+        setMessage(data.error ?? "操作失败");
+        return;
+      }
+
+      setMessage("操作成功");
+      router.refresh();
+    } catch {
+      setMessage("网络异常，操作失败，请检查连接后重试");
+    } finally {
+      setPendingId(null);
     }
-
-    setMessage("操作成功");
-    router.refresh();
   }
 
   return (
@@ -140,7 +145,7 @@ export function ExamListClient({
                       >
                         取消发布
                       </button>
-                    ) : (
+                    ) : exam.status === "draft" ? (
                       <button
                         className="btn btn-primary px-3 py-2 text-sm"
                         disabled={pendingId === exam.id}
@@ -153,7 +158,7 @@ export function ExamListClient({
                       >
                         发布
                       </button>
-                    )}
+                    ) : null}
                     <button
                       className="btn btn-danger px-3 py-2 text-sm"
                       disabled={pendingId === exam.id}

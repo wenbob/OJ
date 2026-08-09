@@ -1,11 +1,15 @@
 import { AppShell } from "@/components/AppShell";
+import {
+  adminProblemSummarySelect,
+  toAdminProblemSummary,
+} from "@/lib/adminProblemSummary";
 import { requirePageUser } from "@/lib/auth";
 import {
   buildPaginationMeta,
   PROBLEM_LIST_PAGE_SIZE,
   readPaginationFromObject,
 } from "@/lib/pagination";
-import { isProblemType, normalizeProblemType } from "@/lib/objectiveProblem";
+import { isProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
 import {
   getOrderedProblemCategories,
@@ -77,13 +81,13 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
       );
       const pageProblems = await prisma.problem.findMany({
         where: { ...where, id: { in: orderedIds } },
-        include: { testCases: { orderBy: { id: "asc" } } },
+        select: adminProblemSummarySelect,
       });
       return orderProblemsByIds(pageProblems, orderedIds);
     }
     return prisma.problem.findMany({
       where,
-      include: { testCases: { orderBy: { id: "asc" } } },
+      select: adminProblemSummarySelect,
       orderBy: getProblemOrderBy(listSort),
       skip,
       take: pageSize,
@@ -94,24 +98,7 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
   });
 
   const initialProblems = problems.map((problem, index) => ({
-    id: problem.id,
-    title: problem.title,
-    description: problem.description,
-    inputDescription: problem.inputDescription,
-    outputDescription: problem.outputDescription,
-    sampleInput: problem.sampleInput,
-    sampleOutput: problem.sampleOutput,
-    dataRange: problem.dataRange ?? "",
-    difficulty: problem.difficulty,
-    category: problem.category,
-    problemType: normalizeProblemType(problem.problemType),
-    objectiveItems: problem.objectiveItems,
-    testCases: problem.testCases.map((testCase) => ({
-      id: testCase.id,
-      input: testCase.input,
-      output: testCase.output,
-      isSample: testCase.isSample,
-    })),
+    ...toAdminProblemSummary(problem),
     submissions: submissionCounts.get(problem.id) ?? 0,
     sortPosition: skip + index + 1,
     canMoveUp: skip + index > 0,

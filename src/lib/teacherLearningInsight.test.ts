@@ -6,11 +6,12 @@ import {
 } from "./teacherLearningInsight";
 
 const input: TeacherInsightInput = {
-  username: "student1",
   window: "30d",
   issueLabels: ["逻辑判断需加强"],
   statusCounts: { "Wrong Answer": 4 },
-  stuckProblems: [{ title: "最大值", category: "循环", failedCount: 3 }],
+  stuckCategories: [
+    { category: "循环", maxFailedCount: 3, problemCount: 1 },
+  ],
   categories: [
     {
       category: "循环",
@@ -40,6 +41,8 @@ describe("teacher learning insight", () => {
     expect(prompt).not.toContain("#include");
     expect(prompt).not.toContain("隐藏测试点内容");
     expect(prompt).not.toContain("int main");
+    expect(prompt).not.toContain("student1");
+    expect(prompt).not.toContain("最大值");
   });
 
   it("reuses a stable hash for identical aggregate input", () => {

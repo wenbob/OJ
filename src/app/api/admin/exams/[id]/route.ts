@@ -5,6 +5,7 @@ import {
   parseObjectiveItems,
   validateObjectiveItems,
 } from "@/lib/objectiveProblem";
+import { snapshotExamProblems } from "@/lib/examSnapshot";
 import { prisma } from "@/lib/prisma";
 import {
   PayloadTooLargeError,
@@ -100,7 +101,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
   const accessibleExam = await prisma.exam.findFirst({
     where: getExamAccessWhere(auth.user, examId),
-    select: { id: true },
+    select: {
+      aiEnabled: true,
+      description: true,
+      durationMin: true,
+      examType: true,
+      id: true,
+      status: true,
+      title: true,
+    },
   });
   if (!accessibleExam) {
     return NextResponse.json({ error: "考试不存在" }, { status: 404 });
@@ -118,6 +127,39 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const payload = readExamPayload(body);
   const error = validateExamPayload(payload);
   if (error) return NextResponse.json({ error }, { status: 400 });
+  if (accessibleExam.status === "ended") {
+    return NextResponse.json(
+      { error: "已结束的考试不能再修改" },
+      { status: 409 },
+    );
+  }
+  if (accessibleExam.status === "draft" && payload.status === "ended") {
+    return NextResponse.json(
+      { error: "草稿考试不能直接结束，请先发布考试" },
+      { status: 409 },
+    );
+  }
+  if (
+    accessibleExam.status === "published" &&
+    payload.status === "draft"
+  ) {
+    return NextResponse.json(
+      { error: "请使用取消发布操作；已有考试记录时不能改回草稿" },
+      { status: 409 },
+    );
+  }
+  const publishedCoreChanged =
+    accessibleExam.status === "published" &&
+    (payload.title !== accessibleExam.title ||
+      (payload.description || null) !== accessibleExam.description ||
+      payload.durationMin !== accessibleExam.durationMin ||
+      payload.examType !== accessibleExam.examType);
+  if (publishedCoreChanged) {
+    return NextResponse.json(
+      { error: "已发布考试只能切换 AI 开关或结束考试" },
+      { status: 409 },
+    );
+  }
   const examProblems = await prisma.examProblem.findMany({
     where: { examId },
     include: {
@@ -145,6 +187,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
 
   if (payload.status === "published") {
+    if (!payload.durationMin || payload.durationMin <= 0) {
+      return NextResponse.json(
+        { error: "考试时长必须大于 0 分钟" },
+        { status: 400 },
+      );
+    }
     if (examProblems.length === 0) {
       return NextResponse.json(
         { error: "考试至少需要添加 1 道题后才能发布" },
@@ -188,16 +236,24 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
   }
 
-  const exam = await prisma.exam.update({
-    where: { id: examId },
-    data: {
-      title: payload.title,
-      description: payload.description || null,
-      durationMin: payload.durationMin,
-      status: payload.status,
-      examType: payload.examType,
-      aiEnabled: payload.aiEnabled,
-    },
+  const exam = await prisma.$transaction(async (tx) => {
+    if (
+      accessibleExam.status === "draft" &&
+      payload.status === "published"
+    ) {
+      await snapshotExamProblems(tx, examId);
+    }
+    return tx.exam.update({
+      where: { id: examId },
+      data: {
+        title: payload.title,
+        description: payload.description || null,
+        durationMin: payload.durationMin,
+        status: payload.status,
+        examType: payload.examType,
+        aiEnabled: payload.aiEnabled,
+      },
+    });
   });
 
   return NextResponse.json({ exam });

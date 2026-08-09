@@ -76,31 +76,45 @@ export function ExamEditClient({
     selectableResults.length > 0 &&
     selectableResults.every((problem) => selectedProblemIds.includes(problem.id));
 
+  async function runPendingAction(
+    action: () => Promise<void>,
+    networkError: string,
+  ) {
+    setPending(true);
+    setMessage("");
+    try {
+      await action();
+    } catch {
+      setMessage(networkError);
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function search(
     nextKeyword = keyword,
     nextCategory = selectedCategory,
   ) {
-    setPending(true);
-    setMessage("");
     setSelectedProblemIds([]);
     const query = new URLSearchParams();
     if (nextKeyword.trim()) query.set("keyword", nextKeyword.trim());
     if (nextCategory) query.set("category", nextCategory);
     query.set("problemType", exam.examType);
-    const response = await fetch(
-      `/api/admin/problems/search?${query.toString()}`,
-    );
-    const data = await response.json().catch(() => ({}));
-    setPending(false);
+    await runPendingAction(async () => {
+      const response = await fetch(
+        `/api/admin/problems/search?${query.toString()}`,
+      );
+      const data = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      setMessage(data.error ?? "搜索失败");
-      return;
-    }
-    setResults(data.problems ?? []);
-    if (Array.isArray(data.categories)) {
-      setCategoryOptions(data.categories);
-    }
+      if (!response.ok) {
+        setMessage(data.error ?? "搜索失败");
+        return;
+      }
+      setResults(data.problems ?? []);
+      if (Array.isArray(data.categories)) {
+        setCategoryOptions(data.categories);
+      }
+    }, "网络异常，搜索失败，请检查连接后重试");
   }
 
   function readAddValues() {
@@ -126,36 +140,35 @@ export function ExamEditClient({
       return;
     }
 
-    setPending(true);
-    setMessage("");
-    const response = await fetch(`/api/admin/exams/${exam.id}/problems`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        problemId,
-        order: values.order,
-        score: values.score,
-      }),
-    });
-    const data = await response.json().catch(() => ({}));
-    setPending(false);
+    await runPendingAction(async () => {
+      const response = await fetch(`/api/admin/exams/${exam.id}/problems`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          problemId,
+          order: values.order,
+          score: values.score,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      setMessage(data.error ?? "添加失败");
-      return;
-    }
+      if (!response.ok) {
+        setMessage(data.error ?? "添加失败");
+        return;
+      }
 
-    setProblems((current) =>
-      [...current, data.examProblem].sort(
-        (a, b) => a.order - b.order || a.id - b.id,
-      ),
-    );
-    setOrderValue(String(values.order + 1));
-    setSelectedProblemIds((current) =>
-      current.filter((selectedId) => selectedId !== problemId),
-    );
-    setMessage("题目已添加到考试");
-    router.refresh();
+      setProblems((current) =>
+        [...current, data.examProblem].sort(
+          (a, b) => a.order - b.order || a.id - b.id,
+        ),
+      );
+      setOrderValue(String(values.order + 1));
+      setSelectedProblemIds((current) =>
+        current.filter((selectedId) => selectedId !== problemId),
+      );
+      setMessage("题目已添加到考试");
+      router.refresh();
+    }, "网络异常，添加失败，请检查连接后重试");
   }
 
   async function addSelectedProblems() {
@@ -170,35 +183,34 @@ export function ExamEditClient({
       return;
     }
 
-    setPending(true);
-    setMessage("");
-    const response = await fetch(`/api/admin/exams/${exam.id}/problems`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        problemIds,
-        order: values.order,
-        score: values.score,
-      }),
-    });
-    const data = await response.json().catch(() => ({}));
-    setPending(false);
+    await runPendingAction(async () => {
+      const response = await fetch(`/api/admin/exams/${exam.id}/problems`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          problemIds,
+          order: values.order,
+          score: values.score,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      setMessage(data.error ?? "批量添加失败");
-      return;
-    }
+      if (!response.ok) {
+        setMessage(data.error ?? "批量添加失败");
+        return;
+      }
 
-    const addedProblems = data.examProblems ?? [];
-    setProblems((current) =>
-      [...current, ...addedProblems].sort(
-        (a, b) => a.order - b.order || a.id - b.id,
-      ),
-    );
-    setSelectedProblemIds([]);
-    setOrderValue(String(values.order + addedProblems.length));
-    setMessage(`已添加 ${addedProblems.length} 道题到考试`);
-    router.refresh();
+      const addedProblems = data.examProblems ?? [];
+      setProblems((current) =>
+        [...current, ...addedProblems].sort(
+          (a, b) => a.order - b.order || a.id - b.id,
+        ),
+      );
+      setSelectedProblemIds([]);
+      setOrderValue(String(values.order + addedProblems.length));
+      setMessage(`已添加 ${addedProblems.length} 道题到考试`);
+      router.refresh();
+    }, "网络异常，批量添加失败，请检查连接后重试");
   }
 
   function selectCategory(category: string) {
@@ -232,23 +244,24 @@ export function ExamEditClient({
       return;
     }
 
-    setPending(true);
-    setMessage("");
-    const response = await fetch(
-      `/api/admin/exams/${exam.id}/problems/${item.id}`,
-      { method: "DELETE" },
-    );
-    const data = await response.json().catch(() => ({}));
-    setPending(false);
+    await runPendingAction(async () => {
+      const response = await fetch(
+        `/api/admin/exams/${exam.id}/problems/${item.id}`,
+        { method: "DELETE" },
+      );
+      const data = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      setMessage(data.error ?? "移除失败");
-      return;
-    }
+      if (!response.ok) {
+        setMessage(data.error ?? "移除失败");
+        return;
+      }
 
-    setProblems((current) => current.filter((problem) => problem.id !== item.id));
-    setMessage("题目已移除");
-    router.refresh();
+      setProblems((current) =>
+        current.filter((problem) => problem.id !== item.id),
+      );
+      setMessage("题目已移除");
+      router.refresh();
+    }, "网络异常，移除失败，请检查连接后重试");
   }
 
   async function updateProblem(item: ExamProblemItem) {
@@ -261,31 +274,32 @@ export function ExamEditClient({
       return;
     }
 
-    setPending(true);
-    setMessage("");
-    const response = await fetch(
-      `/api/admin/exams/${exam.id}/problems/${item.id}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order: item.order, score: item.score }),
-      },
-    );
-    const data = await response.json().catch(() => ({}));
-    setPending(false);
+    await runPendingAction(async () => {
+      const response = await fetch(
+        `/api/admin/exams/${exam.id}/problems/${item.id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order: item.order, score: item.score }),
+        },
+      );
+      const data = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      setMessage(data.error ?? "保存题目设置失败");
-      return;
-    }
+      if (!response.ok) {
+        setMessage(data.error ?? "保存题目设置失败");
+        return;
+      }
 
-    setProblems((current) =>
-      current
-        .map((problem) => (problem.id === item.id ? data.examProblem : problem))
-        .sort((a, b) => a.order - b.order || a.id - b.id),
-    );
-    setMessage("题目设置已保存");
-    router.refresh();
+      setProblems((current) =>
+        current
+          .map((problem) =>
+            problem.id === item.id ? data.examProblem : problem,
+          )
+          .sort((a, b) => a.order - b.order || a.id - b.id),
+      );
+      setMessage("题目设置已保存");
+      router.refresh();
+    }, "网络异常，保存题目设置失败，请检查连接后重试");
   }
 
   return (

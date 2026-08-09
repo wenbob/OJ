@@ -22,6 +22,64 @@ function parseId(id: string) {
   return Number.isInteger(problemId) ? problemId : null;
 }
 
+export async function GET(request: NextRequest, context: RouteContext) {
+  const auth = await requireApiUser(request, "admin");
+  if (auth.response) return auth.response;
+
+  const { id } = await context.params;
+  const problemId = parseId(id);
+  if (!problemId) {
+    return NextResponse.json({ error: "题目 ID 不合法" }, { status: 400 });
+  }
+
+  const problem = await prisma.problem.findUnique({
+    where: { id: problemId },
+    select: {
+      archivedAt: true,
+      category: true,
+      dataRange: true,
+      description: true,
+      difficulty: true,
+      id: true,
+      inputDescription: true,
+      objectiveItems: true,
+      outputDescription: true,
+      problemType: true,
+      sampleInput: true,
+      sampleOutput: true,
+      testCases: {
+        orderBy: { id: "asc" },
+        select: { id: true, input: true, isSample: true, output: true },
+      },
+      title: true,
+    },
+  });
+  if (!problem || problem.archivedAt) {
+    return NextResponse.json(
+      { error: "题目不存在或已经下架" },
+      { status: 404 },
+    );
+  }
+
+  return NextResponse.json({
+    problem: {
+      category: problem.category,
+      dataRange: problem.dataRange,
+      description: problem.description,
+      difficulty: problem.difficulty,
+      id: problem.id,
+      inputDescription: problem.inputDescription,
+      objectiveItems: problem.objectiveItems,
+      outputDescription: problem.outputDescription,
+      problemType: problem.problemType,
+      sampleInput: problem.sampleInput,
+      sampleOutput: problem.sampleOutput,
+      testCases: problem.testCases,
+      title: problem.title,
+    },
+  });
+}
+
 export async function PUT(request: NextRequest, context: RouteContext) {
   const auth = await requireApiUser(request, "admin");
   if (auth.response) return auth.response;
@@ -49,12 +107,21 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         include: {
           exam: {
             select: {
+              status: true,
               title: true,
               examType: true,
             },
           },
         },
       });
+      const publishedExam = examLinks.find(
+        (link) => link.exam.status === "published",
+      );
+      if (publishedExam) {
+        throw new PublishedExamProblemError(
+          `题目正在已发布考试《${publishedExam.exam.title}》中，请先取消发布`,
+        );
+      }
       const incompatibleExam = examLinks.find(
         (link) => link.exam.examType !== payload.problemType,
       );
@@ -118,7 +185,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "更新题目失败" },
-      { status: error instanceof PayloadTooLargeError ? 413 : 400 },
+      {
+        status:
+          error instanceof PayloadTooLargeError
+            ? 413
+            : error instanceof PublishedExamProblemError
+              ? 409
+              : 400,
+      },
     );
   }
 }
@@ -168,3 +242,5 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   }
   return NextResponse.json({ archivedAt, archivedCount: 1, ok: true });
 }
+
+class PublishedExamProblemError extends Error {}
