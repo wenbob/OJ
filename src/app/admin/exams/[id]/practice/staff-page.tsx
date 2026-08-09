@@ -204,12 +204,12 @@ export async function StaffExamPracticePage({
                   const active = item.problemId === selectedProblem.id;
                   return (
                     <div
-                      className={`p-4 transition-colors hover:bg-white/70 ${
+                      className={`p-4 transition-colors ${
                         acceptedSubmissionId
                           ? "bg-emerald-50/80 hover:bg-emerald-100/70"
                           : active
-                            ? "bg-white/75"
-                            : ""
+                            ? "problem-hover-incomplete bg-white/75"
+                            : "problem-hover-incomplete"
                       }`}
                       key={item.id}
                     >

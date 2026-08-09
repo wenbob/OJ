@@ -162,7 +162,7 @@ export async function StaffPracticePage({
                     className={`border-b border-ink-950/10 transition-colors ${
                       acceptedSubmissionId
                         ? "bg-emerald-50/80 hover:bg-emerald-100/70"
-                        : ""
+                        : "problem-hover-incomplete"
                     }`}
                     key={problem.id}
                   >

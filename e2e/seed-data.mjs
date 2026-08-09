@@ -103,6 +103,14 @@ export async function prepareE2eDatabase() {
         username: "e2e-student",
       },
     });
+    await prisma.user.create({
+      data: {
+        id: 3,
+        passwordHash: await hash("e2e-teacher-password", 10),
+        role: "teacher",
+        username: "e2e-teacher",
+      },
+    });
 
     await prisma.problem.create({
       data: {
@@ -202,6 +210,30 @@ export async function prepareE2eDatabase() {
         language: "Objective",
         problemId: 103,
         status: "Wrong Answer",
+        submissionType: "practice",
+        totalCount: 1,
+        userId: 2,
+      },
+    });
+    await prisma.submission.create({
+      data: {
+        caseResults: {
+          create: [
+            {
+              actualOutput: "B",
+              caseIndex: 1,
+              expectedOutput: "B",
+              input: "",
+              status: "Accepted",
+            },
+          ],
+        },
+        code: "B",
+        id: 503,
+        language: "Objective",
+        passedCount: 1,
+        problemId: 103,
+        status: "Accepted",
         submissionType: "practice",
         totalCount: 1,
         userId: 2,

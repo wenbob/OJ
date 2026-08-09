@@ -199,10 +199,15 @@ export default async function StudentExamTakePage({
                 {exam.problems.map((item, index) => {
                   const latest = latestByProblem.get(item.problemId);
                   const active = item.problemId === selectedProblem.id;
+                  const isAccepted = latest?.status === "Accepted";
                   return (
                     <Link
-                      className={`block p-4 hover:bg-white/70 ${
-                        active ? "bg-white/75" : ""
+                      className={`block p-4 transition-colors ${
+                        isAccepted
+                          ? "bg-emerald-50/80 hover:bg-emerald-100/70"
+                          : active
+                            ? "problem-hover-incomplete bg-white/75"
+                            : "problem-hover-incomplete"
                       }`}
                       href={`/student/exams/${exam.id}/take?problemId=${item.problemId}`}
                       key={item.id}

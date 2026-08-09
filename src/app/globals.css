@@ -391,8 +391,18 @@ a:focus-visible {
     transition: transform 160ms var(--ease-out-expo);
   }
 
+  .app-stage table tbody tr.problem-hover-incomplete {
+    transition:
+      background-color 160ms var(--ease-out-expo),
+      transform 160ms var(--ease-out-expo);
+  }
+
   .app-stage table tbody tr:hover {
     transform: translateX(2px);
+  }
+
+  .problem-hover-incomplete:hover {
+    background-color: rgba(79, 111, 136, 0.12);
   }
 
   .leaderboard-row:hover {

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 type BrowserResponse = {
   body: Record<string, unknown>;
@@ -6,12 +6,28 @@ type BrowserResponse = {
   status: number;
 };
 
+const acceptedHoverBackground = "rgba(209, 250, 229, 0.7)";
+const incompleteHoverBackground = "rgba(79, 111, 136, 0.12)";
+
 async function login(page: Page, username: string, password: string) {
   await page.goto("/login");
   await page.getByLabel("用户名").fill(username);
   await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "登录" }).click();
   await expect(page).not.toHaveURL(/\/login/);
+}
+
+async function expectHoverBackground(
+  target: Locator,
+  expectedBackground: string,
+) {
+  await expect(target).toBeVisible();
+  await target.hover();
+  await expect
+    .poll(() =>
+      target.evaluate((element) => getComputedStyle(element).backgroundColor),
+    )
+    .toBe(expectedBackground);
 }
 
 async function postJson(
@@ -45,6 +61,49 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     await expect(page).toHaveURL(/\/student$/);
     await page.goto("/admin");
     await expect(page).toHaveURL(/\/student$/);
+  });
+
+  await test.step("problem hover states stay visible for students and teachers", async () => {
+    await page.goto("/student/problems?problemType=programming");
+    const studentIncompleteRow = page.getByRole("row").filter({
+      hasText: "E2E 加法题",
+    });
+    await expectHoverBackground(
+      studentIncompleteRow,
+      incompleteHoverBackground,
+    );
+    await expect
+      .poll(() =>
+        studentIncompleteRow.evaluate(
+          (element) => getComputedStyle(element).transform,
+        ),
+      )
+      .not.toBe("none");
+    await expect(
+      studentIncompleteRow.getByRole("link", { name: "开始做题" }),
+    ).toHaveAttribute("href", "/student/problems/101");
+
+    await page.goto("/student/problems?problemType=objective");
+    const studentAcceptedRow = page.getByRole("row").filter({
+      hasText: "E2E 客观题",
+    });
+    await expectHoverBackground(studentAcceptedRow, acceptedHoverBackground);
+
+    const teacherContext = await browser.newContext();
+    const teacherPage = await teacherContext.newPage();
+    await login(teacherPage, "e2e-teacher", "e2e-teacher-password");
+    await teacherPage.goto("/teacher/practice?problemType=programming");
+    const teacherIncompleteRow = teacherPage.getByRole("row").filter({
+      hasText: "E2E 加法题",
+    });
+    await expectHoverBackground(
+      teacherIncompleteRow,
+      incompleteHoverBackground,
+    );
+    await expect(
+      teacherIncompleteRow.getByRole("link", { name: "进入做题" }),
+    ).toHaveAttribute("href", "/teacher/practice/problems/101");
+    await teacherContext.close();
   });
 
   await test.step("hidden programming tests stay redacted", async () => {
@@ -119,6 +178,13 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
 
     await page.getByRole("button", { name: "开始考试" }).click();
     await expect(page).toHaveURL(/\/student\/exams\/202\/take$/);
+    const studentExamProblem = page
+      .locator("aside .problem-hover-incomplete")
+      .filter({ hasText: "E2E 加法题" });
+    await expectHoverBackground(
+      studentExamProblem,
+      incompleteHoverBackground,
+    );
     await page.route("**/api/exams/202/submit", (route) => route.abort());
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "交卷", exact: true }).click();
@@ -135,6 +201,24 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     const adminContext = await browser.newContext();
     const adminPage = await adminContext.newPage();
     await login(adminPage, "e2e-admin", "e2e-admin-password");
+    await adminPage.goto("/admin/practice?problemType=programming");
+    const adminIncompleteRow = adminPage.getByRole("row").filter({
+      hasText: "E2E 加法题",
+    });
+    await expectHoverBackground(
+      adminIncompleteRow,
+      incompleteHoverBackground,
+    );
+    await expect(
+      adminIncompleteRow.getByRole("link", { name: "进入做题" }),
+    ).toHaveAttribute("href", "/admin/practice/problems/101");
+
+    await adminPage.goto("/admin/exams/201/practice");
+    const adminExamProblem = adminPage
+      .locator("aside .problem-hover-incomplete")
+      .filter({ hasText: "E2E 加法题" });
+    await expectHoverBackground(adminExamProblem, incompleteHoverBackground);
+
     const response = await adminPage.evaluate(async () => {
       const result = await fetch("/api/admin/users/1", {
         body: JSON.stringify({
