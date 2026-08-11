@@ -857,7 +857,7 @@ curl http://127.0.0.1:3000/api/health
 ```text
 [ ] 检查 /api/health
 [ ] 检查 https://botcode.work 可正常打开且 www 自动跳转
-[ ] 检查证书未接近到期；每月确认 certbot.timer 正常
+[ ] 检查证书未接近到期；使用 Certbot 时每月确认 timer 和 renew dry-run
 [ ] 检查 Docker Desktop / Docker Engine 是否运行
 [ ] 执行数据库备份
 [ ] 确认 backups/ 中有当天备份文件

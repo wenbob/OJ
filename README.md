@@ -71,6 +71,7 @@
 - [2026-08-09 OJ P0–P2 加固与生产发布记录](docs/ops-review-2026-08-09.md)
 - [2026-08-10 未完成题目悬停高亮与生产发布记录](docs/ops-review-2026-08-10-problem-hover.md)
 - [2026-08-11 P1/P2 风险修复与生产发布记录](docs/ops-review-2026-08-11-p1-p2.md)
+- [2026-08-11 全站页面切换流畅度优化与生产发布记录](docs/ops-review-2026-08-11-navigation-performance.md)
 
 ## 技术栈
 
@@ -101,6 +102,15 @@ prisma/init.sql         SQLite 初始化 SQL
 prisma/seed.ts          初始账号、题目、考试和系统设置
 docker/judge-cpp        Docker Judge 镜像定义
 ```
+
+## 导航、布局与加载
+
+- `/admin`、`/teacher` 和学生普通页面分别由角色 `layout.tsx` 持久挂载 `AppShell`；同角色切页只替换主体，页头、导航和会话守卫不重建。页面组件不要再次包裹外壳。
+- 学生正式答题位于不改变公开 URL 的 `(exam)` 路由组，使用独立锁定外壳；不显示普通导航和退出按钮，既有离开交卷规则保持不变。
+- 普通内容入场统一为 `180ms`、`4px` 且无分段延迟；系统启用“减少动态效果”时近似无动画。高频链接用 `NavigationLink`，导航超过 `100ms` 才显示非阻断等待提示。
+- 角色级及题库、提交列表、题目详情和考试练习路由提供 `loading.tsx` 骨架。学生首页的段位、排名、学情等慢模块使用细粒度 `Suspense` 流式补齐；专项练习强提醒仍会先完成服务端判断，避免漏提醒或闪现。
+- 认证和公共设置只使用 React `cache()` 做单次请求内去重，不跨请求缓存权限、考试或提交状态。根布局把公共设置直接传给 `BrowserIdentity`，首次加载不再额外请求 `/api/settings/public`。
+- 天梯统计、分类列表、最近通过记录和后台学生数优先在数据库聚合或有界选取，避免把全量历史 Accepted 或整张题目表加载到应用层。
 
 ## 快速开始
 
@@ -1416,7 +1426,7 @@ GET /api/admin/problems?page=1&pageSize=50&category=基础语法
 [ ] APP_ORIGIN=https://botcode.work
 [ ] SESSION_COOKIE_SECURE=true
 [ ] 大陆服务器域名已备案，或已配置最小权限 DNS-01 自动验证；公网 ACME 路径无 Beaver 403
-[ ] Certbot 双域名证书和自动续期 dry-run 通过
+[ ] 当前双域名证书及其实际续期机制已验证；使用 Certbot 时 renew dry-run 通过
 [ ] npm run check:env 通过
 [ ] 默认管理员密码已修改
 [ ] npm run test 通过

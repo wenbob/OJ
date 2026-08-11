@@ -23,8 +23,7 @@ Next.js App Router + Prisma + SQLite 的 C++ 在线 OJ。生产目录 `/www/oj`�
 - 依赖未变可复用服务器根 `node_modules`；依赖变化时上传 Linux 依赖或安排停机窗口。不要在 `/www/oj-new` 迁移绝对路径生产库；停 PM2、备份/复制最新 DB、切换目录后再在新 `/www/oj` 执行 `db:deploy`。
 - 只有无法本地构建时才按 `docs/deploy.md` 停 PM2 并用单 worker、`--max-old-space-size=768` 应急构建。
 - OJ 清理只允许 `/www/oj-old-*`、失败残留 `/www/oj-new` 和 OJ 发布包；前后检查当前目录、PM2 与健康接口。不得动其它站点、股票系统或未经确认执行 Docker 全局 prune。
-- 域名/证书变更先备份 Nginx。大陆公网 HTTP 被阿里云 `Server: Beaver` 403 时停止 HTTP-01；DNS-01 仅用最小权限 RAM 凭据且不得写入项目、`.env` 或日志。
-- 证书必须覆盖根域名与 `www`，续期 hook 先 `nginx -t` 再 reload。首次 HSTS 为 `86400`；稳定 7 天且 dry-run 通过后才升至 `15552000`，不启用子域或 preload。完整跳转、双网络 HTTPS、连续健康检查未通过前不得删旧证书或宣布完成。
+- 域名/证书变更先备份、`nginx -T` 核对，模板不可盲盖。证书覆盖双域名；续期先 `nginx -t` 再 reload。Beaver 403 停 HTTP-01；DNS-01 凭据最小权限且不入项目/`.env`/日志。HSTS 先 `86400`；稳定 7 天且续期 dry-run 后才升 `15552000`，不启用子域/preload。跳转、双网络 HTTPS、连续健康通过前不得删旧证书。
 
 ## Judge、提交与可见性
 
@@ -96,7 +95,8 @@ Next.js App Router + Prisma + SQLite 的 C++ 在线 OJ。生产目录 `/www/oj`�
 
 ## 共享界面约束
 
-- 浏览器标题/图标只由 `BrowserIdentity.tsx` 同步 `SystemSetting.browserTitle/browserIcon`；图标只接受服务端校验、256KB 内 PNG/ICO Data URL。
+- 浏览器标题/图标仅由 `BrowserIdentity.tsx` 同步系统设置；图标须为服务端校验、≤256KB 的 PNG/ICO Data URL。
+- `AppShell` 仅在 `layout`；学生考试走 `(exam)` 锁定布局且 URL 不变。`cache()` 只请求内去重，禁跨请求缓存权限或状态。
 - 选择判断 AI 桌面端为“解析在上、答案在下”；解析可内部滚动，答案编辑器使用 `clamp(360px, 44dvh, 520px)`，答案外层不增加滚动；移动端自然排列。
 
 ## 本地质量检查

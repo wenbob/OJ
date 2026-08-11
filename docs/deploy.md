@@ -232,9 +232,11 @@ JUDGE_COMPILE_TIMEOUT_MS=45000
 pm2 restart oj --update-env
 ```
 
-## 4. 域名、Certbot 与 Nginx
+## 4. 域名、证书与 Nginx
 
-正式 Nginx 配置以仓库中的 `deploy/nginx/oj.conf` 为准。根域名保留 A 记录 `39.105.91.81`，并在 DNS 增加：
+仓库中的 `deploy/nginx/oj.conf` 是站点结构和性能配置的基线，但其中证书路径指向 Let’s Encrypt，不能无条件覆盖生产现有配置。每次修改前先用 `nginx -T` 核对当前 `server_name`、证书路径和静态资源 location，再备份 `/etc/nginx/sites-available/oj`。在新的证书文件真实存在且 `nginx -t` 通过前，必须保留当前有效证书路径。仓库的 `install-domain-nginx-bootstrap.sh` 会把模板路径替换为服务器现有的阿里云证书路径；只有 Let’s Encrypt 双域名证书签发成功后，才可直接安装模板。
+
+根域名保留 A 记录 `39.105.91.81`，并在 DNS 增加：
 
 ```text
 www  CNAME  botcode.work
@@ -295,7 +297,9 @@ certbot renew --dry-run
 
 最终行为固定为：HTTP 主域名、HTTP IP、HTTP/HTTPS `www` 均 301 到 `https://botcode.work`；只有主域名 HTTPS 代理到 `127.0.0.1:3000`。ACME 路径不跳转，供自动续期使用。AI 路由保留 600 秒上游超时和关闭缓冲，普通健康检查不放宽超时，以免掩盖 Next.js 上游冻结。
 
-初始 HSTS 为一天。连续稳定运行 7 天且 `certbot renew --dry-run` 正常后，可把两个 HTTPS 块的 `max-age=86400` 提升为 `max-age=15552000`；不要增加 `includeSubDomains` 或 preload。
+性能配置也属于正式基线：upstream 使用 HTTP/1.1 和 `keepalive 16`；哈希文件 `/_next/static/` 由 Nginx 直接映射到 `/www/oj/.next/standalone/.next/static/`，启用 gzip 和一年 immutable 缓存；普通页面、用户数据和 RSC 响应继续 `proxy_cache off`，不得做共享缓存。应用为动态响应发送 `X-Accel-Buffering: no` 以支持流式加载；Nginx 可能消费该响应头，所以公网不回显不代表未生效，应同时检查直连 Next 的响应。`location` 内重新声明 `add_header` 会中断继承，修改静态 location 时必须保留 HSTS 与 `X-Content-Type-Options: nosniff`。
+
+初始 HSTS 为一天。连续稳定运行 7 天且当前证书续期机制验证正常后，可把两个 HTTPS 块的 `max-age=86400` 提升为 `max-age=15552000`；使用 Certbot 时还必须先通过 `certbot renew --dry-run`。不要增加 `includeSubDomains` 或 preload。
 
 配置失败时恢复 `oj.before-certbot-*`，执行 `nginx -t` 后 reload；确认新证书和续期正常前不要删除原阿里云证书。
 
@@ -320,6 +324,22 @@ curl https://botcode.work/api/health
 
 ```bash
 curl -fsSI https://botcode.work/login | grep -Ei 'strict-transport-security|content-security-policy|x-content-type-options|x-frame-options|referrer-policy|permissions-policy'
+```
+
+流式响应、动态缓存和静态资源检查：
+
+```bash
+# 直连 Next 应看到 X-Accel-Buffering: no；公网层可能由 Nginx 消费该头
+curl -fsSI http://127.0.0.1:3000/login | grep -Ei 'x-accel-buffering|cache-control'
+
+# 普通页面和 RSC 都应保持私有、不做共享缓存
+curl -fsS -D - -o /dev/null https://botcode.work/login | grep -i cache-control
+curl -fsS -D - -o /dev/null -H 'RSC: 1' https://botcode.work/login | grep -i cache-control
+
+# 把路径替换为登录页实际引用的哈希 CSS/JS；应有 gzip 和一年 immutable 缓存
+curl -fsS -D - -o /dev/null -H 'Accept-Encoding: gzip' \
+  https://botcode.work/_next/static/chunks/实际文件.css \
+  | grep -Ei 'content-encoding|cache-control|expires|strict-transport-security|x-content-type-options'
 ```
 
 ## 6. SQLite 数据备份
@@ -498,7 +518,7 @@ Docker 注意事项：
 - [ ] Docker Judge 使用 `JUDGE_MODE=docker`。
 - [ ] `/api/health` 返回正常。
 - [ ] `botcode.work` 与 `www.botcode.work` 均包含在当前证书中。
-- [ ] `certbot.timer` 已启用，`certbot renew --dry-run` 通过。
+- [ ] 当前证书的实际续期机制已验证；使用 Certbot 时 timer 已启用且 `renew --dry-run` 通过。
 - [ ] HTTP、HTTP IP 和 `www` 均跳转到 `https://botcode.work`。
 - [ ] 登录 Cookie 包含 `Secure`、`HttpOnly`、`SameSite=Lax`。
 - [ ] 登录页响应包含基础安全头：`Content-Security-Policy`、`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy`。
@@ -674,6 +694,8 @@ curl http://127.0.0.1:3000/api/health
 curl -I http://127.0.0.1:3000/_next/static/某个实际 chunk.css
 curl -I http://127.0.0.1:3000/ac-success.png
 ```
+
+还要确认 `/www/oj/.next/standalone/.next/static/` 与登录页实际引用的哈希资源存在，并按第 5 节检查公网 gzip、immutable 缓存、动态 no-store 和直连 `X-Accel-Buffering`。不要把用户页面或 RSC 响应配置为 Nginx 共享缓存。
 
 清空浏览器缓存后完成第一次 Accepted 冒烟：网络面板应在答题页挂载后直接看到 `/ac-success.png`，提交通过后图片从可绘制状态开始完整展示；不应出现针对该图片的 `/_next/image` 请求。再连续提交一次，确认复用浏览器缓存且没有重复的图片优化请求。
 
