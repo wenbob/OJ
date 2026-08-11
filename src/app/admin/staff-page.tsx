@@ -14,16 +14,12 @@ import {
   BrainCircuit,
   ClipboardList,
 } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { prisma } from "@/lib/prisma";
-import { getStudentRankings } from "@/lib/ranking";
 import { getAdminDisplaySettings } from "@/lib/settings";
 import {
   getExamAccessWhere,
   getStaffSubmissionWhere,
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -31,18 +27,20 @@ import {
 export async function StaffHomePage({ role }: { role: StaffRole }) {
   const user = await requireStaffPageUser(role);
   const basePath = getStaffBasePath(role);
+  const studentCountPromise = prisma.user.count({ where: { role: "student" } });
   const [
     problemCount,
     examCount,
     userCount,
+    studentCount,
     dailySubmissionCount,
     examSubmissionCount,
-    rankings,
     settings,
   ] = await Promise.all([
     prisma.problem.count({ where: { archivedAt: null } }),
     prisma.exam.count({ where: getExamAccessWhere(user) }),
-    prisma.user.count({ where: role === "teacher" ? { role: "student" } : undefined }),
+    role === "teacher" ? studentCountPromise : prisma.user.count(),
+    studentCountPromise,
     prisma.submission.count({
       where: {
         AND: [
@@ -59,12 +57,11 @@ export async function StaffHomePage({ role }: { role: StaffRole }) {
         ],
       },
     }),
-    getStudentRankings(),
     getAdminDisplaySettings(),
   ]);
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <section className="mb-6 flex items-start gap-3 border border-clay/25 bg-[#fffaf1] p-4 text-sm font-semibold leading-6 text-ink-700">
         <Megaphone aria-hidden="true" className="mt-0.5 flex-none text-clay" size={18} />
         <span>{settings.adminNotice}</span>
@@ -93,7 +90,7 @@ export async function StaffHomePage({ role }: { role: StaffRole }) {
           <OverviewStat label="题库题目" value={problemCount} />
           <OverviewStat label={role === "admin" ? "模拟考试" : "我的考试"} value={examCount} />
           <OverviewStat label={role === "admin" ? "系统用户" : "学生账号"} value={userCount} />
-          <OverviewStat label="天梯学生" value={rankings.length} />
+          <OverviewStat label="天梯学生" value={studentCount} />
         </div>
       </section>
 
@@ -170,7 +167,7 @@ export async function StaffHomePage({ role }: { role: StaffRole }) {
           />
           <AdminEntry
             className="lg:col-span-4"
-            count={rankings.length}
+            count={studentCount}
             href={`${basePath}/leaderboard`}
             icon={<Trophy size={23} />}
             label="天梯管理台"
@@ -216,7 +213,7 @@ export async function StaffHomePage({ role }: { role: StaffRole }) {
           />
         </div> : null}
       </section>
-    </AppShell>
+    </>
   );
 }
 

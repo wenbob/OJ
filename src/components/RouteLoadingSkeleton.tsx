@@ -32,6 +32,8 @@ export function RouteLoadingSkeleton() {
   );
 }
 
+export default RouteLoadingSkeleton;
+
 function DashboardSkeleton() {
   return (
     <div className="grid gap-6">

@@ -1,14 +1,11 @@
 // Shared server page for administrator and teacher shells.
 import Link from "next/link";
 import { ArrowRight, ClipboardList, Layers3, UsersRound } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { getAssignmentProgress } from "@/lib/learningAssignments";
 import { prisma } from "@/lib/prisma";
 import { getOrderedProblemCategories } from "@/lib/problemOrdering";
 import {
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -36,10 +33,9 @@ export async function StaffAssignmentsPage({ role }: { role: StaffRole }) {
           problemTitle: true,
         },
       }),
-      prisma.problem.findMany({
+      prisma.problem.groupBy({
+        by: ["category"],
         where: { archivedAt: null, problemType: "programming" },
-        distinct: ["category"],
-        select: { category: true },
       }),
       prisma.learningAssignment.findMany({
         where: role === "teacher" ? { createdById: user.id } : undefined,
@@ -81,7 +77,7 @@ export async function StaffAssignmentsPage({ role }: { role: StaffRole }) {
   }));
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <section className="surface overflow-hidden">
         <div className="grid bg-ink-950 text-linen lg:grid-cols-[1fr_auto]">
           <div className="p-6 md:p-8">
@@ -165,7 +161,7 @@ export async function StaffAssignmentsPage({ role }: { role: StaffRole }) {
           </div>
         )}
       </section>
-    </AppShell>
+    </>
   );
 }
 

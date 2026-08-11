@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildStudentRankings,
   buildStudentRankingSummary,
   getRankTierProgress,
   getRankTierTitle,
+  getStudentRankings,
   normalizeCustomTitle,
   validateCustomTitle,
 } from "./ranking";
@@ -138,6 +139,38 @@ describe("student rankings", () => {
     });
 
     expect(rankings.map((entry) => entry.username)).toEqual(["bob", "carol"]);
+  });
+
+  it("builds the leaderboard from database aggregates instead of Accepted rows", async () => {
+    const findMany = vi.fn().mockResolvedValue(users.slice(0, 2));
+    const groupBy = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { _count: { _all: 2 }, userId: 1 },
+        { _count: { _all: 1 }, userId: 2 },
+      ])
+      .mockResolvedValueOnce([
+        { _count: { _all: 2 }, problemId: 1, userId: 1 },
+        { _count: { _all: 1 }, problemId: 1, userId: 2 },
+      ]);
+    const db = {
+      submission: { groupBy },
+      user: { findMany },
+    };
+
+    const rankings = await getStudentRankings(db as never);
+
+    expect(rankings.map((entry) => entry.userId)).toEqual([1, 2]);
+    expect(findMany).toHaveBeenCalledWith({
+      select: {
+        id: true,
+        role: true,
+        studentProfile: { select: { customTitle: true } },
+        username: true,
+      },
+      where: { role: "student" },
+    });
+    expect(groupBy).toHaveBeenCalledTimes(2);
   });
 
   it("normalizes and validates custom titles", () => {

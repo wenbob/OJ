@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextRequest, NextResponse } from "next/server";
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { shouldUseSecureSessionCookies } from "@/lib/env";
 import {
@@ -164,17 +165,20 @@ async function hydrateSession(
   };
 }
 
-export async function getCurrentUser() {
+const getCurrentSessionStateForRender = cache(async () => {
   const cookieStore = await cookies();
-  const state = await hydrateSession(
+  return hydrateSession(
     readSessionToken(cookieStore.get(SESSION_COOKIE)?.value),
   );
+});
+
+export async function getCurrentUser() {
+  const state = await getCurrentSessionState();
   return state.user;
 }
 
 export async function getCurrentSessionState() {
-  const cookieStore = await cookies();
-  return hydrateSession(readSessionToken(cookieStore.get(SESSION_COOKIE)?.value));
+  return getCurrentSessionStateForRender();
 }
 
 export async function getUserFromRequest(request: NextRequest) {

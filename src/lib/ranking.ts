@@ -59,6 +59,28 @@ export type RankTierProgress = {
   progressPercent: number;
 };
 
+function compareStudentRankingEntries(
+  left: StudentRankingSummary,
+  right: StudentRankingSummary,
+) {
+  if (right.points !== left.points) return right.points - left.points;
+  if (right.acCount !== left.acCount) return right.acCount - left.acCount;
+  if (right.acceptedSubmissionCount !== left.acceptedSubmissionCount) {
+    return right.acceptedSubmissionCount - left.acceptedSubmissionCount;
+  }
+  const usernameOrder = left.username.localeCompare(right.username, "zh-Hans-CN");
+  if (usernameOrder !== 0) return usernameOrder;
+  return left.userId - right.userId;
+}
+
+function assignStudentRanks(
+  summaries: StudentRankingSummary[],
+): StudentRankingEntry[] {
+  return summaries
+    .sort(compareStudentRankingEntries)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+}
+
 export function normalizeCustomTitle(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -184,16 +206,7 @@ export function buildStudentRankings({
         username: user.username,
       };
     })
-    .sort((left, right) => {
-      if (right.points !== left.points) return right.points - left.points;
-      if (right.acCount !== left.acCount) return right.acCount - left.acCount;
-      if (right.acceptedSubmissionCount !== left.acceptedSubmissionCount) {
-        return right.acceptedSubmissionCount - left.acceptedSubmissionCount;
-      }
-      const usernameOrder = left.username.localeCompare(right.username, "zh-Hans-CN");
-      if (usernameOrder !== 0) return usernameOrder;
-      return left.userId - right.userId;
-    });
+    .sort(compareStudentRankingEntries);
 
   return entries.map((entry, index) => ({
     ...entry,
@@ -307,26 +320,17 @@ export async function getStudentRankingSummariesForUsers(
 }
 
 export async function getStudentRankings(db: DbClient = prisma) {
-  const [users, submissions] = await Promise.all([
-    db.user.findMany({
-      select: {
-        id: true,
-        username: true,
-        role: true,
-        studentProfile: { select: { customTitle: true } },
-      },
-    }),
-    db.submission.findMany({
-      where: { status: "Accepted" },
-      select: {
-        problemId: true,
-        status: true,
-        userId: true,
-      },
-    }),
-  ]);
-
-  return buildStudentRankings({ submissions, users });
+  const users = await db.user.findMany({
+    where: { role: "student" },
+    select: {
+      id: true,
+      username: true,
+      role: true,
+      studentProfile: { select: { customTitle: true } },
+    },
+  });
+  const summaries = await getStudentRankingSummariesForUsers(users, db);
+  return assignStudentRanks(summaries);
 }
 
 export async function getStudentRankingSummaryForUser(
@@ -344,16 +348,8 @@ export async function getStudentRankingSummaryForUser(
   });
   if (!user) return null;
 
-  const submissions = await db.submission.findMany({
-    where: { status: "Accepted", userId },
-    select: {
-      problemId: true,
-      status: true,
-      userId: true,
-    },
-  });
-
-  return buildStudentRankingSummary({ submissions, user });
+  const summaries = await getStudentRankingSummariesForUsers([user], db);
+  return summaries[0] ?? null;
 }
 
 export function findRankingByUserId(

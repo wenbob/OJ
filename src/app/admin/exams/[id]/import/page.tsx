@@ -1,27 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AppShell } from "@/components/AppShell";
 import { requirePageUser } from "@/lib/auth";
 import { normalizeProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
 import { ExamImportClient } from "./exam-import-client";
-
-const adminNav = [
-  { href: "/admin", label: "后台首页" },
-  { href: "/admin/practice", label: "题目练习" },
-  { href: "/admin/problems", label: "题目管理" },
-  { href: "/admin/exams", label: "模拟考试" },
-  { href: "/admin/users", label: "用户管理" },
-  { href: "/admin/submissions", label: "日常提交" },
-  { href: "/admin/exam-submissions", label: "考试提交" },
-];
 
 type PageProps = {
   params: Promise<{ id: string }>;
 };
 
 export default async function AdminExamImportPage({ params }: PageProps) {
-  const user = await requirePageUser("admin");
+  await requirePageUser("admin");
   const { id } = await params;
   const examId = Number(id);
   if (!Number.isInteger(examId)) notFound();
@@ -33,7 +22,7 @@ export default async function AdminExamImportPage({ params }: PageProps) {
   if (!exam) notFound();
 
   return (
-    <AppShell nav={adminNav} title="管理员端" user={user}>
+    <>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
@@ -51,6 +40,6 @@ export default async function AdminExamImportPage({ params }: PageProps) {
         examId={exam.id}
         examType={normalizeProblemType(exam.examType)}
       />
-    </AppShell>
+    </>
   );
 }

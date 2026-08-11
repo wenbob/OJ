@@ -1,13 +1,10 @@
 // Shared server page for administrator and teacher shells.
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { prisma } from "@/lib/prisma";
 import {
   getExamAccessWhere,
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -31,7 +28,7 @@ export async function StaffExamsPage({ role }: { role: StaffRole }) {
   }));
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <section className="surface overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-950/10 p-5">
           <div>
@@ -49,7 +46,7 @@ export async function StaffExamsPage({ role }: { role: StaffRole }) {
         </div>
         <ExamListClient basePath={basePath} exams={clientExams} />
       </section>
-    </AppShell>
+    </>
   );
 }
 

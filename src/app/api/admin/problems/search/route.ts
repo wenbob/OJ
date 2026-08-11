@@ -46,10 +46,9 @@ export async function GET(request: NextRequest) {
     take: 200,
   });
 
-  const categoryRows = await prisma.problem.findMany({
+  const categoryRows = await prisma.problem.groupBy({
+    by: ["category"],
     where: { archivedAt: null, ...(problemType ? { problemType } : {}) },
-    distinct: ["category"],
-    select: { category: true },
   });
 
   const categoryNames = categoryRows.map((item) => item.category).filter(Boolean);

@@ -26,10 +26,13 @@ export async function AppShell({
   locked?: boolean;
   children: React.ReactNode;
 }) {
-  const { siteName } = await getPublicSettings();
-  const currentRanking = user.role === "student"
-    ? await getStudentRankingSummaryForUser(user.id)
-    : null;
+  const [publicSettings, currentRanking] = await Promise.all([
+    getPublicSettings(),
+    user.role === "student" && !locked
+      ? getStudentRankingSummaryForUser(user.id)
+      : Promise.resolve(null),
+  ]);
+  const { siteName } = publicSettings;
   const supplementalItems = user.role !== "student"
     ? [
         {
@@ -59,7 +62,7 @@ export async function AppShell({
   return (
     <div className="min-h-screen" data-app-shell-root>
       {user.role === "student" ? <SessionPresenceGuard /> : null}
-      <header className="arena-shell-header">
+      <header className="arena-shell-header" data-app-shell-header>
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
           {locked ? (
             <div

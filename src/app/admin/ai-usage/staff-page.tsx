@@ -8,12 +8,9 @@ import {
   Gauge,
   Users,
 } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { getAiUsageDashboard, readAiUsageFilters } from "@/lib/aiUsage";
 import {
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -26,7 +23,7 @@ export async function StaffAiUsagePage({
   role,
   searchParams,
 }: PageProps & { role: StaffRole }) {
-  const user = await requireStaffPageUser(role);
+  await requireStaffPageUser(role);
   const basePath = getStaffBasePath(role);
   const rawParams = await searchParams;
   const filters = readAiUsageFilters(toUrlSearchParams(rawParams));
@@ -34,7 +31,7 @@ export async function StaffAiUsagePage({
   const maxHour = Math.max(1, ...dashboard.hourly.map((item) => item.count));
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <section className="surface overflow-hidden">
         <div className="grid bg-ink-950 text-linen lg:grid-cols-[1fr_auto]">
           <div className="p-6 md:p-8">
@@ -118,7 +115,7 @@ export async function StaffAiUsagePage({
           </div>
         )}
       </section>
-    </AppShell>
+    </>
   );
 }
 

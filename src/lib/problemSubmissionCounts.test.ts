@@ -4,10 +4,12 @@ import {
   getLatestAcceptedSubmissionIdsByProblem,
 } from "./problemSubmissionCounts";
 
-const mocks = vi.hoisted(() => ({ findMany: vi.fn() }));
+const mocks = vi.hoisted(() => ({ findMany: vi.fn(), groupBy: vi.fn() }));
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: { submission: { findMany: mocks.findMany } },
+  prisma: {
+    submission: { findMany: mocks.findMany, groupBy: mocks.groupBy },
+  },
 }));
 
 describe("accepted problem history", () => {
@@ -41,6 +43,12 @@ describe("accepted problem history", () => {
   });
 
   it("keeps the newest Accepted submission for each problem", async () => {
+    const problem2AcceptedAt = new Date("2026-08-11T08:00:00.000Z");
+    const problem4AcceptedAt = new Date("2026-08-11T09:00:00.000Z");
+    mocks.groupBy.mockResolvedValue([
+      { _max: { createdAt: problem2AcceptedAt }, problemId: 2 },
+      { _max: { createdAt: problem4AcceptedAt }, problemId: 4 },
+    ]);
     mocks.findMany.mockResolvedValue([
       { id: 12, problemId: 2 },
       { id: 10, problemId: 4 },
@@ -58,14 +66,26 @@ describe("accepted problem history", () => {
         [4, 10],
       ]),
     );
+    expect(mocks.groupBy).toHaveBeenCalledWith({
+      _max: { createdAt: true },
+      by: ["problemId"],
+      where: {
+        problemId: { in: [2, 4] },
+        status: "Accepted",
+        userId: 9,
+      },
+    });
     expect(mocks.findMany).toHaveBeenCalledWith({
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy: [{ id: "desc" }],
       select: {
         id: true,
         problemId: true,
       },
       where: {
-        problemId: { in: [2, 4] },
+        OR: [
+          { createdAt: problem2AcceptedAt, problemId: 2 },
+          { createdAt: problem4AcceptedAt, problemId: 4 },
+        ],
         status: "Accepted",
         userId: 9,
       },
@@ -80,5 +100,6 @@ describe("accepted problem history", () => {
       }),
     ).resolves.toEqual(new Map());
     expect(mocks.findMany).not.toHaveBeenCalled();
+    expect(mocks.groupBy).not.toHaveBeenCalled();
   });
 });

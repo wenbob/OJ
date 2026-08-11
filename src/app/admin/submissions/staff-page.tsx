@@ -1,6 +1,5 @@
 // Shared server page for administrator and teacher shells.
 import Link from "next/link";
-import { AppShell } from "@/components/AppShell";
 import { CopyCodeButton } from "@/components/CopyCodeButton";
 import { Pagination } from "@/components/Pagination";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -16,9 +15,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import {
   getStaffBasePath,
-  getStaffNav,
   getStaffSubmissionWhere,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -71,7 +68,7 @@ export async function StaffSubmissionsPage({
   const pagination = buildPaginationMeta({ page, pageSize, total });
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <section className="surface p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -248,7 +245,7 @@ export async function StaffSubmissionsPage({
           totalPages={pagination.totalPages}
         />
       </section>
-    </AppShell>
+    </>
   );
 }
 

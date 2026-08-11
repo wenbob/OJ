@@ -12,6 +12,7 @@ const securityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=()",
   },
+  { key: "X-Accel-Buffering", value: "no" },
 ];
 
 const requestedBuildWorkers = Number(

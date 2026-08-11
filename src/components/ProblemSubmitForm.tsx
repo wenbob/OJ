@@ -60,6 +60,7 @@ export function ProblemSubmitForm({
   objectiveCompact = false,
   problemType = "programming",
   problemId,
+  refreshShellOnAccepted = false,
   refreshOnSuccess = false,
   sampleCount = 0,
 }: {
@@ -80,6 +81,7 @@ export function ProblemSubmitForm({
   objectiveCompact?: boolean;
   problemType?: ProblemType;
   problemId: number;
+  refreshShellOnAccepted?: boolean;
   refreshOnSuccess?: boolean;
   sampleCount?: number;
 }) {
@@ -345,6 +347,7 @@ export function ProblemSubmitForm({
     }
     if (
       refreshOnSuccess ||
+      (refreshShellOnAccepted && data.submission?.status === "Accepted") ||
       data.countedForLearningAssignment ||
       data.learningAssignmentDetached
     ) {

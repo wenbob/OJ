@@ -57,13 +57,31 @@ export async function getLatestAcceptedSubmissionIdsByProblem({
     return new Map<number, number>();
   }
 
-  const rows = await prisma.submission.findMany({
+  const latestAcceptedAt = await prisma.submission.groupBy({
+    by: ["problemId"],
     where: {
       problemId: { in: problemIds },
       status: "Accepted",
       userId,
     },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    _max: { createdAt: true },
+  });
+  const latestFilters = latestAcceptedAt.flatMap((row) =>
+    row._max.createdAt
+      ? [{ createdAt: row._max.createdAt, problemId: row.problemId }]
+      : [],
+  );
+  if (latestFilters.length === 0) {
+    return new Map<number, number>();
+  }
+
+  const rows = await prisma.submission.findMany({
+    where: {
+      OR: latestFilters,
+      status: "Accepted",
+      userId,
+    },
+    orderBy: [{ id: "desc" }],
     select: {
       id: true,
       problemId: true,
@@ -71,11 +89,11 @@ export async function getLatestAcceptedSubmissionIdsByProblem({
   });
 
   const latestByProblem = new Map<number, number>();
-  rows.forEach((row) => {
+  for (const row of rows) {
     if (!latestByProblem.has(row.problemId)) {
       latestByProblem.set(row.problemId, row.id);
     }
-  });
+  }
 
   return latestByProblem;
 }

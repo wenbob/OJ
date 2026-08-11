@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { ImagePlus, RotateCcw, Save } from "lucide-react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useState } from "react";
@@ -35,6 +36,7 @@ export function SettingsForm({
   initialRevision: string;
   initialSettings: SystemSettings;
 }) {
+  const router = useRouter();
   const [settings, setSettings] = useState(initialSettings);
   const [aiProviderStatuses, setAiProviderStatuses] = useState(
     initialAiProviderStatuses,
@@ -176,6 +178,7 @@ export function SettingsForm({
         }));
       }
       notifyBrowserIdentityUpdated(savedSettings);
+      router.refresh();
       setMessage("设置已保存，两类 AI 模型、提示词与角色触发间隔已经生效");
     } catch {
       setError("保存设置失败，请检查本地服务");

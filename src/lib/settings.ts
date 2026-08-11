@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { MAX_BROWSER_ICON_BYTES } from "@/lib/browserIdentity";
+import { cache } from "react";
 
 export const defaultCppTemplate = `#include <bits/stdc++.h>
 using namespace std;
@@ -164,7 +165,7 @@ export async function getAllSystemSettings(): Promise<SystemSettings> {
   }
 }
 
-export async function getPublicSettings() {
+export const getPublicSettings = cache(async function getPublicSettings() {
   const settings = await getAllSystemSettings();
   const browserIcon = validateBrowserIcon(settings.browserIcon)
     ? defaultSystemSettings.browserIcon
@@ -176,7 +177,7 @@ export async function getPublicSettings() {
     browserIcon,
     studentNotice: settings.studentNotice,
   };
-}
+});
 
 export async function getAdminDisplaySettings() {
   const settings = await getAllSystemSettings();

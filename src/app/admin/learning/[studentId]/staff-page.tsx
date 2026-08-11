@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, Clock3, Target } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   createAiProviderFingerprint,
@@ -18,8 +17,6 @@ import {
 import { getTeacherLearningStudentDetail } from "@/lib/teacherLearning";
 import {
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -75,7 +72,7 @@ export async function StaffStudentLearningPage({
   const suggestedTitle = "课后练习";
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <Link className="inline-flex items-center gap-2 text-sm font-black text-steel" href={`${basePath}/learning?window=${window}`}>
           <ArrowLeft size={16} /> 返回学情看板
@@ -228,7 +225,7 @@ export async function StaffStudentLearningPage({
           categories={categories}
         />
       </div>
-    </AppShell>
+    </>
   );
 }
 

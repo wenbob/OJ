@@ -52,13 +52,12 @@ export async function GET(request: NextRequest) {
   };
   const [total, categoryRows, titleRows] = await Promise.all([
     prisma.problem.count({ where }),
-    prisma.problem.findMany({
+    prisma.problem.groupBy({
+      by: ["category"],
       where: {
         archivedAt: null,
         ...(problemType ? { problemType } : {}),
       },
-      select: { category: true },
-      distinct: ["category"],
     }),
     isTitleProblemListSort(listSort)
       ? prisma.problem.findMany({

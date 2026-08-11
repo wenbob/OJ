@@ -27,15 +27,17 @@ export const viewport: Viewport = {
   width: "device-width",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const settings = await getPublicSettings();
+
   return (
     <html lang="zh-CN">
       <body className="min-h-screen font-sans antialiased">
-        <BrowserIdentity />
+        <BrowserIdentity initialSettings={settings} />
         {children}
       </body>
     </html>

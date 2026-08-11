@@ -261,7 +261,7 @@ export async function prepareE2eDatabase() {
       },
     });
 
-    for (const examId of [201, 202]) {
+    for (const examId of [201, 202, 203]) {
       await prisma.exam.create({
         data: {
           aiEnabled: false,

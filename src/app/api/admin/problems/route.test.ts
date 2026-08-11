@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
       create: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      groupBy: vi.fn(),
       updateMany: vi.fn(),
     },
     problemCategoryOrder: { findMany: vi.fn() },
@@ -52,6 +53,7 @@ describe("admin problem archiving", () => {
     mocks.prisma.learningAssignmentProblem.count.mockResolvedValue(0);
     mocks.prisma.examProblem.findFirst.mockResolvedValue(null);
     mocks.prisma.problem.updateMany.mockResolvedValue({ count: 1 });
+    mocks.prisma.problem.groupBy.mockResolvedValue([]);
     mocks.prisma.$transaction.mockImplementation(
       async (callback: (client: typeof mocks.prisma) => Promise<unknown>) =>
         callback(mocks.prisma),
@@ -149,20 +151,18 @@ describe("admin problem archiving", () => {
   });
 
   it("returns every category for the selected problem type, not only the current page", async () => {
-    mocks.prisma.problem.findMany
-      .mockResolvedValueOnce([
-        { category: "GESP 一级" },
-        { category: "GESP 一级" },
-        { category: "一级模拟" },
-      ])
-      .mockResolvedValueOnce([
-        {
-          id: 12,
-          category: "GESP 一级",
-          problemType: "objective",
-          testCases: [],
-        },
-      ]);
+    mocks.prisma.problem.groupBy.mockResolvedValue([
+      { category: "GESP 一级" },
+      { category: "一级模拟" },
+    ]);
+    mocks.prisma.problem.findMany.mockResolvedValueOnce([
+      {
+        id: 12,
+        category: "GESP 一级",
+        problemType: "objective",
+        testCases: [],
+      },
+    ]);
     mocks.prisma.problem.count.mockResolvedValue(14);
 
     const response = await GET(
@@ -174,14 +174,14 @@ describe("admin problem archiving", () => {
 
     expect(response.status).toBe(200);
     expect(body.categories).toEqual(["一级模拟", "GESP 一级"]);
-    expect(mocks.prisma.problem.findMany).toHaveBeenNthCalledWith(
-      1,
+    expect(mocks.prisma.problem.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({
+        by: ["category"],
         where: { archivedAt: null, problemType: "objective" },
       }),
     );
     expect(mocks.prisma.problem.findMany).toHaveBeenNthCalledWith(
-      2,
+      1,
       expect.objectContaining({
         orderBy: [{ sortOrder: "desc" }, { id: "desc" }],
       }),
@@ -189,23 +189,22 @@ describe("admin problem archiving", () => {
   });
 
   it("returns summary rows without statements, answers, or hidden test bodies", async () => {
-    mocks.prisma.problem.findMany
-      .mockResolvedValueOnce([{ category: "基础" }])
-      .mockResolvedValueOnce([
-        {
-          _count: { testCases: 3 },
-          category: "基础",
-          description: "must-not-leak-description",
-          difficulty: "入门",
-          id: 12,
-          objectiveItems: null,
-          problemType: "programming",
-          testCases: [
-            { input: "must-not-leak-input", output: "must-not-leak-output" },
-          ],
-          title: "A+B",
-        },
-      ]);
+    mocks.prisma.problem.groupBy.mockResolvedValue([{ category: "基础" }]);
+    mocks.prisma.problem.findMany.mockResolvedValueOnce([
+      {
+        _count: { testCases: 3 },
+        category: "基础",
+        description: "must-not-leak-description",
+        difficulty: "入门",
+        id: 12,
+        objectiveItems: null,
+        problemType: "programming",
+        testCases: [
+          { input: "must-not-leak-input", output: "must-not-leak-output" },
+        ],
+        title: "A+B",
+      },
+    ]);
     mocks.prisma.problem.count.mockResolvedValue(1);
 
     const response = await GET(
@@ -220,19 +219,19 @@ describe("admin problem archiving", () => {
     expect(body.items[0]).toMatchObject({ itemCount: 3, title: "A+B" });
     expect(serialized).not.toContain("must-not-leak");
     expect(mocks.prisma.problem.findMany).toHaveBeenNthCalledWith(
-      2,
+      1,
       expect.objectContaining({
         select: expect.any(Object),
       }),
     );
     expect(
-      mocks.prisma.problem.findMany.mock.calls[1]?.[0],
+      mocks.prisma.problem.findMany.mock.calls[0]?.[0],
     ).not.toHaveProperty("include");
   });
 
   it("sorts titles naturally before applying pagination", async () => {
+    mocks.prisma.problem.groupBy.mockResolvedValue([{ category: "综合" }]);
     mocks.prisma.problem.findMany
-      .mockResolvedValueOnce([{ category: "综合" }])
       .mockResolvedValueOnce([
         { id: 10, title: "第 10 题" },
         { id: 2, title: "第 2 题" },
@@ -266,7 +265,7 @@ describe("admin problem archiving", () => {
     expect(body.sort).toBe("title-asc");
     expect(body.items.map((item: { id: number }) => item.id)).toEqual([1, 2]);
     expect(mocks.prisma.problem.findMany).toHaveBeenNthCalledWith(
-      3,
+      2,
       expect.objectContaining({
         where: expect.objectContaining({ id: { in: [1, 2] } }),
       }),
@@ -274,9 +273,8 @@ describe("admin problem archiving", () => {
   });
 
   it("uses creation time only as an administrator view sort", async () => {
-    mocks.prisma.problem.findMany
-      .mockResolvedValueOnce([{ category: "综合" }])
-      .mockResolvedValueOnce([]);
+    mocks.prisma.problem.groupBy.mockResolvedValue([{ category: "综合" }]);
+    mocks.prisma.problem.findMany.mockResolvedValueOnce([]);
     mocks.prisma.problem.count.mockResolvedValue(0);
 
     const response = await GET(
@@ -293,7 +291,7 @@ describe("admin problem archiving", () => {
       totalPages: 1,
     });
     expect(mocks.prisma.problem.findMany).toHaveBeenNthCalledWith(
-      2,
+      1,
       expect.objectContaining({
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         skip: 0,

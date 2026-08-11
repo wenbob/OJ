@@ -1,7 +1,6 @@
 // Shared server page for administrator and teacher shells.
 import { notFound } from "next/navigation";
 import { AcceptedProblemIndicator } from "@/components/AcceptedProblemIndicator";
-import { AppShell } from "@/components/AppShell";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
 import { ProblemRichText } from "@/components/ProblemRichText";
@@ -34,8 +33,6 @@ import {
 } from "@/lib/settings";
 import {
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -112,7 +109,7 @@ export async function StaffPracticeProblemPage({
   });
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <StaffObjectiveAnswerVisibilityProvider
         key={`staff-objective-answers-${problem.id}`}
       >
@@ -243,7 +240,7 @@ export async function StaffPracticeProblemPage({
           </div>
         </ObjectiveAiExplanationProvider>
       </StaffObjectiveAnswerVisibilityProvider>
-    </AppShell>
+    </>
   );
 }
 

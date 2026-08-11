@@ -1,13 +1,10 @@
 // Shared server page for administrator and teacher shells.
 import Link from "next/link";
 import { BookOpenCheck, Clock3, Users } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { isLearningWindow, type LearningWindow } from "@/lib/learningAnalytics";
 import { getTeacherLearningDashboard } from "@/lib/teacherLearning";
 import {
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -21,7 +18,7 @@ export async function StaffLearningPage({
   role,
   searchParams,
 }: PageProps & { role: StaffRole }) {
-  const user = await requireStaffPageUser(role);
+  await requireStaffPageUser(role);
   const basePath = getStaffBasePath(role);
   const rawWindow = (await searchParams).window;
   const selectedWindow = Array.isArray(rawWindow) ? rawWindow[0] : rawWindow;
@@ -31,7 +28,7 @@ export async function StaffLearningPage({
   const dashboard = await getTeacherLearningDashboard(window);
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <section className="surface overflow-hidden">
         <div className="grid bg-ink-950 text-linen lg:grid-cols-[1fr_auto]">
           <div className="p-6 md:p-8">
@@ -87,7 +84,7 @@ export async function StaffLearningPage({
           />
         )}
       </section>
-    </AppShell>
+    </>
   );
 }
 

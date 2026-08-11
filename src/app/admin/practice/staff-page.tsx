@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { AcceptedProblemIndicator } from "@/components/AcceptedProblemIndicator";
-import { AppShell } from "@/components/AppShell";
 import { NavigationLink } from "@/components/NavigationLink";
 import { Pagination } from "@/components/Pagination";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
@@ -23,8 +22,6 @@ import {
 } from "@/lib/problemSubmissionCounts";
 import {
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -74,9 +71,9 @@ export async function StaffPracticePage({
       take: pageSize,
     }),
     prisma.problem.count({ where }),
-    prisma.problem.findMany({
+    prisma.problem.groupBy({
+      by: ["category"],
       where: { archivedAt: null, problemType },
-      select: { category: true },
     }),
   ]);
   const problemIds = problems.map((problem) => problem.id);
@@ -103,7 +100,7 @@ export async function StaffPracticePage({
   const pagination = buildPaginationMeta({ page, pageSize, total });
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <section className="surface overflow-hidden">
         <div className="border-b border-ink-950/10 p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
@@ -232,7 +229,7 @@ export async function StaffPracticePage({
           totalPages={pagination.totalPages}
         />
       </section>
-    </AppShell>
+    </>
   );
 }
 

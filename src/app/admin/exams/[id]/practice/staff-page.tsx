@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AcceptedProblemIndicator } from "@/components/AcceptedProblemIndicator";
-import { AppShell } from "@/components/AppShell";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
 import { ProblemRichText } from "@/components/ProblemRichText";
@@ -36,8 +35,6 @@ import {
 import {
   getExamAccessWhere,
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -166,7 +163,7 @@ export async function StaffExamPracticePage({
     boolSetting(staffProgrammingAssistSetting);
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <section className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
@@ -392,7 +389,7 @@ export async function StaffExamPracticePage({
           该考试暂未添加题目。
         </section>
       )}
-    </AppShell>
+    </>
   );
 }
 

@@ -1,8 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AiProviderAdminStatuses } from "@/lib/aiProvider";
 import { defaultSystemSettings } from "@/lib/settings";
 import { SettingsForm } from "./settings-form";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 const statuses: AiProviderAdminStatuses = {
   programming: {

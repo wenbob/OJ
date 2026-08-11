@@ -1,13 +1,10 @@
 // Shared server page for administrator and teacher shells.
 import { notFound } from "next/navigation";
-import { AppShell } from "@/components/AppShell";
 import { SubmissionDetailView } from "@/components/SubmissionDetailView";
 import { prisma } from "@/lib/prisma";
 import {
   getStaffBasePath,
-  getStaffNav,
   getStaffSubmissionWhere,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -43,12 +40,12 @@ export async function StaffSubmissionDetailPage({
   const problemHref = `${basePath}/practice/problems/${submission.problem.id}`;
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <SubmissionDetailView
         problemHref={problemHref}
         submission={submission}
       />
-    </AppShell>
+    </>
   );
 }
 

@@ -1,7 +1,6 @@
 // Shared server page for administrator and teacher shells.
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AppShell } from "@/components/AppShell";
 import { Pagination } from "@/components/Pagination";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
@@ -19,8 +18,6 @@ import { prisma } from "@/lib/prisma";
 import {
   getExamAccessWhere,
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -134,7 +131,7 @@ export async function StaffExamRecordsPage({
   );
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <section className="surface p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -238,7 +235,7 @@ export async function StaffExamRecordsPage({
           totalPages={pagination.totalPages}
         />
       </section>
-    </AppShell>
+    </>
   );
 }
 

@@ -3,15 +3,12 @@ import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BookOpen, BrainCircuit, Clock3, Database, GraduationCap } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { Pagination } from "@/components/Pagination";
 import { aiUsageModeLabels, aiUsageStatusLabels, getAiUsageStudentDetail, readAiUsageFilters } from "@/lib/aiUsage";
 import { parseObjectiveAiExplanationPayload } from "@/lib/objectiveAiExplanationPayload";
 import { readPaginationFromObject } from "@/lib/pagination";
 import {
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -19,7 +16,7 @@ import {
 type PageProps = { params: Promise<{ studentId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 export async function StaffAiUsageStudentPage({ params, role, searchParams }: PageProps & { role: StaffRole }) {
-  const user = await requireStaffPageUser(role);
+  await requireStaffPageUser(role);
   const basePath = getStaffBasePath(role);
   const studentId = Number((await params).studentId);
   if (!Number.isInteger(studentId) || studentId <= 0) notFound();
@@ -30,7 +27,7 @@ export async function StaffAiUsageStudentPage({ params, role, searchParams }: Pa
   if (!detail) notFound();
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div><p className="arena-kicker">AI Conversation Review</p><h1 className="mt-2 text-3xl font-black">{detail.student.username} · AI 对话</h1><p className="mt-2 text-sm font-semibold text-ink-600">精确查看学生在当前题目中的提问与 AI 最终回复，不包含代码或模型内部推理。</p></div>
         <div className="flex gap-2"><Link className="btn btn-secondary" href={`${basePath}/learning/${studentId}`}><BookOpen size={16} />查看学情</Link><Link className="btn btn-secondary" href={`${basePath}/ai-usage`}><ArrowLeft size={16} />返回总览</Link></div>
@@ -63,7 +60,7 @@ export async function StaffAiUsageStudentPage({ params, role, searchParams }: Pa
         })}</div>}
         <Pagination basePath={`${basePath}/ai-usage/${studentId}`} page={detail.page} pageSize={detail.pageSize} searchParams={rawParams} total={detail.total} totalPages={detail.totalPages} />
       </section>
-    </AppShell>
+    </>
   );
 }
 

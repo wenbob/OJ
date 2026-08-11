@@ -39,18 +39,13 @@ export function notifyBrowserIdentityUpdated(settings: BrowserIdentitySettings) 
   );
 }
 
-export function BrowserIdentity() {
+export function BrowserIdentity({
+  initialSettings,
+}: {
+  initialSettings: BrowserIdentitySettings;
+}) {
   useEffect(() => {
-    let active = true;
-
-    fetch("/api/settings/public", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((settings: BrowserIdentitySettings | null) => {
-        if (active && settings) applyBrowserIdentity(settings);
-      })
-      .catch(() => {
-        // Keep the static fallback metadata if public settings cannot be loaded.
-      });
+    applyBrowserIdentity(initialSettings);
 
     const handleUpdate = (event: Event) => {
       const settings = (event as CustomEvent<BrowserIdentitySettings>).detail;
@@ -58,10 +53,9 @@ export function BrowserIdentity() {
     };
     window.addEventListener(browserIdentityEvent, handleUpdate);
     return () => {
-      active = false;
       window.removeEventListener(browserIdentityEvent, handleUpdate);
     };
-  }, []);
+  }, [initialSettings]);
 
   return null;
 }

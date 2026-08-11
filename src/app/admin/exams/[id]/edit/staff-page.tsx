@@ -1,15 +1,12 @@
 // Shared server page for administrator and teacher shells.
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AppShell } from "@/components/AppShell";
 import { normalizeProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
 import { getOrderedProblemCategories } from "@/lib/problemOrdering";
 import {
   getExamAccessWhere,
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
@@ -50,10 +47,9 @@ export async function StaffEditExamPage({
   });
 
   if (!exam) notFound();
-  const categoryRows = await prisma.problem.findMany({
+  const categoryRows = await prisma.problem.groupBy({
+    by: ["category"],
     where: { archivedAt: null, problemType: exam.examType },
-    distinct: ["category"],
-    select: { category: true },
   });
   const categories = await getOrderedProblemCategories(
     prisma,
@@ -78,7 +74,7 @@ export async function StaffEditExamPage({
   };
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
@@ -96,7 +92,7 @@ export async function StaffEditExamPage({
         categories={categories}
         exam={clientExam}
       />
-    </AppShell>
+    </>
   );
 }
 

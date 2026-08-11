@@ -31,6 +31,7 @@ environment[process.platform === "win32" ? "Path" : "PATH"] =
 Object.assign(environment, {
   APP_ORIGIN: "http://127.0.0.1:3100",
   DATABASE_URL: e2eDatabaseUrl,
+  E2E_NAVIGATION_DELAY_MS: "400",
   JUDGE_COMPILE_TIMEOUT_MS: "5000",
   JUDGE_CONCURRENCY: "1",
   JUDGE_DOCKER_IMAGE: "oj-e2e-no-image",

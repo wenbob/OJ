@@ -1,24 +1,21 @@
 // Shared server page for administrator and teacher shells.
 import Link from "next/link";
 import { Trophy } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 import { LeaderboardTable } from "@/components/LeaderboardTable";
 import { getStudentRankings } from "@/lib/ranking";
 import {
   getStaffBasePath,
-  getStaffNav,
-  getStaffTitle,
   requireStaffPageUser,
   type StaffRole,
 } from "@/lib/staffAccess";
 
 export async function StaffLeaderboardPage({ role }: { role: StaffRole }) {
-  const user = await requireStaffPageUser(role);
+  await requireStaffPageUser(role);
   const basePath = getStaffBasePath(role);
   const rankings = await getStudentRankings();
 
   return (
-    <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
+    <>
       <section className="surface overflow-hidden">
         <div className="border-b border-ink-950/10 bg-ink-950 p-5 text-linen md:p-7">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -42,7 +39,7 @@ export async function StaffLeaderboardPage({ role }: { role: StaffRole }) {
         </div>
         <LeaderboardTable rankings={rankings} showAdminColumns />
       </section>
-    </AppShell>
+    </>
   );
 }
 
