@@ -52,6 +52,10 @@ describe("admin problem archiving", () => {
     mocks.prisma.learningAssignmentProblem.count.mockResolvedValue(0);
     mocks.prisma.examProblem.findFirst.mockResolvedValue(null);
     mocks.prisma.problem.updateMany.mockResolvedValue({ count: 1 });
+    mocks.prisma.$transaction.mockImplementation(
+      async (callback: (client: typeof mocks.prisma) => Promise<unknown>) =>
+        callback(mocks.prisma),
+    );
     mocks.prisma.problemCategoryOrder.findMany.mockResolvedValue([]);
     mocks.getPracticeSubmissionCountsByProblem.mockResolvedValue(new Map());
   });

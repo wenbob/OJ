@@ -46,34 +46,51 @@ function normalizeMarkdown(markdown: string) {
     .replace(/\r/g, "\n");
 }
 
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function parseSecondLevelSections(markdown: string) {
+  const sections = new Map<string, string>();
+  const lines = normalizeMarkdown(markdown).split("\n");
+  let heading: string | null = null;
+  let content: string[] = [];
+  let inFence = false;
+
+  const flush = () => {
+    if (heading !== null && !sections.has(heading)) {
+      sections.set(heading, content.join("\n").trim());
+    }
+    content = [];
+  };
+
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      if (heading !== null) content.push(line);
+      continue;
+    }
+    const match = !inFence ? /^##\s+(.+?)\s*$/.exec(line) : null;
+    if (match) {
+      flush();
+      heading = match[1].trim();
+      continue;
+    }
+    if (heading !== null) content.push(line);
+  }
+  flush();
+  return sections;
 }
 
-function getRequiredSection(markdown: string, heading: string, error: string) {
-  const pattern = new RegExp(`^##\\s+${escapeRegExp(heading)}\\s*$`, "m");
-  const match = markdown.match(pattern);
-  if (!match || match.index === undefined) {
-    throw new ProblemMarkdownError(error);
-  }
-
-  const start = match.index + match[0].length;
-  const rest = markdown.slice(start);
-  const nextHeadingIndex = rest.search(/^##\s+/m);
-  const section =
-    nextHeadingIndex >= 0 ? rest.slice(0, nextHeadingIndex) : rest;
-
-  const value = section.trim();
+function getRequiredSection(
+  sections: Map<string, string>,
+  heading: string,
+  error: string,
+) {
+  const value = sections.get(heading)?.trim() ?? "";
   if (!value) throw new ProblemMarkdownError(error);
   return value;
 }
 
-function getOptionalSection(markdown: string, heading: string) {
-  try {
-    return getRequiredSection(markdown, heading, "");
-  } catch {
-    return undefined;
-  }
+function getOptionalSection(sections: Map<string, string>, heading: string) {
+  const value = sections.get(heading)?.trim();
+  return value || undefined;
 }
 
 function normalizeFenceContent(content: string) {
@@ -94,9 +111,12 @@ function findUnclosedFenceLine(markdown: string) {
 
 function parseSamples(sampleSection: string) {
   const blockPattern =
-    /^###\s*(输入样例|输出样例)\s*(\d+)?\s*\n+[ \t]*```[^\n]*\n([\s\S]*?)^[ \t]*```[ \t]*$/gm;
-  const inputs: string[] = [];
-  const outputs: string[] = [];
+    /^###\s*(输入样例|输出样例)\s*#?\s*(\d+)?\s*\n+[ \t]*```[^\n]*\n([\s\S]*?)^[ \t]*```[ \t]*$/gm;
+  const blocks: Array<{
+    content: string;
+    kind: "输入样例" | "输出样例";
+    number: number | null;
+  }> = [];
   let match: RegExpExecArray | null;
 
   while ((match = blockPattern.exec(sampleSection)) !== null) {
@@ -106,31 +126,69 @@ function parseSamples(sampleSection: string) {
       throw new ProblemMarkdownError("样例代码块内容为空");
     }
 
-    if (kind === "输入样例") {
-      inputs.push(content);
-    } else {
-      outputs.push(content);
+    blocks.push({
+      content,
+      kind: kind as "输入样例" | "输出样例",
+      number: match[2] ? Number(match[2]) : null,
+    });
+  }
+
+  if (blocks.length === 0) {
+    throw new ProblemMarkdownError("缺少样例");
+  }
+  const hasNumbered = blocks.some((block) => block.number !== null);
+  const hasUnnumbered = blocks.some((block) => block.number === null);
+  if (hasNumbered && hasUnnumbered) {
+    throw new ProblemMarkdownError("样例编号必须全部填写或全部省略");
+  }
+
+  const samples: Array<{ input: string; output: string }> = [];
+  if (hasNumbered) {
+    const pairs = new Map<
+      number,
+      { input?: string; output?: string }
+    >();
+    for (const block of blocks) {
+      const number = block.number!;
+      if (number <= 0) {
+        throw new ProblemMarkdownError("样例编号必须是正整数");
+      }
+      const pair = pairs.get(number) ?? {};
+      const key = block.kind === "输入样例" ? "input" : "output";
+      if (pair[key] !== undefined) {
+        throw new ProblemMarkdownError(`样例 ${number} 的${key === "input" ? "输入" : "输出"}重复`);
+      }
+      pair[key] = block.content;
+      pairs.set(number, pair);
+    }
+    const numbers = [...pairs.keys()].sort((left, right) => left - right);
+    if (numbers.some((number, index) => number !== index + 1)) {
+      throw new ProblemMarkdownError("样例编号必须从 1 连续递增");
+    }
+    for (const number of numbers) {
+      const pair = pairs.get(number)!;
+      if (pair.input === undefined || pair.output === undefined) {
+        throw new ProblemMarkdownError("样例输入和样例输出数量不匹配");
+      }
+      samples.push({ input: pair.input, output: pair.output });
+    }
+  } else {
+    for (let index = 0; index < blocks.length; index += 2) {
+      const input = blocks[index];
+      const output = blocks[index + 1];
+      if (input?.kind !== "输入样例" || output?.kind !== "输出样例") {
+        throw new ProblemMarkdownError("样例输入和样例输出数量不匹配");
+      }
+      samples.push({ input: input.content, output: output.content });
     }
   }
 
-  if (inputs.length === 0 && outputs.length === 0) {
-    throw new ProblemMarkdownError("缺少样例");
-  }
-
-  if (inputs.length !== outputs.length) {
-    throw new ProblemMarkdownError("样例输入和样例输出数量不匹配");
-  }
-
-  if (inputs.length < 2) {
+  if (samples.length < 2) {
     throw new ProblemMarkdownError(
-      `至少需要两组样例，当前只有 ${inputs.length} 组`,
+      `至少需要两组样例，当前只有 ${samples.length} 组`,
     );
   }
-
-  return inputs.map((input, index) => ({
-    input,
-    output: outputs[index],
-  }));
+  return samples;
 }
 
 function normalizeProblemTypeLabel(value?: string): ProblemType {
@@ -282,6 +340,7 @@ function parseSingleProblemBlock(
   options: ParseProblemsOptions,
 ): ParsedProblemMarkdown {
   const normalized = normalizeMarkdown(markdown);
+  const sections = parseSecondLevelSections(normalized);
   const titleMatch = normalized.match(/^#\s+(.+?)\s*$/m);
   const title = titleMatch?.[1]?.trim();
 
@@ -290,41 +349,41 @@ function parseSingleProblemBlock(
   }
 
   const difficulty =
-    cleanText(getOptionalSection(normalized, "难度")) ??
+    cleanText(getOptionalSection(sections, "难度")) ??
     cleanText(options.defaultDifficulty);
   if (!difficulty) {
     throw new ProblemMarkdownError("缺少难度");
   }
 
   const category =
-    cleanText(getOptionalSection(normalized, "分类")) ??
+    cleanText(getOptionalSection(sections, "分类")) ??
     cleanText(options.defaultCategory);
   if (!category) {
     throw new ProblemMarkdownError("缺少分类");
   }
 
-  const declaredProblemType = cleanText(getOptionalSection(normalized, "题型"));
+  const declaredProblemType = cleanText(getOptionalSection(sections, "题型"));
   const problemType = declaredProblemType
     ? normalizeProblemTypeLabel(declaredProblemType)
-    : getOptionalSection(normalized, "客观题")
+    : getOptionalSection(sections, "客观题")
       ? "objective"
       : "programming";
 
   const description = getRequiredSection(
-    normalized,
+    sections,
     "题目描述",
     "缺少题目描述",
   );
 
   if (problemType === "objective") {
     const objectiveSection = getRequiredSection(
-      normalized,
+      sections,
       "客观题",
       "缺少客观题",
     );
     const objectiveItems = parseObjectiveItems(objectiveSection);
     const dataRange =
-      cleanText(getOptionalSection(normalized, "数据范围")) ?? "选择判断题";
+      cleanText(getOptionalSection(sections, "数据范围")) ?? "选择判断题";
 
     return {
       title,
@@ -341,18 +400,18 @@ function parseSingleProblemBlock(
   }
 
   const inputDescription = getRequiredSection(
-    normalized,
+    sections,
     "输入格式",
     "缺少输入格式",
   );
   const outputDescription = getRequiredSection(
-    normalized,
+    sections,
     "输出格式",
     "缺少输出格式",
   );
-  const sampleSection = getRequiredSection(normalized, "样例", "缺少样例");
+  const sampleSection = getRequiredSection(sections, "样例", "缺少样例");
   const samples = parseSamples(sampleSection);
-  const dataRange = getRequiredSection(normalized, "数据范围", "缺少数据范围");
+  const dataRange = getRequiredSection(sections, "数据范围", "缺少数据范围");
 
   return {
     title,

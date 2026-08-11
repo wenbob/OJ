@@ -1,8 +1,7 @@
 // Shared server page for administrator and teacher shells.
 import { AppShell } from "@/components/AppShell";
-import { prisma } from "@/lib/prisma";
-import { getStudentRankings } from "@/lib/ranking";
 import { boolSetting, getSetting } from "@/lib/settings";
+import { getStaffUserPage } from "@/lib/staffUserDirectory";
 import {
   getStaffNav,
   getStaffTitle,
@@ -13,46 +12,17 @@ import { UserManager } from "./user-manager";
 
 export async function StaffUsersPage({ role }: { role: StaffRole }) {
   const user = await requireStaffPageUser(role);
-  const [users, rankings, objectiveMaster, objectiveStudent] = await Promise.all([
-    prisma.user.findMany({
-      where: role === "teacher" ? { role: "student" } : undefined,
-      select: {
-        id: true,
-        username: true,
-        role: true,
-        createdAt: true,
-        studentProfile: {
-          select: {
-            aiAccessEnabled: true,
-            customTitle: true,
-            objectiveAiAccessEnabled: true,
-          },
-        },
-        _count: { select: { submissions: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-    getStudentRankings(),
+  const [directory, objectiveMaster, objectiveStudent] = await Promise.all([
+    getStaffUserPage({ viewerRole: role }),
     getSetting("aiObjectiveExplanationEnabled"),
     getSetting("aiStudentObjectiveExplanationEnabled"),
   ]);
-  const rankingByUserId = new Map(rankings.map((item) => [item.userId, item]));
 
   return (
     <AppShell nav={getStaffNav(role)} title={getStaffTitle(role)} user={user}>
       <UserManager
-        initialUsers={users.map((item) => ({
-          id: item.id,
-          username: item.username,
-          role: item.role,
-          createdAt: item.createdAt.toISOString(),
-          aiAccessEnabled: item.studentProfile?.aiAccessEnabled ?? false,
-          objectiveAiAccessEnabled:
-            item.studentProfile?.objectiveAiAccessEnabled ?? false,
-          customTitle: item.studentProfile?.customTitle ?? "",
-          ranking: rankingByUserId.get(item.id) ?? null,
-          submissions: item._count.submissions,
-        }))}
+        initialPagination={directory}
+        initialUsers={directory.users}
         initialStudentObjectiveAiGloballyEnabled={
           boolSetting(objectiveMaster) && boolSetting(objectiveStudent)
         }

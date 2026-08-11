@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { ParsedProblemMarkdown } from "./markdownParser";
+import { getJudgeCasePayloadError } from "./judgeCaseLimits";
 import {
   isProblemType,
   stringifyObjectiveItems,
@@ -74,6 +75,9 @@ export function validateParsedProblems(
         `${prefix}至少需要两组样例，当前只有 ${problem.samples.length} 组`,
       );
     }
+
+    const casePayloadError = getJudgeCasePayloadError(problem.samples);
+    if (casePayloadError) errors.push(`${prefix}${casePayloadError}`);
 
     problem.samples.forEach((sample, sampleIndex) => {
       if (!sample.input?.trim() || !sample.output?.trim()) {

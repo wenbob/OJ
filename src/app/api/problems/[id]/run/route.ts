@@ -10,6 +10,7 @@ import {
 import {
   enqueueJudgeTask,
   JudgeQueueFullError,
+  JudgeQueueOwnerLimitError,
   JudgeQueueTimeoutError,
 } from "@/lib/judgeQueue";
 import { normalizeProblemType } from "@/lib/objectiveProblem";
@@ -259,7 +260,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
           timeLimitMs: judgeDefaults.timeLimitMs,
         });
       },
-      { priority: "trial" },
+      { ownerKey: `user:${auth.user.id}`, priority: "trial" },
     );
 
     return NextResponse.json({
@@ -267,6 +268,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       run,
     });
   } catch (error) {
+    if (error instanceof JudgeQueueOwnerLimitError) {
+      return NextResponse.json(
+        { error: error.message, retryAfterSeconds: 1 },
+        { headers: { "Retry-After": "1" }, status: 429 },
+      );
+    }
     const message =
       error instanceof JudgeQueueFullError ||
       error instanceof JudgeQueueTimeoutError

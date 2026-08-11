@@ -70,16 +70,41 @@ describe("teacher learning submission queries", () => {
     });
   });
 
-  it("keeps the full-history query only for the all window", async () => {
-    mocks.prisma.submission.findMany.mockResolvedValue([]);
+  it("aggregates full history in SQLite instead of loading every submission", async () => {
+    mocks.prisma.$queryRaw
+      .mockResolvedValueOnce([
+        {
+          acceptedEver: 1,
+          failedAfterLastAccepted: 2,
+          latestStatus: "Wrong Answer",
+          latestSubmissionAt: new Date("2026-07-15T00:00:00.000Z"),
+          latestSubmissionId: 20,
+          problemId: 12,
+          userId: 7,
+          windowFailedCount: 4,
+        },
+      ])
+      .mockResolvedValueOnce([
+        { count: 1, status: "Accepted", userId: 7 },
+        { count: 4, status: "Wrong Answer", userId: 7 },
+      ]);
 
-    await getTeacherLearningDashboard("all");
+    const dashboard = await getTeacherLearningDashboard("all");
 
-    expect(mocks.prisma.submission.findMany).toHaveBeenCalledWith(
+    expect(mocks.prisma.submission.findMany).not.toHaveBeenCalled();
+    expect(mocks.prisma.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(dashboard.rows[0]?.analytics.summary).toMatchObject({
+      acceptedProblemCount: 1,
+      failedSubmissionCount: 4,
+      submissionCount: 5,
+    });
+    expect(mocks.prisma.learningAssignment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.not.objectContaining({ createdAt: expect.anything() }),
+        where: {
+          problems: { some: { completedAt: null } },
+          status: "active",
+        },
       }),
     );
-    expect(mocks.prisma.$queryRaw).not.toHaveBeenCalled();
   });
 });

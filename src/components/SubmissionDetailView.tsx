@@ -210,23 +210,23 @@ export function SubmissionDetailView({
                   </summary>
                   <div className="grid gap-4 border-t border-ink-950/10 p-4 xl:grid-cols-3">
                     {caseResult.studentDetailsHidden ? (
-                      <div className="border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800 xl:col-span-2">
-                        隐藏测试点的输入和标准输出不对学生公开。
+                      <div className="border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800 xl:col-span-3">
+                        正式提交的测试输入、标准输出、程序输出和详细运行错误不对学生公开；请使用公开样例或自定义输入调试。
                       </div>
                     ) : (
-                      <CaseBlock title="输入" value={caseResult.input} />
+                      <>
+                        <CaseBlock title="输入" value={caseResult.input} />
+                        <CaseBlock
+                          title="你的输出"
+                          value={caseResult.actualOutput ?? "（无输出）"}
+                        />
+                        <CaseBlock
+                          title="标准输出"
+                          value={caseResult.expectedOutput}
+                        />
+                      </>
                     )}
-                    <CaseBlock
-                      title="你的输出"
-                      value={caseResult.actualOutput ?? "（无输出）"}
-                    />
-                    {!caseResult.studentDetailsHidden ? (
-                      <CaseBlock
-                        title="标准输出"
-                        value={caseResult.expectedOutput}
-                      />
-                    ) : null}
-                    {caseResult.errorMessage ? (
+                    {!caseResult.studentDetailsHidden && caseResult.errorMessage ? (
                       <div className="xl:col-span-3">
                         <CaseBlock
                           title="错误信息"

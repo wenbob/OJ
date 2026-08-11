@@ -28,9 +28,11 @@ import {
 
 export function SettingsForm({
   initialAiProviderStatuses,
+  initialRevision,
   initialSettings,
 }: {
   initialAiProviderStatuses: AiProviderAdminStatuses;
+  initialRevision: string;
   initialSettings: SystemSettings;
 }) {
   const [settings, setSettings] = useState(initialSettings);
@@ -40,6 +42,7 @@ export function SettingsForm({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [revision, setRevision] = useState(initialRevision);
 
   function update(key: keyof SystemSettings, value: string) {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -150,7 +153,7 @@ export function SettingsForm({
       const response = await fetch("/api/admin/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        body: JSON.stringify({ revision, settings }),
       });
       const data = await response.json().catch(() => ({}));
 
@@ -161,6 +164,7 @@ export function SettingsForm({
 
       const savedSettings = (data.settings ?? settings) as SystemSettings;
       setSettings(savedSettings);
+      if (typeof data.revision === "string") setRevision(data.revision);
       if (data.aiProviderStatuses) {
         setAiProviderStatuses(
           data.aiProviderStatuses as AiProviderAdminStatuses,

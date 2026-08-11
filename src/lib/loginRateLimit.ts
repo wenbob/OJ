@@ -4,6 +4,9 @@ const LOGIN_FAILURE_WINDOW_MS = 5 * 60 * 1000;
 const LOGIN_BLOCK_MS = 10 * 60 * 1000;
 const LOGIN_BUCKET_IDLE_TTL_MS = 20 * 60 * 1000;
 const DEFAULT_MAX_BUCKETS = 10_000;
+const DEFAULT_MAX_GLOBAL_VERIFICATIONS = 16;
+const DEFAULT_MAX_IP_VERIFICATIONS = 4;
+const DEFAULT_MAX_ACCOUNT_VERIFICATIONS = 1;
 
 type LoginFailureBucket = {
   blockedUntil: number;
@@ -12,6 +15,30 @@ type LoginFailureBucket = {
 };
 
 const buckets = new Map<string, LoginFailureBucket>();
+const activeVerificationsByAccount = new Map<string, number>();
+const activeVerificationsByIp = new Map<string, number>();
+let activeVerificationCount = 0;
+
+function readBoundedPositiveInt(
+  value: string | undefined,
+  fallback: number,
+  maximum: number,
+) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0
+    ? Math.min(parsed, maximum)
+    : fallback;
+}
+
+function incrementCounter(map: Map<string, number>, key: string) {
+  map.set(key, (map.get(key) ?? 0) + 1);
+}
+
+function decrementCounter(map: Map<string, number>, key: string) {
+  const next = (map.get(key) ?? 0) - 1;
+  if (next > 0) map.set(key, next);
+  else map.delete(key);
+}
 
 function readMaxBuckets() {
   const parsed = Number(process.env.LOGIN_RATE_LIMIT_MAX_BUCKETS);
@@ -110,6 +137,57 @@ export function clearLoginFailures(key: string) {
 
 export function clearAllLoginFailures() {
   buckets.clear();
+}
+
+export function reserveLoginVerification(accountKey: string, ipKey: string) {
+  const maxGlobal = readBoundedPositiveInt(
+    process.env.LOGIN_MAX_IN_FLIGHT_GLOBAL,
+    DEFAULT_MAX_GLOBAL_VERIFICATIONS,
+    256,
+  );
+  const maxPerIp = readBoundedPositiveInt(
+    process.env.LOGIN_MAX_IN_FLIGHT_PER_IP,
+    DEFAULT_MAX_IP_VERIFICATIONS,
+    64,
+  );
+  const maxPerAccount = readBoundedPositiveInt(
+    process.env.LOGIN_MAX_IN_FLIGHT_PER_ACCOUNT,
+    DEFAULT_MAX_ACCOUNT_VERIFICATIONS,
+    16,
+  );
+  if (
+    activeVerificationCount >= maxGlobal ||
+    (activeVerificationsByIp.get(ipKey) ?? 0) >= maxPerIp ||
+    (activeVerificationsByAccount.get(accountKey) ?? 0) >= maxPerAccount
+  ) {
+    return {
+      allowed: false as const,
+      release() {},
+      retryAfterSeconds: 1,
+    };
+  }
+
+  activeVerificationCount += 1;
+  incrementCounter(activeVerificationsByIp, ipKey);
+  incrementCounter(activeVerificationsByAccount, accountKey);
+  let released = false;
+  return {
+    allowed: true as const,
+    release() {
+      if (released) return;
+      released = true;
+      activeVerificationCount -= 1;
+      decrementCounter(activeVerificationsByIp, ipKey);
+      decrementCounter(activeVerificationsByAccount, accountKey);
+    },
+    retryAfterSeconds: 0,
+  };
+}
+
+export function clearAllLoginVerificationReservations() {
+  activeVerificationsByAccount.clear();
+  activeVerificationsByIp.clear();
+  activeVerificationCount = 0;
 }
 
 export function getLoginRateLimitBucketCount() {

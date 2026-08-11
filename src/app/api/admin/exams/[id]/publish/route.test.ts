@@ -48,7 +48,26 @@ describe("exam publishing snapshots", () => {
   it("writes snapshots before changing the exam status", async () => {
     const tx = {
       exam: {
-        update: vi.fn().mockResolvedValue({ id: 3, status: "published" }),
+        findFirst: vi.fn().mockResolvedValue({
+          durationMin: 60,
+          examType: "programming",
+          problems: [
+            {
+              id: 8,
+              score: 100,
+              problem: {
+                archivedAt: null,
+                objectiveItems: null,
+                problemType: "programming",
+                title: "A+B",
+              },
+            },
+          ],
+          status: "draft",
+          title: "正式考试",
+        }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 3, status: "published" }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       examProblem: {
         findMany: vi.fn().mockResolvedValue([
@@ -86,20 +105,29 @@ describe("exam publishing snapshots", () => {
         }),
       }),
     );
-    expect(tx.exam.update).toHaveBeenCalledWith({
+    expect(tx.exam.updateMany).toHaveBeenCalledWith({
       data: { status: "published" },
-      where: { id: 3 },
+      where: { id: 3, status: "draft" },
     });
   });
 
   it("does not republish an ended exam", async () => {
-    mocks.prisma.exam.findFirst.mockResolvedValueOnce({
-      durationMin: 60,
-      examType: "programming",
-      problems: [],
-      status: "ended",
-      title: "已经结束的考试",
-    });
+    const tx = {
+      exam: {
+        findFirst: vi.fn().mockResolvedValue({
+          durationMin: 60,
+          examType: "programming",
+          problems: [],
+          status: "ended",
+          title: "已经结束的考试",
+        }),
+        updateMany: vi.fn(),
+      },
+      examProblem: { findMany: vi.fn(), update: vi.fn() },
+    };
+    mocks.prisma.$transaction.mockImplementationOnce(
+      async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+    );
 
     const response = await POST(
       new NextRequest("http://oj.local/api/admin/exams/3/publish", {
@@ -109,6 +137,6 @@ describe("exam publishing snapshots", () => {
     );
 
     expect(response.status).toBe(409);
-    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.exam.updateMany).not.toHaveBeenCalled();
   });
 });

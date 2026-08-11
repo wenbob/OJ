@@ -7,6 +7,7 @@ import {
   loginRateLimitKey,
   recordFailedLogin,
   recordFailedLoginForIp,
+  reserveLoginVerification,
 } from "@/lib/loginRateLimit";
 import { verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
@@ -70,8 +71,31 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const user = await prisma.user.findUnique({ where: { username } });
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+  const reservation = reserveLoginVerification(rateLimitKey, ipRateLimitKey);
+  if (!reservation.allowed) {
+    return NextResponse.json(
+      {
+        error: "登录验证正在处理中，请稍后再试",
+        retryAfterSeconds: reservation.retryAfterSeconds,
+      },
+      {
+        headers: { "Retry-After": String(reservation.retryAfterSeconds) },
+        status: 429,
+      },
+    );
+  }
+
+  let user;
+  let passwordMatches = false;
+  try {
+    user = await prisma.user.findUnique({ where: { username } });
+    passwordMatches = Boolean(
+      user && (await verifyPassword(password, user.passwordHash)),
+    );
+  } finally {
+    reservation.release();
+  }
+  if (!user || !passwordMatches) {
     recordFailedLogin(rateLimitKey);
     recordFailedLoginForIp(ipRateLimitKey);
     return NextResponse.json({ error: "用户名或密码错误" }, { status: 401 });

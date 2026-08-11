@@ -18,6 +18,7 @@ import {
   isTitleProblemListSort,
   normalizeProblemListSort,
   orderProblemsByIds,
+  TITLE_SORT_PREVIEW_LIMIT,
 } from "@/lib/problemOrdering";
 import { getPracticeSubmissionCountsByProblem } from "@/lib/problemSubmissionCounts";
 import { ProblemManager } from "./problem-manager";
@@ -66,13 +67,27 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
     prisma.problem.findMany({
       where: { archivedAt: null, problemType },
       select: { category: true },
+      distinct: ["category"],
     }),
     isTitleProblemListSort(listSort)
-      ? prisma.problem.findMany({ where, select: { id: true, title: true } })
+      ? prisma.problem.findMany({
+          where,
+          select: { id: true, title: true },
+          take: TITLE_SORT_PREVIEW_LIMIT + 1,
+        })
       : Promise.resolve([]),
   ]);
   const problems = await (async () => {
     if (isTitleProblemListSort(listSort)) {
+      if (titleRows.length > TITLE_SORT_PREVIEW_LIMIT) {
+        return prisma.problem.findMany({
+          where,
+          select: adminProblemSummarySelect,
+          orderBy: getProblemOrderBy(listSort),
+          skip,
+          take: pageSize,
+        });
+      }
       const orderedIds = getTitleSortedProblemPageIds(
         titleRows,
         listSort,

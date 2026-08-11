@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import {
   applyAiProviderStatusesToSettings,
   getEffectiveAiProviderConfig,
@@ -10,9 +9,13 @@ import {
 import {
   getAllSystemSettings,
   normalizeSystemSettingsPayload,
-  systemSettingsEntries,
   validateSystemSettings,
 } from "@/lib/settings";
+import {
+  getSystemSettingsRevision,
+  saveSystemSettingsWithRevision,
+  StaleSystemSettingsError,
+} from "@/lib/systemSettingsRevision";
 import {
   PayloadTooLargeError,
   REQUEST_LIMITS,
@@ -24,8 +27,9 @@ export async function GET(request: NextRequest) {
   const auth = await requireApiUser(request, "admin");
   if (auth.response) return auth.response;
 
-  const [settings, programmingConfig, objectiveConfig] = await Promise.all([
+  const [settings, revision, programmingConfig, objectiveConfig] = await Promise.all([
     getAllSystemSettings(),
+    getSystemSettingsRevision(),
     getEffectiveAiProviderConfig("programming"),
     getEffectiveAiProviderConfig("objective"),
   ]);
@@ -36,6 +40,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     aiProviderStatus: aiProviderStatuses.programming,
     aiProviderStatuses,
+    revision,
     settings: applyAiProviderStatusesToSettings(settings, aiProviderStatuses),
   });
 }
@@ -54,7 +59,18 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "请求格式不合法" }, { status: 400 });
   }
 
-  const normalizedSettings = normalizeSystemSettingsPayload(body);
+  const record =
+    typeof body === "object" && body ? (body as Record<string, unknown>) : {};
+  const expectedRevision =
+    typeof record.revision === "string" ? record.revision.trim() : "";
+  if (!expectedRevision || expectedRevision.length > 128 || !record.settings) {
+    return NextResponse.json(
+      { error: "系统设置页面已过期，请刷新后再保存" },
+      { status: 409 },
+    );
+  }
+
+  const normalizedSettings = normalizeSystemSettingsPayload(record.settings);
   const error = validateSystemSettings(normalizedSettings);
   if (error) return NextResponse.json({ error }, { status: 400 });
 
@@ -79,15 +95,25 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  await prisma.$transaction(
-    systemSettingsEntries(settings).map((item) =>
-      prisma.systemSetting.upsert({
-        where: { key: item.key },
-        update: { value: item.value },
-        create: item,
-      }),
-    ),
-  );
+  let revision;
+  try {
+    revision = await saveSystemSettingsWithRevision({
+      expectedRevision,
+      settings,
+    });
+  } catch (saveError) {
+    if (saveError instanceof StaleSystemSettingsError) {
+      return NextResponse.json(
+        { error: saveError.message },
+        { status: 409 },
+      );
+    }
+    console.error("[SYSTEM_SETTINGS_SAVE_ERROR]", {
+      message: saveError instanceof Error ? saveError.message : "unknown",
+      userId: auth.user.id,
+    });
+    return NextResponse.json({ error: "保存设置失败" }, { status: 500 });
+  }
 
   const [programmingConfig, objectiveConfig] = await Promise.all([
     getEffectiveAiProviderConfig("programming"),
@@ -100,6 +126,7 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json({
     aiProviderStatus: aiProviderStatuses.programming,
     aiProviderStatuses,
+    revision,
     settings: applyAiProviderStatusesToSettings(settings, aiProviderStatuses),
   });
 }

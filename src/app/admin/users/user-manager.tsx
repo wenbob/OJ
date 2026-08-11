@@ -28,7 +28,6 @@ type UserItem = {
     acceptedSubmissionCount: number;
     displayTitle: string;
     points: number;
-    rank: number;
     tierTitle: string;
   } | null;
   username: string;
@@ -53,6 +52,13 @@ const blankForm = {
   role: "student",
 };
 
+type PaginationState = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 function createBlankForm(viewerRole: StaffRole) {
   return {
     ...blankForm,
@@ -62,14 +68,17 @@ function createBlankForm(viewerRole: StaffRole) {
 
 export function UserManager({
   initialUsers,
+  initialPagination,
   initialStudentObjectiveAiGloballyEnabled,
   viewerRole,
 }: {
   initialUsers: UserItem[];
+  initialPagination: PaginationState;
   initialStudentObjectiveAiGloballyEnabled: boolean;
   viewerRole: StaffRole;
 }) {
   const [users, setUsers] = useState(initialUsers);
+  const [pagination, setPagination] = useState(initialPagination);
   const [form, setForm] = useState(() => createBlankForm(viewerRole));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -78,6 +87,7 @@ export function UserManager({
   const [rowPendingId, setRowPendingId] = useState<number | null>(null);
   const [bulkPending, setBulkPending] = useState(false);
   const [query, setQuery] = useState("");
+  const [listPending, setListPending] = useState(false);
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<number>>(
     () => new Set(),
   );
@@ -87,13 +97,9 @@ export function UserManager({
   const [stickyTop, setStickyTop] = useState(16);
   const formPanelRef = useRef<HTMLFormElement>(null);
   const usernameInputRef = useRef<HTMLInputElement>(null);
-  const visibleUsers = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase("zh-CN");
-    if (!normalized) return users;
-    return users.filter((user) =>
-      user.username.toLocaleLowerCase("zh-CN").includes(normalized),
-    );
-  }, [query, users]);
+  const listRequestIdRef = useRef(0);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const visibleUsers = users;
   const visibleStudentIds = useMemo(
     () => visibleUsers.filter((user) => user.role === "student").map((user) => user.id),
     [visibleUsers],
@@ -134,27 +140,64 @@ export function UserManager({
     };
   }, []);
 
-  async function reload() {
-    const response = await fetch("/api/admin/users");
-    const data = await response.json();
-    if (response.ok) {
-      setUsers(
-        data.users.map((item: UserItem) => ({
-          ...item,
-          aiAccessEnabled:
-            item.aiAccessEnabled ?? item.studentProfile?.aiAccessEnabled ?? false,
-          objectiveAiAccessEnabled:
-            item.objectiveAiAccessEnabled ??
-            item.studentProfile?.objectiveAiAccessEnabled ??
-            false,
-          customTitle: item.customTitle ?? item.studentProfile?.customTitle ?? "",
-          submissions: item.submissions ?? item._count?.submissions ?? 0,
-        })),
-      );
-      setStudentObjectiveAiGloballyEnabled(
-        data.studentObjectiveAiGloballyEnabled === true,
-      );
+  useEffect(
+    () => () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    },
+    [],
+  );
+
+  async function reload({
+    page = pagination.page,
+    queryValue = query,
+  }: { page?: number; queryValue?: string } = {}) {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pagination.pageSize),
+    });
+    if (queryValue.trim()) params.set("q", queryValue.trim());
+    const requestId = ++listRequestIdRef.current;
+    setListPending(true);
+    try {
+      const response = await fetch(`/api/admin/users?${params.toString()}`);
+      const data = await response.json();
+      if (response.ok && requestId === listRequestIdRef.current) {
+        setUsers(
+          data.users.map((item: UserItem) => ({
+            ...item,
+            aiAccessEnabled:
+              item.aiAccessEnabled ?? item.studentProfile?.aiAccessEnabled ?? false,
+            objectiveAiAccessEnabled:
+              item.objectiveAiAccessEnabled ??
+              item.studentProfile?.objectiveAiAccessEnabled ??
+              false,
+            customTitle:
+              item.customTitle ?? item.studentProfile?.customTitle ?? "",
+            submissions: item.submissions ?? item._count?.submissions ?? 0,
+          })),
+        );
+        setPagination({
+          page: data.page,
+          pageSize: data.pageSize,
+          total: data.total,
+          totalPages: data.totalPages,
+        });
+        setSelectedStudentIds(new Set());
+        setStudentObjectiveAiGloballyEnabled(
+          data.studentObjectiveAiGloballyEnabled === true,
+        );
+      }
+    } finally {
+      if (requestId === listRequestIdRef.current) setListPending(false);
     }
+  }
+
+  function updateSearch(nextQuery: string) {
+    setQuery(nextQuery);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      void reload({ page: 1, queryValue: nextQuery });
+    }, 300);
   }
 
   function editUser(user: UserItem) {
@@ -201,6 +244,14 @@ export function UserManager({
       form.password.length < 8
     ) {
       setError("密码至少需要 8 位");
+      return;
+    }
+    if (
+      viewerRole === "admin" &&
+      form.password &&
+      new TextEncoder().encode(form.password).byteLength > 72
+    ) {
+      setError("密码的 UTF-8 编码不能超过 72 字节");
       return;
     }
     if (
@@ -410,7 +461,7 @@ export function UserManager({
               />
               <input
                 className="field w-full pl-10"
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => updateSearch(event.target.value)}
                 placeholder="搜索学生用户名"
                 value={query}
               />
@@ -423,7 +474,7 @@ export function UserManager({
                   onChange={toggleVisibleStudents}
                   type="checkbox"
                 />
-                全选当前搜索结果
+                全选当前页
               </label>
               <span className="text-ink-500">
                 已选 {selectedStudentIds.size} 名学生
@@ -628,6 +679,30 @@ export function UserManager({
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink-950/10 px-5 py-4 text-sm font-bold">
+          <span className="text-ink-600">
+            共 {pagination.total} 个账号 · 第 {pagination.page}/{pagination.totalPages} 页
+            {listPending ? " · 正在加载" : ""}
+          </span>
+          <div className="flex gap-2">
+            <button
+              className="btn btn-secondary px-3 py-2"
+              disabled={listPending || pagination.page <= 1}
+              onClick={() => void reload({ page: pagination.page - 1 })}
+              type="button"
+            >
+              上一页
+            </button>
+            <button
+              className="btn btn-secondary px-3 py-2"
+              disabled={listPending || pagination.page >= pagination.totalPages}
+              onClick={() => void reload({ page: pagination.page + 1 })}
+              type="button"
+            >
+              下一页
+            </button>
+          </div>
         </div>
       </section>
 

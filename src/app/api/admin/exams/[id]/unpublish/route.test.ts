@@ -30,7 +30,17 @@ describe("exam unpublish integrity", () => {
   });
 
   it("does not clear snapshots after any student exam record exists", async () => {
-    mocks.prisma.examRecord.count.mockResolvedValue(1);
+    const tx = {
+      exam: {
+        findFirst: vi.fn().mockResolvedValue({ id: 3, status: "published" }),
+        updateMany: vi.fn(),
+      },
+      examProblem: { updateMany: vi.fn() },
+      examRecord: { count: vi.fn().mockResolvedValue(1) },
+    };
+    mocks.prisma.$transaction.mockImplementationOnce(
+      async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+    );
 
     const response = await POST(
       new NextRequest("http://oj.local/api/admin/exams/3/unpublish", {
@@ -42,6 +52,6 @@ describe("exam unpublish integrity", () => {
 
     expect(response.status).toBe(409);
     expect(body.error).toContain("已有学生考试记录");
-    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.examProblem.updateMany).not.toHaveBeenCalled();
   });
 });

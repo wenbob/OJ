@@ -88,7 +88,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(async () => null),
     },
     examRecord: {
-      findFirst: vi.fn(async () => null),
+      findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => null),
     },
     studentProfile: {
@@ -575,9 +575,12 @@ describe("POST /api/ai/problem-assist", () => {
   it("requires the current exam AI switch and an in-progress exam record", async () => {
     vi.mocked(prisma.exam.findUnique).mockResolvedValueOnce({
       aiEnabled: false,
+      durationMin: 60,
       problems: [{ id: 1 }],
+      status: "published",
     } as never);
     vi.mocked(prisma.examRecord.findUnique).mockResolvedValueOnce({
+      startedAt: new Date(),
       status: "in_progress",
     } as never);
 
@@ -590,14 +593,19 @@ describe("POST /api/ai/problem-assist", () => {
   });
 
   it("derives a disabled active exam even when the client omits examId", async () => {
-    vi.mocked(prisma.examRecord.findFirst).mockResolvedValueOnce({
-      examId: 5,
-      exam: {
-        aiEnabled: false,
-        status: "published",
-        title: "期中考试",
+    vi.mocked(prisma.examRecord.findMany).mockResolvedValueOnce([
+      {
+        examId: 5,
+        startedAt: new Date(),
+        exam: {
+          aiEnabled: false,
+          durationMin: 60,
+          problems: [{ id: 1 }],
+          status: "published",
+          title: "期中考试",
+        },
       },
-    } as never);
+    ] as never);
 
     const response = await POST(
       request({ problemId: 10, mode: "overview" }) as never,
@@ -611,14 +619,19 @@ describe("POST /api/ai/problem-assist", () => {
   });
 
   it("rejects a client examId that conflicts with the active exam", async () => {
-    vi.mocked(prisma.examRecord.findFirst).mockResolvedValueOnce({
-      examId: 6,
-      exam: {
-        aiEnabled: true,
-        status: "published",
-        title: "正在进行的考试",
+    vi.mocked(prisma.examRecord.findMany).mockResolvedValueOnce([
+      {
+        examId: 6,
+        startedAt: new Date(),
+        exam: {
+          aiEnabled: true,
+          durationMin: 60,
+          problems: [{ id: 1 }],
+          status: "published",
+          title: "正在进行的考试",
+        },
       },
-    } as never);
+    ] as never);
 
     const response = await POST(
       request({ examId: 5, problemId: 10, mode: "overview" }) as never,
@@ -631,16 +644,19 @@ describe("POST /api/ai/problem-assist", () => {
   });
 
   it("rejects an active exam record after its server-side deadline", async () => {
-    vi.mocked(prisma.examRecord.findFirst).mockResolvedValueOnce({
-      examId: 6,
-      startedAt: new Date("2026-08-01T00:00:00.000Z"),
-      exam: {
-        aiEnabled: true,
-        durationMin: 30,
-        status: "published",
-        title: "已经超时的考试",
+    vi.mocked(prisma.examRecord.findMany).mockResolvedValueOnce([
+      {
+        examId: 6,
+        startedAt: new Date("2026-08-01T00:00:00.000Z"),
+        exam: {
+          aiEnabled: true,
+          durationMin: 30,
+          problems: [{ id: 1 }],
+          status: "published",
+          title: "已经超时的考试",
+        },
       },
-    } as never);
+    ] as never);
 
     const response = await POST(
       request({ problemId: 10, mode: "overview" }) as never,
@@ -652,14 +668,86 @@ describe("POST /api/ai/problem-assist", () => {
     expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
   });
 
+  it("blocks practice AI for a problem outside the active exam", async () => {
+    vi.mocked(prisma.examRecord.findMany).mockResolvedValueOnce([
+      {
+        examId: 6,
+        startedAt: new Date(),
+        exam: {
+          aiEnabled: true,
+          durationMin: 60,
+          problems: [],
+          status: "published",
+          title: "正在进行的考试",
+        },
+      },
+    ] as never);
+
+    const response = await POST(
+      request({ problemId: 10, mode: "overview" }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toContain("考试期间不能使用日常练习 AI");
+    expect(prisma.examRecord.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { status: "in_progress", userId: 1 },
+      }),
+    );
+    expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when legacy data contains multiple active exams", async () => {
+    vi.mocked(prisma.examRecord.findMany).mockResolvedValueOnce([
+      {
+        examId: 5,
+        startedAt: new Date(),
+        exam: {
+          aiEnabled: true,
+          durationMin: 60,
+          problems: [{ id: 1 }],
+          status: "published",
+          title: "考试一",
+        },
+      },
+      {
+        examId: 6,
+        startedAt: new Date(),
+        exam: {
+          aiEnabled: true,
+          durationMin: 60,
+          problems: [],
+          status: "published",
+          title: "考试二",
+        },
+      },
+    ] as never);
+
+    const response = await POST(
+      request({ problemId: 10, mode: "overview" }) as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("多个进行中的考试");
+    expect(requestDeepSeekAdvice).not.toHaveBeenCalled();
+  });
+
   it("allows personalized code help during an AI-enabled active exam", async () => {
-    vi.mocked(prisma.exam.findUnique).mockResolvedValueOnce({
-      aiEnabled: true,
-      problems: [{ id: 1 }],
-    } as never);
-    vi.mocked(prisma.examRecord.findUnique).mockResolvedValueOnce({
-      status: "in_progress",
-    } as never);
+    vi.mocked(prisma.examRecord.findMany).mockResolvedValueOnce([
+      {
+        examId: 5,
+        startedAt: new Date(),
+        exam: {
+          aiEnabled: true,
+          durationMin: 60,
+          problems: [{ id: 1 }],
+          status: "published",
+          title: "期中考试",
+        },
+      },
+    ] as never);
 
     const response = await POST(
       request({
@@ -681,6 +769,28 @@ describe("POST /api/ai/problem-assist", () => {
         }),
       }),
     );
+  });
+
+  it("never sends runtime error text from a formal submission to the AI provider", async () => {
+    vi.mocked(prisma.submission.findFirst).mockResolvedValueOnce({
+      errorMessage: "HIDDEN_STDERR_AI_PROMPT",
+      passedCount: 0,
+      status: "Runtime Error",
+      totalCount: 2,
+    } as never);
+
+    const response = await POST(
+      request({
+        code: "int answer;",
+        problemId: 10,
+        mode: "next_step",
+      }) as never,
+    );
+    const prompt = vi.mocked(requestDeepSeekAdvice).mock.calls[0]?.[0] ?? "";
+
+    expect(response.status).toBe(200);
+    expect(prompt).toContain("程序运行时异常");
+    expect(prompt).not.toContain("HIDDEN_STDERR_AI_PROMPT");
   });
 
   it("sends current code, safe latest submission, and chat history for code help", async () => {

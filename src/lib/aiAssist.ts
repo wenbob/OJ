@@ -221,7 +221,7 @@ ${effectiveInstruction}
 
 export function sanitizeAiAssistResponse(content: string) {
   const trimmed = content.trim().slice(0, 2000);
-  const looksLikeFullCode =
+  const containsCopyableCode =
     trimmed.includes("```") ||
     trimmed.includes("#include") ||
     /int\s+main\s*\(/.test(trimmed) ||
@@ -231,10 +231,30 @@ export function sanitizeAiAssistResponse(content: string) {
     /\breturn(?:\s+[^;\n]+)?\s*;/.test(trimmed) ||
     /\b(?:long\s+long|vector\s*<[^>]+>)\s+[A-Za-z_]\w*/.test(trimmed) ||
     /\b(for|while|if)\s*\([^)]*\)\s*\{?/.test(trimmed) ||
+    /\b(?:std::)?(?:sort|stable_sort|reverse|swap|lower_bound|upper_bound)\s*\([^\n)]{1,240}\)\s*;?/i.test(
+      trimmed,
+    ) ||
+    /(?:^|\n)\s*[A-Za-z_]\w*(?:\s*\[[^\]\n]+\])?\s*=\s*[^=\n][^\n;]{0,240};?\s*(?:$|\n)/m.test(
+      trimmed,
+    ) ||
+    /(?:^|\n)\s*(?:break|continue)\s*;\s*(?:$|\n)/m.test(trimmed) ||
+    /\b[A-Za-z_]\w*\s*\[[^\]\n]+\]/.test(trimmed) ||
+    /(?:^|\n)\s*(?:[A-Za-z_]\w*::)?[A-Za-z_]\w*\s*\([^\n;]{0,240}\)\s*;\s*(?:$|\n)/m.test(
+      trimmed,
+    ) ||
     /^\s*[A-Za-z_][\w\s*&<>]*\s+[A-Za-z_]\w*\s*=.*;\s*$/m.test(trimmed) ||
     /^\s*[A-Za-z_]\w*\s*(\+\+|--|[+\-*/%]?=).+;\s*$/m.test(trimmed);
+  const containsFinalAnswer =
+    /(?:最终|正确|标准)?答案\s*(?:是|为|[:：])\s*\S+/i.test(trimmed) ||
+    /(?:最终)?(?:结果|输出)\s*(?:是|为|应为|应该是|[:：])\s*\S+/i.test(
+      trimmed,
+    ) ||
+    /(?:应选|选择|正确选项是?)\s*[A-D](?:\b|[。.!！])/i.test(trimmed) ||
+    /(?:公式|计算式|表达式)\s*(?:是|为|[:：])\s*[^，。！？\n]{1,160}/i.test(
+      trimmed,
+    );
 
-  if (looksLikeFullCode) {
+  if (containsCopyableCode || containsFinalAnswer) {
     return "";
   }
 

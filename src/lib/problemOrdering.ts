@@ -22,6 +22,7 @@ export type PersistableProblemListSort =
   (typeof persistableProblemListSortValues)[number];
 
 export type ProblemDropPlacement = "before" | "after";
+export const TITLE_SORT_PREVIEW_LIMIT = 5_000;
 
 type TitledProblem = {
   id: number;
@@ -63,8 +64,14 @@ export function isPersistableProblemListSort(
 }
 
 export function getProblemOrderBy(
-  sort: Exclude<ProblemListSort, "title-asc" | "title-desc">,
+  sort: ProblemListSort,
 ): Prisma.ProblemOrderByWithRelationInput[] {
+  if (sort === "title-asc") {
+    return [{ title: "asc" }, { id: "asc" }];
+  }
+  if (sort === "title-desc") {
+    return [{ title: "desc" }, { id: "desc" }];
+  }
   if (sort === "newest") {
     return [{ createdAt: "desc" }, { id: "desc" }];
   }

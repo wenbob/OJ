@@ -30,6 +30,7 @@ describe("administrator AI prompt settings", () => {
     const html = renderToStaticMarkup(
       <SettingsForm
         initialAiProviderStatuses={statuses}
+        initialRevision="revision-1"
         initialSettings={defaultSystemSettings}
       />,
     );

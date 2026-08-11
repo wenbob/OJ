@@ -219,6 +219,16 @@ describe("AI assist prompts", () => {
     expect(sanitized).toBe("");
   });
 
+  it.each([
+    "下一步直接写 sort(a, a + n); 就可以。",
+    "把数组反转：reverse(values.begin(), values.end());",
+    "最终答案是 42。",
+    "正确选项是 B。",
+    "公式为 ans = n * (n - 1) / 2",
+  ])("blocks copyable statements and final answers: %s", (content) => {
+    expect(sanitizeAiAssistResponse(content)).toBe("");
+  });
+
   it("keeps useful code-review prose while translating isolated code terms", () => {
     const sanitized = sanitizeAiAssistResponse(
       "第5行：可以用 abs(x-a) 求距离。第8行的 if 判断括号不完整。最后记得用 cout 输出。",

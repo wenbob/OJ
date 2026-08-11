@@ -113,6 +113,7 @@ model Submission {
   @@index([problemId, createdAt])
   @@index([createdAt])
   @@index([submissionType, userId, createdAt])
+  @@index([status, userId, problemId])
   @@index([submissionType, createdAt])
   @@index([examId, userId, problemId])
   @@index([learningAssignmentId, userId, problemId])

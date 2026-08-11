@@ -47,19 +47,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   if (!Number.isInteger(examId) || !Number.isInteger(examProblemId)) {
     return NextResponse.json({ error: "考试题目 ID 不合法" }, { status: 400 });
   }
-  const exam = await prisma.exam.findFirst({
-    where: getExamAccessWhere(auth.user, examId),
-    select: { id: true, status: true },
-  });
-  if (!exam) {
-    return NextResponse.json({ error: "考试不存在" }, { status: 404 });
-  }
-  if (exam.status !== "draft") {
-    return NextResponse.json(
-      { error: "只有草稿考试可以调整题目" },
-      { status: 409 },
-    );
-  }
   if (payload.order !== null && (!Number.isInteger(payload.order) || payload.order < 0)) {
     return NextResponse.json({ error: "排序值不合法" }, { status: 400 });
   }
@@ -67,59 +54,72 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "分值必须是正整数" }, { status: 400 });
   }
 
-  const existing = await prisma.examProblem.findFirst({
-    where: { id: examProblemId, examId },
-    include: {
-      problem: {
-        select: {
-          problemType: true,
-          objectiveItems: true,
+  try {
+    const examProblem = await prisma.$transaction(async (tx) => {
+      const exam = await tx.exam.findFirst({
+        where: getExamAccessWhere(auth.user, examId),
+        select: { id: true, status: true },
+      });
+      if (!exam) throw new ExamProblemEditError(404, "考试不存在");
+      if (exam.status !== "draft") {
+        throw new ExamProblemEditError(409, "只有草稿考试可以调整题目");
+      }
+      const existing = await tx.examProblem.findFirst({
+        where: { id: examProblemId, examId },
+        include: {
+          problem: {
+            select: {
+              problemType: true,
+              objectiveItems: true,
+            },
+          },
         },
-      },
-    },
-  });
-  if (!existing) {
-    return NextResponse.json({ error: "考试题目不存在" }, { status: 404 });
-  }
-  const objectiveScore =
-    existing.problem.problemType === "objective"
-      ? getObjectiveTotalScore(
-          parseObjectiveItems(existing.problem.objectiveItems),
-        )
-      : null;
-
-  const updated = await prisma.examProblem.updateMany({
-    where: { id: examProblemId, examId },
-    data: {
-      ...(payload.order !== null ? { order: payload.order } : {}),
-      ...(objectiveScore !== null
-        ? { score: objectiveScore }
-        : payload.score !== null
-          ? { score: payload.score }
-          : {}),
-    },
-  });
-
-  if (updated.count === 0) {
-    return NextResponse.json({ error: "考试题目不存在" }, { status: 404 });
-  }
-
-  const examProblem = await prisma.examProblem.findFirst({
-    where: { id: examProblemId, examId },
-    include: {
-      problem: {
-        select: {
-          id: true,
-          title: true,
-          difficulty: true,
-          category: true,
-          problemType: true,
+      });
+      if (!existing) {
+        throw new ExamProblemEditError(404, "考试题目不存在");
+      }
+      const objectiveScore =
+        existing.problem.problemType === "objective"
+          ? getObjectiveTotalScore(
+              parseObjectiveItems(existing.problem.objectiveItems),
+            )
+          : null;
+      const updated = await tx.examProblem.updateMany({
+        where: { id: examProblemId, examId },
+        data: {
+          ...(payload.order !== null ? { order: payload.order } : {}),
+          ...(objectiveScore !== null
+            ? { score: objectiveScore }
+            : payload.score !== null
+              ? { score: payload.score }
+              : {}),
         },
-      },
-    },
-  });
-
-  return NextResponse.json({ examProblem });
+      });
+      if (updated.count === 0) {
+        throw new ExamProblemEditError(404, "考试题目不存在");
+      }
+      return tx.examProblem.findFirst({
+        where: { id: examProblemId, examId },
+        include: {
+          problem: {
+            select: {
+              id: true,
+              title: true,
+              difficulty: true,
+              category: true,
+              problemType: true,
+            },
+          },
+        },
+      });
+    });
+    return NextResponse.json({ examProblem });
+  } catch (error) {
+    if (error instanceof ExamProblemEditError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ error: "调整考试题目失败" }, { status: 500 });
+  }
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
@@ -132,20 +132,37 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   if (!Number.isInteger(examId) || !Number.isInteger(examProblemId)) {
     return NextResponse.json({ error: "考试题目 ID 不合法" }, { status: 400 });
   }
-  const exam = await prisma.exam.findFirst({
-    where: getExamAccessWhere(auth.user, examId),
-    select: { id: true, status: true },
-  });
-  if (!exam) {
-    return NextResponse.json({ error: "考试不存在" }, { status: 404 });
+  try {
+    await prisma.$transaction(async (tx) => {
+      const exam = await tx.exam.findFirst({
+        where: getExamAccessWhere(auth.user, examId),
+        select: { id: true, status: true },
+      });
+      if (!exam) throw new ExamProblemEditError(404, "考试不存在");
+      if (exam.status !== "draft") {
+        throw new ExamProblemEditError(409, "只有草稿考试可以增删题目");
+      }
+      const deleted = await tx.examProblem.deleteMany({
+        where: { id: examProblemId, examId },
+      });
+      if (deleted.count === 0) {
+        throw new ExamProblemEditError(404, "考试题目不存在");
+      }
+    });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof ExamProblemEditError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ error: "移除考试题目失败" }, { status: 500 });
   }
-  if (exam.status !== "draft") {
-    return NextResponse.json(
-      { error: "只有草稿考试可以增删题目" },
-      { status: 409 },
-    );
-  }
+}
 
-  await prisma.examProblem.deleteMany({ where: { id: examProblemId, examId } });
-  return NextResponse.json({ ok: true });
+class ExamProblemEditError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
 }

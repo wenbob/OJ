@@ -6,6 +6,7 @@ import {
   type ObjectiveItem,
   type ProblemType,
 } from "./objectiveProblem";
+import { assertJudgeCasePayload } from "./judgeCaseLimits";
 
 export type ProblemPayload = {
   title: string;
@@ -111,6 +112,8 @@ export function normalizeProblemPayload(body: unknown): ProblemPayload {
       isSample: true,
     });
   }
+
+  assertJudgeCasePayload(testCases);
 
   for (const testCase of testCases) {
     if (!testCase.input.trim() || !testCase.output.trim()) {

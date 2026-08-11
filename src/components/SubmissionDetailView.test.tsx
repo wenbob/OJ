@@ -43,7 +43,7 @@ describe("SubmissionDetailView objective feedback", () => {
     expect(html).not.toContain("STANDARD_ANSWER_MUST_STAY_HIDDEN");
   });
 
-  it("renders a placeholder instead of hidden programming test data", () => {
+  it("renders a placeholder instead of any hidden programming test channel", () => {
     const html = renderToStaticMarkup(
       <SubmissionDetailView
         problemHref="/student/problems/3"
@@ -51,9 +51,9 @@ describe("SubmissionDetailView objective feedback", () => {
         submission={{
           caseResults: [
             {
-              actualOutput: "41",
+              actualOutput: "HIDDEN_ACTUAL_OUTPUT",
               caseIndex: 1,
-              errorMessage: null,
+              errorMessage: "HIDDEN_RUNTIME_ERROR",
               expectedOutput: "",
               id: 10,
               input: "",
@@ -64,7 +64,7 @@ describe("SubmissionDetailView objective feedback", () => {
           ],
           code: "int main() {}",
           createdAt: new Date("2026-08-09T00:00:00.000Z"),
-          errorMessage: null,
+          errorMessage: "程序运行时异常",
           id: 9,
           language: "C++17",
           passedCount: 0,
@@ -77,8 +77,9 @@ describe("SubmissionDetailView objective feedback", () => {
       />,
     );
 
-    expect(html).toContain("隐藏测试点的输入和标准输出不对学生公开");
-    expect(html).toContain("41");
+    expect(html).toContain("测试输入、标准输出、程序输出和详细运行错误不对学生公开");
+    expect(html).not.toContain("HIDDEN_ACTUAL_OUTPUT");
+    expect(html).not.toContain("HIDDEN_RUNTIME_ERROR");
     expect(html).not.toContain("标准输出</h3>");
   });
 });

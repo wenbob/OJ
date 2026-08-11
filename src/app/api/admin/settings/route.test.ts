@@ -12,33 +12,52 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    $transaction: vi.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
-    systemSetting: {
+  prisma: (() => {
+    const systemSetting = {
+      create: vi.fn(async () => ({})),
       findMany: vi.fn(async () => []),
+      findUnique: vi.fn(async () => ({ value: "revision-1" })),
+      updateMany: vi.fn(async () => ({ count: 1 })),
       upsert: vi.fn(async () => ({})),
-    },
-  },
+    };
+    return {
+      $transaction: vi.fn(
+        async (callback: (tx: { systemSetting: typeof systemSetting }) => unknown) =>
+          callback({ systemSetting }),
+      ),
+      systemSetting,
+    };
+  })(),
 }));
 
 const pngIcon = `data:image/png;base64,${Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 ]).toString("base64")}`;
 
-function request(body: unknown, contentLength?: number) {
+function request(
+  settings: unknown,
+  contentLength?: number,
+  revision = "revision-1",
+) {
   return new Request("http://oj.local/api/admin/settings", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
       ...(contentLength ? { "Content-Length": String(contentLength) } : {}),
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ revision, settings }),
   });
 }
 
 describe("PUT /api/admin/settings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.systemSetting.findUnique).mockResolvedValue({
+      value: "revision-1",
+    } as never);
+    vi.mocked(prisma.systemSetting.updateMany).mockResolvedValue({
+      count: 1,
+    } as never);
   });
 
   it("stores a validated browser title and PNG icon", async () => {
@@ -72,6 +91,34 @@ describe("PUT /api/admin/settings", () => {
   it("rejects settings requests above the dedicated limit", async () => {
     const response = await PUT(request(defaultSystemSettings, 512 * 1024 + 1) as never);
     expect(response.status).toBe(413);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale administrator snapshot without overwriting settings", async () => {
+    vi.mocked(prisma.systemSetting.findUnique).mockResolvedValueOnce({
+      value: "revision-2",
+    } as never);
+
+    const response = await PUT(
+      request(defaultSystemSettings, undefined, "revision-1") as never,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("其他页面更新");
+    expect(prisma.systemSetting.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects legacy full-form writes that do not carry a revision", async () => {
+    const response = await PUT(
+      new Request("http://oj.local/api/admin/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(defaultSystemSettings),
+      }) as never,
+    );
+
+    expect(response.status).toBe(409);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 

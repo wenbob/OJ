@@ -9,6 +9,7 @@ export type ObjectiveSubmissionResult = {
     caseIndex: number;
     status: string;
     actualOutput: string | null;
+    studentDetailsHidden?: boolean;
   }>;
 };
 

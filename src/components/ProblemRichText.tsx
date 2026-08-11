@@ -139,6 +139,7 @@ function renderInlineRichText(value: string): ReactNode {
 }
 
 function splitMarkdownTableRow(value: string) {
+  const maxCells = 33;
   const cells: string[] = [];
   let current = "";
   let escaped = false;
@@ -158,6 +159,7 @@ function splitMarkdownTableRow(value: string) {
     }
     if (char === "|" && !escaped && !inMath) {
       cells.push(current.trim());
+      if (cells.length >= maxCells) return cells;
       current = "";
     } else {
       current += char;
@@ -174,6 +176,9 @@ function isMarkdownTableSeparator(value: string) {
 }
 
 function renderTextBlocks(value: string) {
+  const maxTableColumns = 32;
+  const maxTableRows = 200;
+  const maxTableCells = 2_000;
   const lines = value.replace(/\r\n?/g, "\n").split("\n");
   const nodes: ReactNode[] = [];
   let paragraph: string[] = [];
@@ -212,18 +217,43 @@ function renderTextBlocks(value: string) {
     if (trimmed.startsWith("|")) {
       const tableLines: string[] = [];
       let cursor = index;
+      let tooManyRows = false;
       while (cursor < lines.length && lines[cursor].trim().startsWith("|")) {
-        tableLines.push(lines[cursor]);
+        if (tableLines.length < maxTableRows + 2) {
+          tableLines.push(lines[cursor]);
+        } else {
+          tooManyRows = true;
+        }
         cursor += 1;
       }
       if (tableLines.length >= 2 && isMarkdownTableSeparator(tableLines[1])) {
         flushParagraph();
         const header = splitMarkdownTableRow(tableLines[0]);
-        const rows = tableLines.slice(2).map((row) => {
-          const cells = splitMarkdownTableRow(row);
-          return [...cells, ...Array(Math.max(0, header.length - cells.length)).fill("")]
-            .slice(0, header.length);
-        });
+        const parsedRows = tableLines
+          .slice(2)
+          .map((row) => splitMarkdownTableRow(row));
+        const oversized =
+          tooManyRows ||
+          header.length > maxTableColumns ||
+          parsedRows.some((row) => row.length > maxTableColumns) ||
+          header.length * (parsedRows.length + 1) > maxTableCells;
+        if (oversized) {
+          nodes.push(
+            <pre
+              className="max-w-full overflow-x-auto whitespace-pre-wrap border border-amber-300 bg-amber-50/70 p-3 text-xs text-amber-950"
+              data-oversized-markdown-table="true"
+              key={`table-fallback-${nodes.length}`}
+            >
+              {lines.slice(index, cursor).join("\n")}
+            </pre>,
+          );
+          index = cursor - 1;
+          continue;
+        }
+        const rows = parsedRows.map((cells) =>
+          [...cells, ...Array(Math.max(0, header.length - cells.length)).fill("")]
+            .slice(0, header.length),
+        );
         nodes.push(
           <div className="max-w-full overflow-x-auto" key={`table-${nodes.length}`}>
             <table className="w-full min-w-[32rem] border-collapse text-left text-sm">

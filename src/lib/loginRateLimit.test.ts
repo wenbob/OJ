@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   clearAllLoginFailures,
+  clearAllLoginVerificationReservations,
   clearLoginFailures,
   getLoginClientIp,
   getLoginRateLimitBucketCount,
@@ -9,16 +10,19 @@ import {
   loginRateLimitKey,
   recordFailedLogin,
   recordFailedLoginForIp,
+  reserveLoginVerification,
 } from "./loginRateLimit";
 
 const originalMaxBuckets = process.env.LOGIN_RATE_LIMIT_MAX_BUCKETS;
 
 beforeEach(() => {
   clearAllLoginFailures();
+  clearAllLoginVerificationReservations();
 });
 
 afterEach(() => {
   clearAllLoginFailures();
+  clearAllLoginVerificationReservations();
   if (originalMaxBuckets === undefined) {
     delete process.env.LOGIN_RATE_LIMIT_MAX_BUCKETS;
   } else {
@@ -95,5 +99,19 @@ describe("login rate limiting", () => {
     expect(getLoginRateLimitBucketCount()).toBe(3);
     expect(getLoginRateLimitStatus("user-1", 2_000_005).limited).toBe(false);
     expect(getLoginRateLimitBucketCount()).toBe(3);
+  });
+
+  it("reserves bcrypt work atomically per account and releases idempotently", () => {
+    const first = reserveLoginVerification("account:alice", "ip:local");
+    const overlapping = reserveLoginVerification("account:alice", "ip:other");
+
+    expect(first.allowed).toBe(true);
+    expect(overlapping).toMatchObject({ allowed: false, retryAfterSeconds: 1 });
+
+    first.release();
+    first.release();
+    const next = reserveLoginVerification("account:alice", "ip:local");
+    expect(next.allowed).toBe(true);
+    next.release();
   });
 });

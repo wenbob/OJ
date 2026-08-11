@@ -22,6 +22,26 @@ export type LearningSubmissionInput = {
   submissionType: string;
 };
 
+export type LearningProblemFactInput = {
+  acceptedEver: boolean;
+  acceptedInWindow: boolean;
+  failedAfterLastAccepted: number;
+  latestStatus: string;
+  latestSubmissionAt: Date;
+  latestSubmissionId: number;
+  problemId: number;
+  windowFailedCount: number;
+};
+
+export type LearningAnalyticsFactsInput = {
+  hasLearningData: boolean;
+  lastTrainingAt: Date | null;
+  problemFacts: LearningProblemFactInput[];
+  statusCounts: Record<string, number>;
+  submissionCount: number;
+  uniqueAcceptedInWindow: number;
+};
+
 export type LearningCategoryInsight = {
   acceptedProblemCount: number;
   attemptedProblemCount: number;
@@ -128,16 +148,10 @@ export function buildLearningAnalytics({
     submissionsByProblem.set(submission.problemId, list);
   }
 
-  const categoryMap = new Map<
-    string,
-    Omit<LearningCategoryInsight, "masteryPercent">
-  >();
-  const problemInsights: LearningProblemInsight[] = [];
+  const problemFacts: LearningProblemFactInput[] = [];
   const acceptedInWindow = new Set<number>();
 
   for (const [problemId, problemSubmissions] of submissionsByProblem) {
-    const problem = programmingProblems.get(problemId)!;
-    const category = normalizeCategory(problem.category);
     const acceptedEver = problemSubmissions.some(({ status }) => status === "Accepted");
     let lastAcceptedIndex = -1;
     for (let index = problemSubmissions.length - 1; index >= 0; index -= 1) {
@@ -157,10 +171,9 @@ export function buildLearningAnalytics({
     }
 
     const latestSubmission = problemSubmissions.at(-1)!;
-    const insight: LearningProblemInsight = {
+    problemFacts.push({
       acceptedEver,
-      category,
-      difficulty: problem.difficulty,
+      acceptedInWindow: acceptedInWindow.has(problemId),
       failedAfterLastAccepted: problemSubmissions
         .slice(lastAcceptedIndex + 1)
         .filter(
@@ -171,10 +184,67 @@ export function buildLearningAnalytics({
       latestSubmissionAt: latestSubmission.createdAt,
       latestSubmissionId: latestSubmission.id,
       problemId,
-      title: problem.title,
       windowFailedCount,
-    };
-    problemInsights.push(insight);
+    });
+  }
+
+  const statusCounts: Record<string, number> = {};
+  for (const submission of windowSubmissions) {
+    statusCounts[submission.status] = (statusCounts[submission.status] ?? 0) + 1;
+  }
+  return buildLearningAnalyticsFromFacts({
+    facts: {
+      hasLearningData: relevantSubmissions.length > 0,
+      lastTrainingAt: relevantSubmissions.at(-1)?.createdAt ?? null,
+      problemFacts,
+      statusCounts,
+      submissionCount: windowSubmissions.length,
+      uniqueAcceptedInWindow: acceptedInWindow.size,
+    },
+    now,
+    problems,
+    window,
+  });
+}
+
+export function buildLearningAnalyticsFromFacts({
+  facts,
+  now = new Date(),
+  problems,
+  window = "30d",
+}: {
+  facts: LearningAnalyticsFactsInput;
+  now?: Date;
+  problems: LearningProblemInput[];
+  window?: LearningWindow;
+}): LearningAnalytics {
+  const programmingProblems = new Map(
+    problems
+      .filter((problem) => problem.problemType === "programming")
+      .map((problem) => [problem.id, problem]),
+  );
+  const categoryMap = new Map<
+    string,
+    Omit<LearningCategoryInsight, "masteryPercent">
+  >();
+  const problemInsights: LearningProblemInsight[] = [];
+
+  for (const fact of facts.problemFacts) {
+    const problem = programmingProblems.get(fact.problemId);
+    if (!problem) continue;
+    const category = normalizeCategory(problem.category);
+    problemInsights.push({
+      acceptedEver: fact.acceptedEver,
+      category,
+      difficulty: problem.difficulty,
+      failedAfterLastAccepted: fact.failedAfterLastAccepted,
+      latestStatus: fact.latestStatus,
+      latestSubmissionAt: fact.latestSubmissionAt,
+      latestSubmissionId: fact.latestSubmissionId,
+      problemId: fact.problemId,
+      title: problem.title,
+      windowFailedCount: fact.windowFailedCount,
+    });
 
     const categoryInsight = categoryMap.get(category) ?? {
       acceptedProblemCount: 0,
@@ -184,21 +254,20 @@ export function buildLearningAnalytics({
       windowFailedCount: 0,
     };
     categoryInsight.attemptedProblemCount += 1;
-    categoryInsight.windowFailedCount += windowFailedCount;
-    if (acceptedEver) categoryInsight.acceptedProblemCount += 1;
+    categoryInsight.windowFailedCount += fact.windowFailedCount;
+    if (fact.acceptedEver) categoryInsight.acceptedProblemCount += 1;
     else categoryInsight.pendingProblemCount += 1;
     categoryMap.set(category, categoryInsight);
   }
 
-  const statusCounts: Record<string, number> = {};
-  for (const submission of windowSubmissions) {
-    statusCounts[submission.status] = (statusCounts[submission.status] ?? 0) + 1;
-  }
-  const failedSubmissionCount = windowSubmissions.filter(
-    ({ status }) => status !== "Accepted",
-  ).length;
+  const windowStartedAt = getLearningWindowStartedAt(window, now);
+  const statusCounts = { ...facts.statusCounts };
+  const failedSubmissionCount = Math.max(
+    0,
+    facts.submissionCount - (statusCounts.Accepted ?? 0),
+  );
   const issueLabels: string[] = [];
-  if (relevantSubmissions.length > 0 && windowSubmissions.length === 0) {
+  if (facts.hasLearningData && facts.submissionCount === 0) {
     issueLabels.push("近期未训练");
   }
 
@@ -266,7 +335,7 @@ export function buildLearningAnalytics({
 
   return {
     categories,
-    hasLearningData: relevantSubmissions.length > 0,
+    hasLearningData: facts.hasLearningData,
     issueLabels,
     latestFailures,
     pendingProblems,
@@ -277,10 +346,10 @@ export function buildLearningAnalytics({
       acceptedProblemCount: problemInsights.filter((problem) => problem.acceptedEver).length,
       attemptedProblemCount: problemInsights.length,
       failedSubmissionCount,
-      lastTrainingAt: relevantSubmissions.at(-1)?.createdAt ?? null,
+      lastTrainingAt: facts.lastTrainingAt,
       pendingProblemCount: pendingProblems.length,
-      submissionCount: windowSubmissions.length,
-      uniqueAcceptedInWindow: acceptedInWindow.size,
+      submissionCount: facts.submissionCount,
+      uniqueAcceptedInWindow: facts.uniqueAcceptedInWindow,
     },
     window,
     windowStartedAt,

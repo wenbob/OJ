@@ -7,6 +7,7 @@ import {
   toAiProviderAdminStatus,
 } from "@/lib/aiProvider";
 import { getAllSystemSettings } from "@/lib/settings";
+import { getSystemSettingsRevision } from "@/lib/systemSettingsRevision";
 import { SettingsForm } from "./settings-form";
 
 const adminNav = [
@@ -22,8 +23,9 @@ const adminNav = [
 
 export default async function AdminSettingsPage() {
   const user = await requirePageUser("admin");
-  const [storedSettings, programmingConfig, objectiveConfig] = await Promise.all([
+  const [storedSettings, revision, programmingConfig, objectiveConfig] = await Promise.all([
     getAllSystemSettings(),
+    getSystemSettingsRevision(),
     getEffectiveAiProviderConfig("programming"),
     getEffectiveAiProviderConfig("objective"),
   ]);
@@ -54,6 +56,7 @@ export default async function AdminSettingsPage() {
       </div>
       <SettingsForm
         initialAiProviderStatuses={aiProviderStatuses}
+        initialRevision={revision}
         initialSettings={settings}
       />
     </AppShell>

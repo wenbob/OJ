@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   enqueueJudgeTask,
+  JudgeQueueOwnerLimitError,
   JudgeQueueTimeoutError,
 } from "./judgeQueue";
 
@@ -193,6 +194,81 @@ describe("enqueueJudgeTask", () => {
       } else {
         process.env.JUDGE_QUEUE_WAIT_TIMEOUT_MS = previousWaitTimeout;
       }
+    }
+  });
+
+  it("caps one owner's pending tasks without blocking another owner", async () => {
+    const previousConcurrency = process.env.JUDGE_CONCURRENCY;
+    const previousPendingLimit = process.env.JUDGE_MAX_PENDING_PER_OWNER;
+    process.env.JUDGE_CONCURRENCY = "2";
+    process.env.JUDGE_MAX_PENDING_PER_OWNER = "1";
+    let releaseOwnerA: (() => void) | undefined;
+    let ownerBStarted = false;
+
+    const runningA = enqueueJudgeTask(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseOwnerA = resolve;
+        }),
+      { ownerKey: "user:a" },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const pendingA = enqueueJudgeTask(async () => {}, { ownerKey: "user:a" });
+
+    try {
+      await expect(
+        enqueueJudgeTask(async () => {}, { ownerKey: "user:a" }),
+      ).rejects.toBeInstanceOf(JudgeQueueOwnerLimitError);
+      await enqueueJudgeTask(
+        async () => {
+          ownerBStarted = true;
+        },
+        { ownerKey: "user:b" },
+      );
+      expect(ownerBStarted).toBe(true);
+    } finally {
+      releaseOwnerA?.();
+      await Promise.all([runningA, pendingA]);
+      if (previousConcurrency === undefined) delete process.env.JUDGE_CONCURRENCY;
+      else process.env.JUDGE_CONCURRENCY = previousConcurrency;
+      if (previousPendingLimit === undefined) {
+        delete process.env.JUDGE_MAX_PENDING_PER_OWNER;
+      } else {
+        process.env.JUDGE_MAX_PENDING_PER_OWNER = previousPendingLimit;
+      }
+    }
+  });
+
+  it("round-robins owners within the same priority", async () => {
+    const previousConcurrency = process.env.JUDGE_CONCURRENCY;
+    process.env.JUDGE_CONCURRENCY = "1";
+    const order: string[] = [];
+    let releaseSeed: (() => void) | undefined;
+    const seed = enqueueJudgeTask(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseSeed = resolve;
+        }),
+      { ownerKey: "seed" },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const a1 = enqueueJudgeTask(async () => void order.push("a1"), {
+      ownerKey: "a",
+    });
+    const a2 = enqueueJudgeTask(async () => void order.push("a2"), {
+      ownerKey: "a",
+    });
+    const b1 = enqueueJudgeTask(async () => void order.push("b1"), {
+      ownerKey: "b",
+    });
+
+    try {
+      releaseSeed?.();
+      await Promise.all([seed, a1, a2, b1]);
+      expect(order).toEqual(["a1", "b1", "a2"]);
+    } finally {
+      if (previousConcurrency === undefined) delete process.env.JUDGE_CONCURRENCY;
+      else process.env.JUDGE_CONCURRENCY = previousConcurrency;
     }
   });
 });

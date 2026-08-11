@@ -238,6 +238,74 @@ export function buildStudentRankingSummary({
   };
 }
 
+function buildStudentRankingSummaryFromCounts({
+  acceptedSubmissionCount,
+  acCount,
+  user,
+}: {
+  acceptedSubmissionCount: number;
+  acCount: number;
+  user: RankingUserInput;
+}): StudentRankingSummary | null {
+  if (user.role !== "student") return null;
+  const points = acCount * RANK_POINT_PER_UNIQUE_ACCEPTED;
+  const tierTitle = getRankTierTitle(points);
+  const customTitle = normalizeCustomTitle(
+    user.studentProfile?.customTitle ?? null,
+  );
+  return {
+    acceptedSubmissionCount,
+    acCount,
+    customTitle,
+    displayTitle: customTitle ?? tierTitle,
+    points,
+    tierTitle,
+    userId: user.id,
+    username: user.username,
+  };
+}
+
+export async function getStudentRankingSummariesForUsers(
+  users: RankingUserInput[],
+  db: DbClient = prisma,
+) {
+  const students = users.filter((user) => user.role === "student");
+  const userIds = students.map((user) => user.id);
+  if (userIds.length === 0) return [];
+
+  const [acceptedCounts, acceptedProblems] = await Promise.all([
+    db.submission.groupBy({
+      by: ["userId"],
+      where: { status: "Accepted", userId: { in: userIds } },
+      _count: { _all: true },
+    }),
+    db.submission.groupBy({
+      by: ["userId", "problemId"],
+      where: { status: "Accepted", userId: { in: userIds } },
+      _count: { _all: true },
+    }),
+  ]);
+  const acceptedCountByUser = new Map(
+    acceptedCounts.map((row) => [row.userId, row._count._all]),
+  );
+  const uniqueAcceptedByUser = new Map<number, number>();
+  for (const row of acceptedProblems) {
+    uniqueAcceptedByUser.set(
+      row.userId,
+      (uniqueAcceptedByUser.get(row.userId) ?? 0) + 1,
+    );
+  }
+
+  return students.flatMap((user) => {
+    const summary = buildStudentRankingSummaryFromCounts({
+      acceptedSubmissionCount: acceptedCountByUser.get(user.id) ?? 0,
+      acCount: uniqueAcceptedByUser.get(user.id) ?? 0,
+      user,
+    });
+    return summary ? [summary] : [];
+  });
+}
+
 export async function getStudentRankings(db: DbClient = prisma) {
   const [users, submissions] = await Promise.all([
     db.user.findMany({

@@ -65,4 +65,22 @@ $$0 \\ 2 \\ 0 \\ 3 \\ 4 \\ 1 \\ 9$$`}
     expect(html).toContain("katex");
     expect(html).not.toContain("cute-table");
   });
+
+  it("falls back to plain text before oversized tables can expand the React tree", () => {
+    const header = `| ${Array.from({ length: 40 }, (_, index) => `H${index}`).join(" | ")} |`;
+    const separator = `| ${Array.from({ length: 40 }, () => "---").join(" | ")} |`;
+    const rows = Array.from({ length: 80 }, (_, index) => `| row-${index} |`).join("\n");
+    const html = renderToStaticMarkup(
+      <ProblemRichText
+        className="content"
+        codeClassName="code"
+        value={`${header}\n${separator}\n${rows}`}
+      />,
+    );
+
+    expect(html).toContain('data-oversized-markdown-table="true"');
+    expect(html).not.toContain("<table");
+    expect(html).not.toContain("<td");
+    expect(html).toContain("row-79");
+  });
 });

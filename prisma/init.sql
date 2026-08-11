@@ -289,6 +289,7 @@ CREATE INDEX "Submission_userId_problemId_createdAt_idx" ON "Submission"("userId
 CREATE INDEX "Submission_problemId_createdAt_idx" ON "Submission"("problemId", "createdAt");
 CREATE INDEX "Submission_createdAt_idx" ON "Submission"("createdAt");
 CREATE INDEX "Submission_submissionType_userId_createdAt_idx" ON "Submission"("submissionType", "userId", "createdAt");
+CREATE INDEX "Submission_status_userId_problemId_idx" ON "Submission"("status", "userId", "problemId");
 CREATE INDEX "Submission_submissionType_createdAt_idx" ON "Submission"("submissionType", "createdAt");
 CREATE INDEX "Submission_examId_userId_problemId_idx" ON "Submission"("examId", "userId", "problemId");
 CREATE INDEX "Submission_learningAssignmentId_userId_problemId_idx" ON "Submission"("learningAssignmentId", "userId", "problemId");

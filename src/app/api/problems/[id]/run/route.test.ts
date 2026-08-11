@@ -32,9 +32,11 @@ vi.mock("@/lib/examScoring", () => ({
 vi.mock("@/lib/judge", () => ({ runCppCode: mocks.runCpp }));
 vi.mock("@/lib/judgeQueue", () => {
   class MockJudgeQueueFullError extends Error {}
+  class MockJudgeQueueOwnerLimitError extends Error {}
   class MockJudgeQueueTimeoutError extends Error {}
   return {
     JudgeQueueFullError: MockJudgeQueueFullError,
+    JudgeQueueOwnerLimitError: MockJudgeQueueOwnerLimitError,
     JudgeQueueTimeoutError: MockJudgeQueueTimeoutError,
     enqueueJudgeTask: mocks.enqueue,
   };
@@ -144,6 +146,7 @@ describe("problem trial run API", () => {
       timeLimitMs: 1000,
     });
     expect(enqueueJudgeTask).toHaveBeenCalledWith(expect.any(Function), {
+      ownerKey: "user:7",
       priority: "trial",
     });
     expect(prisma.problem.findUnique).toHaveBeenCalledWith(

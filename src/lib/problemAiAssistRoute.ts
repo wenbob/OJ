@@ -57,6 +57,7 @@ import {
   boolSetting,
   getSetting,
 } from "@/lib/settings";
+import { sanitizeSubmissionForStudent } from "@/lib/submissionVisibility";
 
 function readMode(value: unknown): AiAssistMode | null {
   if (value === "hint") return "overview";
@@ -591,13 +592,13 @@ export async function handleProblemAssist(
   let examTitle: string | null = null;
   let activeExamResolved = false;
   if (options.audience === "student") {
-    const activeExamRecord = await prisma.examRecord.findFirst({
+    const activeExamRecords = await prisma.examRecord.findMany({
       where: {
         userId: auth.user.id,
         status: "in_progress",
-        exam: { problems: { some: { problemId } } },
       },
       orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+      take: 2,
       select: {
         examId: true,
         startedAt: true,
@@ -607,11 +608,24 @@ export async function handleProblemAssist(
             durationMin: true,
             status: true,
             title: true,
+            problems: {
+              where: { problemId },
+              select: { id: true },
+              take: 1,
+            },
           },
         },
       },
     });
 
+    if (activeExamRecords.length > 1) {
+      return NextResponse.json(
+        { error: "检测到多个进行中的考试，请先返回考试列表处理" },
+        { status: 409 },
+      );
+    }
+
+    const activeExamRecord = activeExamRecords[0];
     if (activeExamRecord) {
       if (
         requestedExamId !== null &&
@@ -637,6 +651,12 @@ export async function handleProblemAssist(
       ) {
         return NextResponse.json(
           { error: "考试已超时，不能继续使用 AI" },
+          { status: 403 },
+        );
+      }
+      if (activeExamRecord.exam.problems.length === 0) {
+        return NextResponse.json(
+          { error: "当前题目不属于正在进行的考试，考试期间不能使用日常练习 AI" },
           { status: 403 },
         );
       }
@@ -686,11 +706,29 @@ export async function handleProblemAssist(
       );
     }
     if (options.audience === "student") {
-      if (!exam.aiEnabled) {
-        return NextResponse.json({ error: "本场考试 AI 已关闭" }, { status: 403 });
+      if (exam.status !== "published") {
+        return NextResponse.json(
+          { error: "考试未发布或已经结束" },
+          { status: 403 },
+        );
       }
       if (!examRecord || examRecord.status !== "in_progress") {
         return NextResponse.json({ error: "考试未开始或已结束" }, { status: 403 });
+      }
+      if (
+        !isExamSubmissionOnTime({
+          createdAt: new Date(),
+          durationMin: exam.durationMin,
+          startedAt: examRecord.startedAt,
+        })
+      ) {
+        return NextResponse.json(
+          { error: "考试已超时，不能继续使用 AI" },
+          { status: 403 },
+        );
+      }
+      if (!exam.aiEnabled) {
+        return NextResponse.json({ error: "本场考试 AI 已关闭" }, { status: 403 });
       }
     } else if (
       auth.user.role === "teacher" &&
@@ -701,7 +739,7 @@ export async function handleProblemAssist(
     examTitle = exam.title;
   }
 
-  const latestSubmission =
+  const latestSubmissionRecord =
     mode === "overview"
       ? null
       : await prisma.submission.findFirst({
@@ -720,6 +758,9 @@ export async function handleProblemAssist(
             totalCount: true,
           },
         });
+  const latestSubmission = latestSubmissionRecord
+    ? sanitizeSubmissionForStudent(latestSubmissionRecord)
+    : null;
 
   const customInstruction = await getSetting(
     aiProgrammingPromptSettingKeys[mode],

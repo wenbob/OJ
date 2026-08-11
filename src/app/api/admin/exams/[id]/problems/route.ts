@@ -61,67 +61,64 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "排序值不合法" }, { status: 400 });
   }
 
-  const [exam, foundProblems, existingProblems] = await Promise.all([
-    prisma.exam.findFirst({
-      where: getExamAccessWhere(auth.user, examId),
-      select: { id: true, examType: true, status: true },
-    }),
-    prisma.problem.findMany({
-      where: { archivedAt: null, id: { in: problemIds } },
-      select: {
-        id: true,
-        title: true,
-        problemType: true,
-        objectiveItems: true,
-      },
-    }),
-    prisma.examProblem.findMany({
-      where: { examId, problemId: { in: problemIds } },
-      select: { problemId: true },
-    }),
-  ]);
-
-  if (!exam) return NextResponse.json({ error: "考试不存在" }, { status: 404 });
-  if (exam.status !== "draft") {
-    return NextResponse.json(
-      { error: "只有草稿考试可以增删题目" },
-      { status: 409 },
-    );
-  }
-  if (foundProblems.length !== problemIds.length) {
-    return NextResponse.json({ error: "存在不存在的题目" }, { status: 404 });
-  }
-  const mismatchedProblem = foundProblems.find(
-    (problem) => problem.problemType !== exam.examType,
-  );
-  if (mismatchedProblem) {
-    return NextResponse.json(
-      {
-        error: `题目《${mismatchedProblem.title}》与当前考试类型不一致`,
-      },
-      { status: 400 },
-    );
-  }
-  if (existingProblems.length > 0) {
-    return NextResponse.json({ error: "选中的题目中有题目已经在考试中" }, { status: 409 });
-  }
-
-  const nextOrder =
-    order ??
-    ((await prisma.examProblem.aggregate({
-      where: { examId },
-      _max: { order: true },
-    }))._max.order ?? 0) + 1;
-
   try {
-    const foundProblemMap = new Map(
-      foundProblems.map((problem) => [problem.id, problem]),
-    );
-    const examProblems = await prisma.$transaction((tx) =>
-      Promise.all(
+    const examProblems = await prisma.$transaction(async (tx) => {
+      const [exam, foundProblems, existingProblems] = await Promise.all([
+        tx.exam.findFirst({
+          where: getExamAccessWhere(auth.user, examId),
+          select: { id: true, examType: true, status: true },
+        }),
+        tx.problem.findMany({
+          where: { archivedAt: null, id: { in: problemIds } },
+          select: {
+            id: true,
+            title: true,
+            problemType: true,
+            objectiveItems: true,
+          },
+        }),
+        tx.examProblem.findMany({
+          where: { examId, problemId: { in: problemIds } },
+          select: { problemId: true },
+        }),
+      ]);
+      if (!exam) throw new ExamProblemMutationError(404, "考试不存在");
+      if (exam.status !== "draft") {
+        throw new ExamProblemMutationError(409, "只有草稿考试可以增删题目");
+      }
+      if (foundProblems.length !== problemIds.length) {
+        throw new ExamProblemMutationError(404, "存在不存在的题目");
+      }
+      const mismatchedProblem = foundProblems.find(
+        (problem) => problem.problemType !== exam.examType,
+      );
+      if (mismatchedProblem) {
+        throw new ExamProblemMutationError(
+          400,
+          `题目《${mismatchedProblem.title}》与当前考试类型不一致`,
+        );
+      }
+      if (existingProblems.length > 0) {
+        throw new ExamProblemMutationError(
+          409,
+          "选中的题目中有题目已经在考试中",
+        );
+      }
+      const nextOrder =
+        order ??
+        ((await tx.examProblem.aggregate({
+          where: { examId },
+          _max: { order: true },
+        }))._max.order ?? 0) + 1;
+      const foundProblemMap = new Map(
+        foundProblems.map((problem) => [problem.id, problem]),
+      );
+      return Promise.all(
         problemIds.map((problemId, index) => {
           const problem = foundProblemMap.get(problemId);
-          if (!problem) throw new Error("题目不存在");
+          if (!problem) {
+            throw new ExamProblemMutationError(404, "题目不存在");
+          }
           const objectiveItems =
             problem.problemType === "objective"
               ? parseObjectiveItems(problem.objectiveItems)
@@ -131,7 +128,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
               ? validateObjectiveItems(objectiveItems)
               : [];
           if (objectiveErrors.length > 0) {
-            throw new Error(
+            throw new ExamProblemMutationError(
+              400,
               `题目《${problem.title}》配置无效：${objectiveErrors[0]}`,
             );
           }
@@ -159,8 +157,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
             },
           });
         }),
-      ),
-    );
+      );
+    });
 
     if (Array.isArray(record.problemIds)) {
       return NextResponse.json({ examProblems }, { status: 201 });
@@ -168,9 +166,24 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ examProblem: examProblems[0] }, { status: 201 });
   } catch (error) {
+    if (error instanceof ExamProblemMutationError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
+    }
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "添加题目失败" },
+      { error: "添加题目失败，考试状态或题单可能已经变化" },
       { status: 409 },
     );
+  }
+}
+
+class ExamProblemMutationError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
   }
 }

@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { hashPassword, validateAccountPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import {
-  getStudentRankings,
   normalizeCustomTitle,
   validateCustomTitle,
 } from "@/lib/ranking";
+import { readPaginationFromUrl } from "@/lib/pagination";
 import {
   PayloadTooLargeError,
   REQUEST_LIMITS,
@@ -14,6 +14,10 @@ import {
 import { requireStaffApiUser } from "@/lib/staffAccess";
 import { boolSetting, getSetting } from "@/lib/settings";
 import { TEACHER_STUDENT_INITIAL_PASSWORD } from "@/lib/userManagementPolicy";
+import {
+  getStaffUserPage,
+  STAFF_USER_PAGE_SIZE,
+} from "@/lib/staffUserDirectory";
 
 function readRole(value: unknown) {
   if (value === "admin" || value === "teacher" || value === "student") {
@@ -34,45 +38,27 @@ export async function GET(request: NextRequest) {
   const auth = await requireStaffApiUser(request);
   if (auth.response) return auth.response;
 
-  const [users, rankings, objectiveMaster, objectiveStudent] = await Promise.all([
-    prisma.user.findMany({
-      where: auth.user.role === "teacher" ? { role: "student" } : undefined,
-      select: {
-        id: true,
-        username: true,
-        role: true,
-        createdAt: true,
-        studentProfile: {
-          select: {
-            aiAccessEnabled: true,
-            customTitle: true,
-            objectiveAiAccessEnabled: true,
-          },
-        },
-        _count: { select: { submissions: true } },
-      },
-      orderBy: { createdAt: "desc" },
+  const searchParams = new URL(request.url).searchParams;
+  const { page, pageSize } = readPaginationFromUrl(
+    searchParams,
+    STAFF_USER_PAGE_SIZE,
+  );
+  const query = searchParams.get("q") ?? "";
+  const [directory, objectiveMaster, objectiveStudent] = await Promise.all([
+    getStaffUserPage({
+      page,
+      pageSize,
+      query,
+      viewerRole: auth.user.role,
     }),
-    getStudentRankings(),
     getSetting("aiObjectiveExplanationEnabled"),
     getSetting("aiStudentObjectiveExplanationEnabled"),
   ]);
-  const rankingByUserId = new Map(rankings.map((item) => [item.userId, item]));
 
   return NextResponse.json({
+    ...directory,
     studentObjectiveAiGloballyEnabled:
       boolSetting(objectiveMaster) && boolSetting(objectiveStudent),
-    users: users.map((user) => {
-      const customTitle = user.studentProfile?.customTitle ?? "";
-      return {
-        ...user,
-        aiAccessEnabled: user.studentProfile?.aiAccessEnabled ?? false,
-        objectiveAiAccessEnabled:
-          user.studentProfile?.objectiveAiAccessEnabled ?? false,
-        customTitle,
-        ranking: rankingByUserId.get(user.id) ?? null,
-      };
-    }),
   });
 }
 

@@ -47,10 +47,12 @@ vi.mock("@/lib/judge", () => ({
 
 vi.mock("@/lib/judgeQueue", () => {
   class MockJudgeQueueFullError extends Error {}
+  class MockJudgeQueueOwnerLimitError extends Error {}
   class MockJudgeQueueTimeoutError extends Error {}
   return {
     enqueueJudgeTask: mocks.enqueue,
     JudgeQueueFullError: MockJudgeQueueFullError,
+    JudgeQueueOwnerLimitError: MockJudgeQueueOwnerLimitError,
     JudgeQueueTimeoutError: MockJudgeQueueTimeoutError,
   };
 });
@@ -144,6 +146,46 @@ describe("learning assignment submission attribution", () => {
     expect(response.status).toBe(200);
     expect(body.countedForLearningAssignment).toBe(false);
     expect(mocks.updateAssignmentProblem).not.toHaveBeenCalled();
+  });
+
+  it("redacts output and runtime errors from the student response", async () => {
+    mocks.createSubmission.mockResolvedValueOnce({
+      caseResults: [
+        {
+          actualOutput: "HIDDEN_ACTUAL_RESPONSE",
+          caseIndex: 1,
+          errorMessage: "HIDDEN_STDERR_RESPONSE",
+          expectedOutput: "HIDDEN_EXPECTED_RESPONSE",
+          input: "HIDDEN_INPUT_RESPONSE",
+          runtimeMs: 2,
+          status: "Runtime Error",
+        },
+      ],
+      errorMessage: "HIDDEN_STDERR_RESPONSE",
+      id: 99,
+      language: "C++17",
+      passedCount: 0,
+      runtimeMs: 2,
+      status: "Runtime Error",
+      totalCount: 1,
+    });
+
+    const response = await POST(request({}) as never, {
+      params: Promise.resolve({ id: "12" }),
+    });
+    const body = await response.json();
+    const serialized = JSON.stringify(body);
+
+    expect(response.status).toBe(200);
+    expect(body.submission.errorMessage).toBe("程序运行时异常");
+    expect(body.submission.caseResults[0]).toMatchObject({
+      actualOutput: "",
+      errorMessage: "程序运行时异常",
+      expectedOutput: "",
+      input: "",
+      studentDetailsHidden: true,
+    });
+    expect(serialized).not.toContain("HIDDEN_");
   });
 
   it("keeps a late judge result but detaches it when the teacher removed the problem", async () => {

@@ -142,6 +142,25 @@ export async function prepareE2eDatabase() {
     await prisma.problem.create({
       data: {
         category: "E2E",
+        dataRange: "1 <= n <= 1000",
+        description: "输入一个整数并原样输出。",
+        difficulty: "入门",
+        id: 102,
+        inputDescription: "一个整数。",
+        outputDescription: "原样输出该整数。",
+        problemType: "programming",
+        sampleInput: "7",
+        sampleOutput: "7",
+        sortOrder: 0,
+        testCases: {
+          create: [{ input: "7\n", isSample: true, output: "7\n" }],
+        },
+        title: "E2E 题单外编程题",
+      },
+    });
+    await prisma.problem.create({
+      data: {
+        category: "E2E",
         dataRange: null,
         description: "选择负责保存数据的部件。",
         difficulty: "入门",
@@ -173,8 +192,9 @@ export async function prepareE2eDatabase() {
         caseResults: {
           create: [
             {
-              actualOutput: "0",
+              actualOutput: "HIDDEN_ACTUAL_E2E",
               caseIndex: 1,
+              errorMessage: "HIDDEN_STDERR_E2E",
               expectedOutput: "HIDDEN_EXPECTED_E2E",
               input: "HIDDEN_INPUT_E2E",
               status: "Wrong Answer",
@@ -182,6 +202,7 @@ export async function prepareE2eDatabase() {
           ],
         },
         code: "int main() { return 0; }",
+        errorMessage: "HIDDEN_STDERR_E2E",
         id: 501,
         language: "C++17",
         passedCount: 0,

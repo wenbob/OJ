@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildDockerRunArgs,
   isDockerInfrastructureResult,
+  getJudgeTaskBudgetMs,
   normalizeDockerErrorMessage,
+  shouldStopAfterRunCase,
 } from "./dockerJudge";
 
 describe("normalizeDockerErrorMessage", () => {
@@ -102,5 +104,29 @@ describe("normalizeDockerErrorMessage", () => {
 
     expect(args).toContain("--ulimit");
     expect(args).toContain("fsize=67108864:67108864");
+  });
+
+  it("caps the whole judge task budget and stops after terminal run failures", () => {
+    expect(getJudgeTaskBudgetMs("999999")).toBe(180_000);
+    expect(getJudgeTaskBudgetMs("invalid")).toBe(60_000);
+    expect(shouldStopAfterRunCase("time_limit_exceeded")).toBe(true);
+    expect(shouldStopAfterRunCase("runtime_error")).toBe(true);
+    expect(shouldStopAfterRunCase("mismatched")).toBe(false);
+  });
+
+  it("classifies an unverified container cleanup as infrastructure failure", () => {
+    expect(
+      isDockerInfrastructureResult(
+        {
+          errorMessage: "评测容器清理失败",
+          exitCode: null,
+          runtimeMs: 10,
+          stderr: "",
+          stdout: "",
+          timedOut: true,
+        },
+        "run",
+      ),
+    ).toBe(true);
   });
 });

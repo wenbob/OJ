@@ -14,6 +14,7 @@ import {
 import {
   enqueueJudgeTask,
   JudgeQueueFullError,
+  JudgeQueueOwnerLimitError,
   JudgeQueueTimeoutError,
 } from "@/lib/judgeQueue";
 import {
@@ -21,6 +22,7 @@ import {
   parseObjectiveItems,
   validateObjectiveItems,
 } from "@/lib/objectiveProblem";
+import { reserveObjectiveSubmission } from "@/lib/objectiveSubmissionRateLimit";
 import { prisma } from "@/lib/prisma";
 import {
   PayloadTooLargeError,
@@ -122,6 +124,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     problem.problemType === "objective"
       ? parseObjectiveItems(problem.objectiveItems)
       : [];
+  let objectiveReservation: ReturnType<
+    typeof reserveObjectiveSubmission
+  > | null = null;
   if (problem.problemType === "objective") {
     const objectiveErrors = validateObjectiveItems(objectiveItems);
     if (objectiveErrors.length > 0) {
@@ -270,10 +275,27 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { status: 429 },
       );
     }
+
+    objectiveReservation = reserveObjectiveSubmission({
+      examId,
+      problemId,
+      submissionType,
+      userId: auth.user.id,
+    });
+    if (!objectiveReservation.allowed) {
+      return NextResponse.json(
+        {
+          error: "该选择判断提交正在处理中，请稍后再试",
+          retryAfterSeconds: 1,
+        },
+        { headers: { "Retry-After": "1" }, status: 429 },
+      );
+    }
   }
 
-  let result: JudgeResult;
   try {
+    let result: JudgeResult;
+    try {
     if (problem.problemType === "objective") {
       result = judgeObjectiveSubmission({
         answerText: code,
@@ -281,54 +303,62 @@ export async function POST(request: NextRequest, context: RouteContext) {
       });
     } else {
       const judgeDefaults = await getJudgeDefaultSettings();
-      result = await enqueueJudgeTask(() =>
-        judgeCppCode({
-          code,
-          testCases: problem.testCases.map((item) => ({
-            input: item.input,
-            output: item.output,
-          })),
-          timeLimitMs: judgeDefaults.timeLimitMs,
-          memoryLimitMb: judgeDefaults.memoryLimitMb,
-        }),
+      result = await enqueueJudgeTask(
+        () =>
+          judgeCppCode({
+            code,
+            testCases: problem.testCases.map((item) => ({
+              input: item.input,
+              output: item.output,
+            })),
+            timeLimitMs: judgeDefaults.timeLimitMs,
+            memoryLimitMb: judgeDefaults.memoryLimitMb,
+          }),
+        { ownerKey: `user:${auth.user.id}`, priority: "submission" },
       );
     }
-  } catch (error) {
-    if (
-      error instanceof JudgeQueueFullError ||
-      error instanceof JudgeQueueTimeoutError ||
-      error instanceof JudgeInfrastructureError
-    ) {
-      const message =
+    } catch (error) {
+      if (error instanceof JudgeQueueOwnerLimitError) {
+        return NextResponse.json(
+          { error: error.message, retryAfterSeconds: 1 },
+          { headers: { "Retry-After": "1" }, status: 429 },
+        );
+      }
+      if (
+        error instanceof JudgeQueueFullError ||
+        error instanceof JudgeQueueTimeoutError ||
         error instanceof JudgeInfrastructureError
-          ? "评测服务暂时不可用，请稍后再试"
-          : "评测队列繁忙，请稍后再试";
-      return NextResponse.json(
-        { error: message, retryAfterSeconds: JUDGE_RETRY_AFTER_SECONDS },
-        {
-          headers: {
-            "Retry-After": String(JUDGE_RETRY_AFTER_SECONDS),
+      ) {
+        const message =
+          error instanceof JudgeInfrastructureError
+            ? "评测服务暂时不可用，请稍后再试"
+            : "评测队列繁忙，请稍后再试";
+        return NextResponse.json(
+          { error: message, retryAfterSeconds: JUDGE_RETRY_AFTER_SECONDS },
+          {
+            headers: {
+              "Retry-After": String(JUDGE_RETRY_AFTER_SECONDS),
+            },
+            status: 503,
           },
-          status: 503,
-        },
+        );
+      }
+      console.error("[JUDGE_SUBMISSION_ERROR]", {
+        message: error instanceof Error ? error.message : "unknown",
+        problemId,
+        userId: auth.user.id,
+      });
+      return NextResponse.json(
+        { error: "评测任务执行失败" },
+        { status: 500 },
       );
     }
-    console.error("[JUDGE_SUBMISSION_ERROR]", {
-      message: error instanceof Error ? error.message : "unknown",
-      problemId,
-      userId: auth.user.id,
-    });
-    return NextResponse.json(
-      { error: "评测任务执行失败" },
-      { status: 500 },
-    );
-  }
 
-  const {
-    countedForLearningAssignment,
-    learningAssignmentDetached,
-    submission,
-  } = await prisma.$transaction(
+    const {
+      countedForLearningAssignment,
+      learningAssignmentDetached,
+      submission,
+    } = await prisma.$transaction(
     async (tx) => {
       const currentAssignmentProblem =
         learningAssignmentId !== null && assignmentProblemId !== null
@@ -402,27 +432,30 @@ export async function POST(request: NextRequest, context: RouteContext) {
     },
   );
 
-  if (examId !== null) {
-    try {
+    if (examId !== null) {
+      try {
       // A judge can finish after the exam timer has closed the record. Refresh
       // the frozen score so an on-time submission is counted exactly once.
       await refreshFinishedExamScore({
         examId,
         userId: auth.user.id,
       });
-    } catch (error) {
-      console.error("[EXAM_SCORE_REFRESH_ERROR]", {
-        examId,
-        message: error instanceof Error ? error.message : "unknown",
-        userId: auth.user.id,
-      });
+      } catch (error) {
+        console.error("[EXAM_SCORE_REFRESH_ERROR]", {
+          examId,
+          message: error instanceof Error ? error.message : "unknown",
+          userId: auth.user.id,
+        });
+      }
     }
-  }
 
-  return NextResponse.json({
-    countedForLearningAssignment,
-    learningAssignmentDetached,
-    submission: sanitizeSubmissionForStudent(submission),
-    submissionId: submission.id,
-  });
+    return NextResponse.json({
+      countedForLearningAssignment,
+      learningAssignmentDetached,
+      submission: sanitizeSubmissionForStudent(submission),
+      submissionId: submission.id,
+    });
+  } finally {
+    objectiveReservation?.release();
+  }
 }

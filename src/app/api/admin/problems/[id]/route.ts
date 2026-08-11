@@ -207,40 +207,58 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "题目 ID 不合法" }, { status: 400 });
   }
 
-  const activeAssignmentCount = await prisma.learningAssignmentProblem.count({
-    where: {
-      completedAt: null,
+  try {
+    const archivedAt = await prisma.$transaction(async (tx) => {
+      const activeAssignmentCount = await tx.learningAssignmentProblem.count({
+        where: {
+          completedAt: null,
+          problemId,
+          assignment: { status: "active" },
+        },
+      });
+      if (activeAssignmentCount > 0) {
+        throw new ProblemArchiveConflictError(
+          "该题正在学生未完成的专项练习中，请先归档相关任务",
+        );
+      }
+
+      const publishedExam = await tx.examProblem.findFirst({
+        where: { problemId, exam: { status: "published" } },
+        select: { exam: { select: { title: true } } },
+      });
+      if (publishedExam) {
+        throw new ProblemArchiveConflictError(
+          `该题正在已发布考试《${publishedExam.exam.title}》中，请先取消发布`,
+        );
+      }
+
+      const nextArchivedAt = new Date();
+      const result = await tx.problem.updateMany({
+        where: { archivedAt: null, id: problemId },
+        data: { archivedAt: nextArchivedAt },
+      });
+      if (result.count === 0) throw new ProblemArchiveNotFoundError();
+      return nextArchivedAt;
+    });
+    return NextResponse.json({ archivedAt, archivedCount: 1, ok: true });
+  } catch (error) {
+    if (error instanceof ProblemArchiveConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    if (error instanceof ProblemArchiveNotFoundError) {
+      return NextResponse.json(
+        { error: "题目不存在或已经下架" },
+        { status: 404 },
+      );
+    }
+    console.error("[PROBLEM_ARCHIVE_ERROR]", {
+      message: error instanceof Error ? error.message : "unknown",
       problemId,
-      assignment: { status: "active" },
-    },
-  });
-  if (activeAssignmentCount > 0) {
-    return NextResponse.json(
-      { error: "该题正在学生未完成的专项练习中，请先归档相关任务" },
-      { status: 409 },
-    );
+    });
+    return NextResponse.json({ error: "下架题目失败" }, { status: 500 });
   }
-
-  const publishedExam = await prisma.examProblem.findFirst({
-    where: { problemId, exam: { status: "published" } },
-    select: { exam: { select: { title: true } } },
-  });
-  if (publishedExam) {
-    return NextResponse.json(
-      { error: `该题正在已发布考试《${publishedExam.exam.title}》中，请先取消发布` },
-      { status: 409 },
-    );
-  }
-
-  const archivedAt = new Date();
-  const result = await prisma.problem.updateMany({
-    where: { archivedAt: null, id: problemId },
-    data: { archivedAt },
-  });
-  if (result.count === 0) {
-    return NextResponse.json({ error: "题目不存在或已经下架" }, { status: 404 });
-  }
-  return NextResponse.json({ archivedAt, archivedCount: 1, ok: true });
 }
 
 class PublishedExamProblemError extends Error {}
+class ProblemArchiveConflictError extends Error {}
+class ProblemArchiveNotFoundError extends Error {}

@@ -32,6 +32,10 @@ describe("problem ordering", () => {
       { createdAt: "asc" },
       { id: "asc" },
     ]);
+    expect(getProblemOrderBy("title-asc")).toEqual([
+      { title: "asc" },
+      { id: "asc" },
+    ]);
   });
 
   it("sorts mixed numeric titles naturally and paginates after sorting", () => {

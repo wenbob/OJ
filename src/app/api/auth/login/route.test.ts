@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getLoginRateLimitStatus: vi.fn(),
   recordFailedLogin: vi.fn(),
   recordFailedLoginForIp: vi.fn(),
+  reserveLoginVerification: vi.fn(),
   userFindUnique: vi.fn(),
   userUpdate: vi.fn(),
   verifyPassword: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock("@/lib/loginRateLimit", () => ({
   loginRateLimitKey: () => "test-key",
   recordFailedLogin: mocks.recordFailedLogin,
   recordFailedLoginForIp: mocks.recordFailedLoginForIp,
+  reserveLoginVerification: mocks.reserveLoginVerification,
 }));
 vi.mock("@/lib/password", () => ({ verifyPassword: mocks.verifyPassword }));
 vi.mock("@/lib/prisma", () => ({
@@ -61,6 +63,11 @@ describe("login session rotation", () => {
     mocks.finishExamRecord.mockResolvedValue({ status: "submitted" });
     mocks.getLoginRateLimitStatus.mockReturnValue({
       limited: false,
+      retryAfterSeconds: 0,
+    });
+    mocks.reserveLoginVerification.mockReturnValue({
+      allowed: true,
+      release: vi.fn(),
       retryAfterSeconds: 0,
     });
   });
@@ -171,5 +178,33 @@ describe("login session rotation", () => {
     expect(response.status).toBe(401);
     expect(mocks.recordFailedLogin).toHaveBeenCalledWith("test-key");
     expect(mocks.recordFailedLoginForIp).toHaveBeenCalledWith("test-ip-key");
+  });
+
+  it("rejects overlapping password verification before querying the database", async () => {
+    mocks.reserveLoginVerification.mockReturnValueOnce({
+      allowed: false,
+      release: vi.fn(),
+      retryAfterSeconds: 1,
+    });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("1");
+    expect(mocks.userFindUnique).not.toHaveBeenCalled();
+    expect(mocks.verifyPassword).not.toHaveBeenCalled();
+  });
+
+  it("always releases the password verification reservation", async () => {
+    const release = vi.fn();
+    mocks.reserveLoginVerification.mockReturnValueOnce({
+      allowed: true,
+      release,
+      retryAfterSeconds: 0,
+    });
+    mocks.userFindUnique.mockRejectedValueOnce(new Error("database unavailable"));
+
+    await expect(POST(request())).rejects.toThrow("database unavailable");
+    expect(release).toHaveBeenCalledTimes(1);
   });
 });

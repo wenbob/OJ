@@ -6,6 +6,7 @@ import { POST as RESET_PASSWORD } from "./[id]/reset-password/route";
 import { GET, POST } from "./route";
 
 const mocks = vi.hoisted(() => ({
+  getStaffUserPage: vi.fn(),
   getStudentRankings: vi.fn(),
   hashPassword: vi.fn(),
   prisma: {
@@ -28,12 +29,20 @@ vi.mock("@/lib/password", () => ({
   hashPassword: mocks.hashPassword,
   validateAccountPassword(password: string) {
     if (password.length < 8) return "密码至少需要 8 位";
+    if (Buffer.byteLength(password, "utf8") > 72) {
+      return "密码的 UTF-8 编码不能超过 72 字节";
+    }
     return null;
   },
 }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: mocks.prisma,
+}));
+
+vi.mock("@/lib/staffUserDirectory", () => ({
+  getStaffUserPage: mocks.getStaffUserPage,
+  STAFF_USER_PAGE_SIZE: 50,
 }));
 
 vi.mock("@/lib/ranking", () => ({
@@ -113,6 +122,14 @@ describe("admin users API custom title handling", () => {
       response: null,
       user: { id: 1, role: "admin", username: "admin" },
     });
+    mocks.getStaffUserPage.mockResolvedValue({
+      page: 1,
+      pageSize: 50,
+      query: "",
+      total: 0,
+      totalPages: 1,
+      users: [],
+    });
   });
 
   it("returns custom title and ranking summary in the user list", async () => {
@@ -127,20 +144,26 @@ describe("admin users API custom title handling", () => {
       userId: 2,
       username: "alice",
     };
-    mocks.prisma.user.findMany.mockResolvedValue([
-      {
-        _count: { submissions: 4 },
-        createdAt: new Date("2026-06-28T00:00:00.000Z"),
-        id: 2,
-        role: "student",
-        studentProfile: {
+    mocks.getStaffUserPage.mockResolvedValue({
+      page: 1,
+      pageSize: 50,
+      query: "",
+      total: 1,
+      totalPages: 1,
+      users: [
+        {
           aiAccessEnabled: true,
+          createdAt: "2026-06-28T00:00:00.000Z",
           customTitle: "算法新星",
+          id: 2,
+          objectiveAiAccessEnabled: false,
+          ranking,
+          role: "student",
+          submissions: 4,
+          username: "alice",
         },
-        username: "alice",
-      },
-    ]);
-    mocks.getStudentRankings.mockResolvedValue([ranking]);
+      ],
+    });
 
     const response = await GET(emptyRequest());
     const body = await response.json();
@@ -153,13 +176,12 @@ describe("admin users API custom title handling", () => {
       username: "alice",
     });
     expect(JSON.stringify(body)).not.toContain("passwordHash");
-    expect(mocks.prisma.user.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        select: expect.not.objectContaining({
-          passwordHash: expect.anything(),
-        }),
-      }),
-    );
+    expect(mocks.getStaffUserPage).toHaveBeenCalledWith({
+      page: 1,
+      pageSize: 50,
+      query: "",
+      viewerRole: "admin",
+    });
   });
 
   it("creates a student with a custom title", async () => {
@@ -370,16 +392,11 @@ describe("admin users API custom title handling", () => {
       response: null,
       user: { id: 4, role: "teacher", username: "coach" },
     });
-    mocks.prisma.user.findMany.mockResolvedValue([]);
-    mocks.getStudentRankings.mockResolvedValue([]);
-
     const response = await GET(emptyRequest());
 
     expect(response.status).toBe(200);
-    expect(mocks.prisma.user.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { role: "student" },
-      }),
+    expect(mocks.getStaffUserPage).toHaveBeenCalledWith(
+      expect.objectContaining({ viewerRole: "teacher" }),
     );
   });
 
@@ -781,5 +798,19 @@ describe("admin users API custom title handling", () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe("密码至少需要 8 位");
     expect(mocks.prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects Unicode passwords that exceed bcrypt's 72-byte boundary", async () => {
+    const response = await POST(
+      jsonRequest({
+        password: "密".repeat(25),
+        role: "student",
+        username: "alice",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("72 字节");
+    expect(mocks.hashPassword).not.toHaveBeenCalled();
   });
 });

@@ -17,6 +17,7 @@ import {
   createLimitedOutputCollector,
 } from "@/lib/processOutputLimit";
 import { JudgeInfrastructureError } from "@/lib/judgeErrors";
+import { assertJudgeCasePayload } from "@/lib/judgeCaseLimits";
 import type { SubmissionStatus } from "@/lib/status";
 
 export type JudgeTestCase = {
@@ -139,6 +140,12 @@ function validateRunInput({ expectedOutputs, inputs }: RunCppInput) {
   if (expectedOutputs && expectedOutputs.length !== inputs.length) {
     throw new Error("样例输入与标准输出数量不一致");
   }
+  assertJudgeCasePayload(
+    inputs.map((input, index) => ({
+      input,
+      output: expectedOutputs?.[index],
+    })),
+  );
 }
 
 export async function localRunCppCode({

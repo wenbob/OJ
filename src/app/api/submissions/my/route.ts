@@ -5,6 +5,7 @@ import {
   readPaginationFromUrl,
 } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
+import { sanitizeSubmissionForStudent } from "@/lib/submissionVisibility";
 
 export async function GET(request: NextRequest) {
   const auth = await requireApiUser(request);
@@ -24,10 +25,13 @@ export async function GET(request: NextRequest) {
     }),
     prisma.submission.count({ where }),
   ]);
+  const studentSubmissions = submissions.map((submission) =>
+    sanitizeSubmissionForStudent(submission),
+  );
 
   return NextResponse.json({
-    items: submissions,
-    submissions,
+    items: studentSubmissions,
+    submissions: studentSubmissions,
     ...buildPaginationMeta({ page, pageSize, total }),
   });
 }

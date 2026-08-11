@@ -180,6 +180,72 @@ describe("parseProblemMarkdown", () => {
     expect(parsed.samples[0].output).not.toContain("```");
   });
 
+  it("按样例编号配对并允许编号块乱序出现", () => {
+    const reordered = validMarkdown.replace(
+      /## 样例[\s\S]*?## 数据范围/,
+      `## 样例
+
+### 输入样例 2
+
+\`\`\`text
+10 20
+\`\`\`
+
+### 输出样例 1
+
+\`\`\`text
+3
+\`\`\`
+
+### 输入样例 1
+
+\`\`\`text
+1 2
+\`\`\`
+
+### 输出样例 2
+
+\`\`\`text
+30
+\`\`\`
+
+## 数据范围`,
+    );
+
+    expect(parseProblemMarkdown(reordered).samples).toEqual([
+      { input: "1 2", output: "3" },
+      { input: "10 20", output: "30" },
+    ]);
+  });
+
+  it("拒绝重复样例编号，避免覆盖或错配答案", () => {
+    const duplicate = validMarkdown.replace(
+      "### 输入样例 2",
+      "### 输入样例 1",
+    );
+
+    expect(() => parseProblemMarkdown(duplicate)).toThrow("样例 1 的输入重复");
+  });
+
+  it("代码围栏内的二级标题不会截断或冒充题目章节", () => {
+    const fencedHeading = validMarkdown.replace(
+      "输入两个整数 a 和 b，输出它们的和。",
+      `下面是题面中的原样文本：
+
+\`\`\`text
+## 输入格式
+这里不是章节
+\`\`\`
+
+继续阅读题目。`,
+    );
+    const parsed = parseProblemMarkdown(fencedHeading);
+
+    expect(parsed.description).toContain("## 输入格式");
+    expect(parsed.description).toContain("继续阅读题目");
+    expect(parsed.inputDescription).toBe("一行两个整数 a 和 b。");
+  });
+
   it("缺少标题时报错", () => {
     expect(() => parseProblemMarkdown(validMarkdown.replace("# A+B 问题", ""))).toThrow(
       "缺少试题名称",

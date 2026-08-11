@@ -110,12 +110,16 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     await page.goto("/student/submissions/501");
     await page.locator("details summary").click();
     await expect(
-      page.getByText("隐藏测试点的输入和标准输出不对学生公开"),
+      page.getByText(
+        "正式提交的测试输入、标准输出、程序输出和详细运行错误不对学生公开；请使用公开样例或自定义输入调试。",
+      ),
     ).toBeVisible();
     await expect(page.locator("body")).not.toContainText("HIDDEN_INPUT_E2E");
     await expect(page.locator("body")).not.toContainText(
       "HIDDEN_EXPECTED_E2E",
     );
+    await expect(page.locator("body")).not.toContainText("HIDDEN_ACTUAL_E2E");
+    await expect(page.locator("body")).not.toContainText("HIDDEN_STDERR_E2E");
   });
 
   await test.step("Judge infrastructure failure is retryable and not stored", async () => {
@@ -127,7 +131,7 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     expect(String(response.body.error)).toContain("评测服务");
   });
 
-  await test.step("an unrelated active exam blocks objective AI", async () => {
+  await test.step("an active exam blocks out-of-scope AI", async () => {
     const started = await postJson(page, "/api/exams/201/start");
     expect(started.status).toBe(201);
 
@@ -141,6 +145,20 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     );
     expect(blocked.status).toBe(403);
     expect(String(blocked.body.error)).toContain("正式考试");
+
+    const programmingBlocked = await postJson(
+      page,
+      "/api/ai/problem-assist",
+      {
+        code: "",
+        mode: "overview",
+        problemId: 102,
+      },
+    );
+    expect(programmingBlocked.status).toBe(403);
+    expect(String(programmingBlocked.body.error)).toContain(
+      "考试期间不能使用日常练习 AI",
+    );
   });
 
   await test.step("exam submission is idempotent", async () => {

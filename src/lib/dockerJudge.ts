@@ -68,6 +68,7 @@ export function isDockerInfrastructureResult(
   result: CppProcessResult,
   phase: "compile" | "run",
 ) {
+  if (result.errorMessage === "评测容器清理失败") return true;
   const details = [result.errorMessage, result.stderr, result.stdout]
     .filter(Boolean)
     .join("\n");
@@ -98,6 +99,80 @@ function createContainerName() {
   return `oj-cpp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+type DockerControlResult = {
+  errorMessage?: string;
+  exitCode: number | null;
+  stderr: string;
+  timedOut: boolean;
+};
+
+function runDockerControlCommand(
+  args: string[],
+  timeoutMs: number,
+): Promise<DockerControlResult> {
+  return new Promise((resolve) => {
+    const child = spawn("docker", args, {
+      windowsHide: true,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let settled = false;
+    let stderr = "";
+    let forceTimer: ReturnType<typeof setTimeout> | null = null;
+    const finish = (result: DockerControlResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (forceTimer) clearTimeout(forceTimer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      forceTimer = setTimeout(
+        () => finish({ exitCode: null, stderr, timedOut: true }),
+        250,
+      );
+    }, timeoutMs);
+    child.stderr.on("data", (chunk) => {
+      stderr = `${stderr}${String(chunk)}`.slice(-4096);
+    });
+    child.on("error", (error) => {
+      finish({
+        errorMessage: error.message,
+        exitCode: null,
+        stderr,
+        timedOut: false,
+      });
+    });
+    child.on("close", (exitCode) => {
+      finish({ exitCode, stderr, timedOut: false });
+    });
+  });
+}
+
+function isMissingContainerMessage(value: string) {
+  return /no such (?:object|container)/i.test(value);
+}
+
+async function forceRemoveDockerContainer(containerName: string) {
+  const removed = await runDockerControlCommand(
+    ["rm", "-f", containerName],
+    5_000,
+  );
+  const removeDetails = `${removed.errorMessage ?? ""}\n${removed.stderr}`;
+  if (removed.exitCode === 0 || isMissingContainerMessage(removeDetails)) {
+    return true;
+  }
+
+  const inspected = await runDockerControlCommand(
+    ["inspect", containerName],
+    2_000,
+  );
+  const inspectDetails = `${inspected.errorMessage ?? ""}\n${inspected.stderr}`;
+  return (
+    inspected.exitCode !== 0 && isMissingContainerMessage(inspectDetails)
+  );
+}
+
 function runProcess({
   args,
   input,
@@ -119,7 +194,8 @@ function runProcess({
     const stderr = createLimitedOutputCollector(outputLimitBytes);
     let settled = false;
     let timedOut = false;
-    let cleanupPromise: Promise<void> | null = null;
+    let cleanupPromise: Promise<boolean> | null = null;
+    let forcedFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
 
     const child = spawn("docker", args, {
       windowsHide: true,
@@ -128,25 +204,7 @@ function runProcess({
 
     const cleanupContainer = () => {
       if (cleanupPromise) return cleanupPromise;
-      cleanupPromise = new Promise<void>((cleanupDone) => {
-        const cleanup = spawn("docker", ["rm", "-f", containerName], {
-          windowsHide: true,
-          stdio: "ignore",
-        });
-        let cleanupSettled = false;
-        const finishCleanup = () => {
-          if (cleanupSettled) return;
-          cleanupSettled = true;
-          clearTimeout(cleanupTimer);
-          cleanupDone();
-        };
-        const cleanupTimer = setTimeout(() => {
-          cleanup.kill();
-          finishCleanup();
-        }, 5_000);
-        cleanup.once("error", finishCleanup);
-        cleanup.once("close", finishCleanup);
-      });
+      cleanupPromise = forceRemoveDockerContainer(containerName);
       return cleanupPromise;
     };
 
@@ -154,29 +212,53 @@ function runProcess({
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      if (cleanupPromise) await cleanupPromise;
-      resolve({ ...result, runtimeMs: Date.now() - startedAt });
+      if (forcedFinalizeTimer) clearTimeout(forcedFinalizeTimer);
+      const cleanupSucceeded = cleanupPromise ? await cleanupPromise : true;
+      resolve({
+        ...result,
+        exitCode: cleanupSucceeded ? result.exitCode : null,
+        errorMessage: cleanupSucceeded
+          ? result.errorMessage
+          : "评测容器清理失败",
+        runtimeMs: Date.now() - startedAt,
+      });
+    };
+
+    const forceStop = () => {
+      child.kill();
+      void cleanupContainer();
+      if (!forcedFinalizeTimer) {
+        forcedFinalizeTimer = setTimeout(() => {
+          void finish({
+            stdout: stdout.value(),
+            stderr: stderr.value(),
+            exitCode: null,
+            timedOut,
+            errorMessage:
+              stdout.exceeded() || stderr.exceeded()
+                ? "程序输出超过限制"
+                : undefined,
+          });
+        }, 9_000);
+      }
     };
 
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill();
-      void cleanupContainer();
+      forceStop();
     }, timeoutMs);
 
     child.stdout.on("data", (chunk) => {
       stdout.append(chunk);
       if (stdout.exceeded()) {
-        child.kill();
-        void cleanupContainer();
+        forceStop();
       }
     });
 
     child.stderr.on("data", (chunk) => {
       stderr.append(chunk);
       if (stderr.exceeded()) {
-        child.kill();
-        void cleanupContainer();
+        forceStop();
       }
     });
 
@@ -264,6 +346,16 @@ export function buildDockerRunArgs({
   ];
 }
 
+export function getJudgeTaskBudgetMs(value = process.env.JUDGE_TASK_TIMEOUT_MS) {
+  return readBoundedPositiveInt(value, 60_000, 180_000);
+}
+
+export function shouldStopAfterRunCase(
+  status: ReturnType<typeof buildRunCaseResult>["status"],
+) {
+  return status === "time_limit_exceeded" || status === "runtime_error";
+}
+
 export async function dockerRunCppCode({
   code,
   expectedOutputs,
@@ -271,6 +363,7 @@ export async function dockerRunCppCode({
   memoryLimitMb = readPositiveInt(process.env.JUDGE_MEMORY_LIMIT_MB, 128),
   timeLimitMs = readPositiveInt(process.env.JUDGE_TIME_LIMIT_MS, 2000),
 }: RunCppInput): Promise<RunCppResult> {
+  const taskDeadline = Date.now() + getJudgeTaskBudgetMs();
   const compileTimeoutMs = readPositiveInt(
     process.env.JUDGE_COMPILE_TIMEOUT_MS,
     30000,
@@ -309,7 +402,13 @@ export async function dockerRunCppCode({
       }),
       containerName: compileContainerName,
       input: "",
-      timeoutMs: Math.max(compileTimeoutMs, timeLimitMs + 5000),
+      timeoutMs: Math.max(
+        1,
+        Math.min(
+          Math.max(compileTimeoutMs, timeLimitMs + 5000),
+          taskDeadline - Date.now(),
+        ),
+      ),
     });
 
     const compileInfrastructureError = getDockerInfrastructureError(
@@ -343,6 +442,25 @@ export async function dockerRunCppCode({
     const cases = [];
 
     for (const [index, input] of inputs.entries()) {
+      const remainingTaskMs = taskDeadline - Date.now();
+      if (remainingTaskMs <= 0) {
+        cases.push(
+          buildRunCaseResult({
+            caseIndex: index + 1,
+            expectedOutput: expectedOutputs?.[index],
+            input,
+            processResult: {
+              exitCode: null,
+              runtimeMs: 0,
+              stderr: "",
+              stdout: "",
+              timedOut: true,
+            },
+            timeLimitMs,
+          }),
+        );
+        break;
+      }
       const runContainerName = createContainerName();
       const run = await runProcess({
         args: buildDockerRunArgs({
@@ -354,12 +472,11 @@ export async function dockerRunCppCode({
         }),
         containerName: runContainerName,
         input,
-        timeoutMs: timeLimitMs,
+        timeoutMs: Math.max(1, Math.min(timeLimitMs, remainingTaskMs)),
       });
       const runInfrastructureError = getDockerInfrastructureError(run, "run");
       if (runInfrastructureError) throw runInfrastructureError;
-      cases.push(
-        buildRunCaseResult({
+      const caseResult = buildRunCaseResult({
           caseIndex: index + 1,
           expectedOutput: expectedOutputs?.[index],
           input,
@@ -373,8 +490,9 @@ export async function dockerRunCppCode({
           runtimeErrorFallback:
             "程序运行时异常，可能触发了容器资源限制",
           timeLimitMs,
-        }),
-      );
+        });
+      cases.push(caseResult);
+      if (shouldStopAfterRunCase(caseResult.status)) break;
     }
 
     return summarizeRunCases({

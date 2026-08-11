@@ -2,9 +2,12 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import {
   buildLearningAnalytics,
+  buildLearningAnalyticsFromFacts,
   buildLearningRecommendations,
   getLearningWindowStartedAt,
   type LearningProblemInput,
+  type LearningAnalyticsFactsInput,
+  type LearningProblemFactInput,
   type LearningSubmissionInput,
   type LearningWindow,
 } from "./learningAnalytics";
@@ -29,6 +32,34 @@ type RawLearningSubmissionRow = {
   submissionType: string;
   userId: bigint | number;
 };
+
+type RawAllLearningFactRow = {
+  acceptedEver: bigint | number;
+  failedAfterLastAccepted: bigint | number;
+  latestStatus: string;
+  latestSubmissionAt: Date | string;
+  latestSubmissionId: bigint | number;
+  problemId: bigint | number;
+  userId: bigint | number;
+  windowFailedCount: bigint | number;
+};
+
+type RawAllLearningStatusRow = {
+  count: bigint | number;
+  status: string;
+  userId: bigint | number;
+};
+
+function emptyLearningFacts(): LearningAnalyticsFactsInput {
+  return {
+    hasLearningData: false,
+    lastTrainingAt: null,
+    problemFacts: [],
+    statusCounts: {},
+    submissionCount: 0,
+    uniqueAcceptedInWindow: 0,
+  };
+}
 
 function normalizeRawLearningSubmission(
   row: RawLearningSubmissionRow,
@@ -143,9 +174,139 @@ async function findLearningSubmissions({
   return [...baselines, ...currentRows];
 }
 
+async function findAllLearningFacts(studentId?: number) {
+  const studentFilter =
+    studentId === undefined
+      ? Prisma.sql`AND u."role" = 'student'`
+      : Prisma.sql`AND s."userId" = ${studentId}`;
+  const [factRows, statusRows] = await Promise.all([
+    prisma.$queryRaw<RawAllLearningFactRow[]>(Prisma.sql`
+      WITH filtered AS (
+        SELECT s."createdAt", s."id", s."problemId", s."status", s."userId"
+        FROM "Submission" s
+        INNER JOIN "Problem" p ON p."id" = s."problemId"
+        INNER JOIN "User" u ON u."id" = s."userId"
+        WHERE p."problemType" = 'programming'
+          ${studentFilter}
+      ),
+      latest AS (
+        SELECT *, ROW_NUMBER() OVER (
+          PARTITION BY "userId", "problemId"
+          ORDER BY "createdAt" DESC, "id" DESC
+        ) AS row_rank
+        FROM filtered
+      ),
+      accepted AS (
+        SELECT *, ROW_NUMBER() OVER (
+          PARTITION BY "userId", "problemId"
+          ORDER BY "createdAt" DESC, "id" DESC
+        ) AS row_rank
+        FROM filtered
+        WHERE "status" = 'Accepted'
+      )
+      SELECT
+        f."userId" AS "userId",
+        f."problemId" AS "problemId",
+        MAX(CASE WHEN f."status" = 'Accepted' THEN 1 ELSE 0 END) AS "acceptedEver",
+        SUM(CASE WHEN f."status" <> 'Accepted' THEN 1 ELSE 0 END) AS "windowFailedCount",
+        SUM(CASE
+          WHEN f."status" <> 'Accepted' AND (
+            a."id" IS NULL OR
+            f."createdAt" > a."createdAt" OR
+            (f."createdAt" = a."createdAt" AND f."id" > a."id")
+          ) THEN 1 ELSE 0
+        END) AS "failedAfterLastAccepted",
+        l."status" AS "latestStatus",
+        l."createdAt" AS "latestSubmissionAt",
+        l."id" AS "latestSubmissionId"
+      FROM filtered f
+      INNER JOIN latest l
+        ON l."userId" = f."userId"
+        AND l."problemId" = f."problemId"
+        AND l.row_rank = 1
+      LEFT JOIN accepted a
+        ON a."userId" = f."userId"
+        AND a."problemId" = f."problemId"
+        AND a.row_rank = 1
+      GROUP BY f."userId", f."problemId"
+    `),
+    prisma.$queryRaw<RawAllLearningStatusRow[]>(Prisma.sql`
+      SELECT s."userId" AS "userId", s."status" AS "status", COUNT(*) AS "count"
+      FROM "Submission" s
+      INNER JOIN "Problem" p ON p."id" = s."problemId"
+      INNER JOIN "User" u ON u."id" = s."userId"
+      WHERE p."problemType" = 'programming'
+        ${studentFilter}
+      GROUP BY s."userId", s."status"
+    `),
+  ]);
+
+  const factsByStudent = new Map<number, LearningAnalyticsFactsInput>();
+  for (const row of factRows) {
+    const userId = Number(row.userId);
+    const facts = factsByStudent.get(userId) ?? emptyLearningFacts();
+    const acceptedEver = Number(row.acceptedEver) > 0;
+    const latestSubmissionAt =
+      row.latestSubmissionAt instanceof Date
+        ? row.latestSubmissionAt
+        : new Date(row.latestSubmissionAt);
+    const problemFact: LearningProblemFactInput = {
+      acceptedEver,
+      acceptedInWindow: acceptedEver,
+      failedAfterLastAccepted: Number(row.failedAfterLastAccepted),
+      latestStatus: row.latestStatus,
+      latestSubmissionAt,
+      latestSubmissionId: Number(row.latestSubmissionId),
+      problemId: Number(row.problemId),
+      windowFailedCount: Number(row.windowFailedCount),
+    };
+    facts.problemFacts.push(problemFact);
+    facts.hasLearningData = true;
+    if (
+      !facts.lastTrainingAt ||
+      latestSubmissionAt > facts.lastTrainingAt
+    ) {
+      facts.lastTrainingAt = latestSubmissionAt;
+    }
+    if (acceptedEver) facts.uniqueAcceptedInWindow += 1;
+    factsByStudent.set(userId, facts);
+  }
+  for (const row of statusRows) {
+    const userId = Number(row.userId);
+    const facts = factsByStudent.get(userId) ?? emptyLearningFacts();
+    const count = Number(row.count);
+    facts.statusCounts[row.status] = count;
+    facts.submissionCount += count;
+    facts.hasLearningData ||= count > 0;
+    factsByStudent.set(userId, facts);
+  }
+  return factsByStudent;
+}
+
+async function loadLearningData({
+  now,
+  studentId,
+  window,
+}: {
+  now: Date;
+  studentId?: number;
+  window: LearningWindow;
+}) {
+  if (window === "all") {
+    return {
+      factsByStudent: await findAllLearningFacts(studentId),
+      kind: "facts" as const,
+    };
+  }
+  return {
+    kind: "submissions" as const,
+    submissions: await findLearningSubmissions({ now, studentId, window }),
+  };
+}
+
 export async function getTeacherLearningDashboard(window: LearningWindow) {
   const now = new Date();
-  const [students, problems, submissions, assignments] = await Promise.all([
+  const [students, problems, learningData, assignments] = await Promise.all([
     prisma.user.findMany({
       where: { role: "student" },
       select: { id: true, username: true },
@@ -156,19 +317,24 @@ export async function getTeacherLearningDashboard(window: LearningWindow) {
       select: programmingProblemSelect,
       orderBy: { id: "asc" },
     }),
-    findLearningSubmissions({ now, window }),
+    loadLearningData({ now, window }),
     prisma.learningAssignment.findMany({
-      where: { status: "active" },
+      where: {
+        status: "active",
+        problems: { some: { completedAt: null } },
+      },
       include: { problems: { orderBy: { order: "asc" } } },
       orderBy: { createdAt: "desc" },
     }),
   ]);
 
   const submissionsByStudent = new Map<number, LearningSubmissionInput[]>();
-  for (const { userId, ...submission } of submissions) {
-    const list = submissionsByStudent.get(userId) ?? [];
-    list.push(submission);
-    submissionsByStudent.set(userId, list);
+  if (learningData.kind === "submissions") {
+    for (const { userId, ...submission } of learningData.submissions) {
+      const list = submissionsByStudent.get(userId) ?? [];
+      list.push(submission);
+      submissionsByStudent.set(userId, list);
+    }
   }
   const assignmentsByStudent = new Map<number, typeof assignments>();
   for (const assignment of assignments) {
@@ -182,12 +348,22 @@ export async function getTeacherLearningDashboard(window: LearningWindow) {
     const activeIncompleteAssignments = studentAssignments.filter(
       (assignment) => !getAssignmentProgress(assignment.problems).completed,
     );
-    const analytics = buildLearningAnalytics({
-      now,
-      problems,
-      submissions: submissionsByStudent.get(student.id) ?? [],
-      window,
-    });
+    const analytics =
+      learningData.kind === "facts"
+        ? buildLearningAnalyticsFromFacts({
+            facts:
+              learningData.factsByStudent.get(student.id) ??
+              emptyLearningFacts(),
+            now,
+            problems,
+            window,
+          })
+        : buildLearningAnalytics({
+            now,
+            problems,
+            submissions: submissionsByStudent.get(student.id) ?? [],
+            window,
+          });
     const assignmentProblemCount = activeIncompleteAssignments.reduce(
       (sum, assignment) => sum + assignment.problems.length,
       0,
@@ -229,7 +405,7 @@ export async function getTeacherLearningStudentDetail(
   window: LearningWindow,
 ) {
   const now = new Date();
-  const [student, problems, submissions, assignments, activeRows] = await Promise.all([
+  const [student, problems, learningData, assignments, activeRows] = await Promise.all([
     prisma.user.findFirst({
       where: { id: studentId, role: "student" },
       select: { id: true, username: true },
@@ -239,7 +415,7 @@ export async function getTeacherLearningStudentDetail(
       select: programmingProblemSelect,
       orderBy: { id: "asc" },
     }),
-    findLearningSubmissions({ now, studentId, window }),
+    loadLearningData({ now, studentId, window }),
     prisma.learningAssignment.findMany({
       where: { studentId },
       include: {
@@ -258,12 +434,21 @@ export async function getTeacherLearningStudentDetail(
     }),
   ]);
   if (!student) return null;
-  const analytics = buildLearningAnalytics({
-    now,
-    problems,
-    submissions,
-    window,
-  });
+  const analytics =
+    learningData.kind === "facts"
+      ? buildLearningAnalyticsFromFacts({
+          facts:
+            learningData.factsByStudent.get(studentId) ?? emptyLearningFacts(),
+          now,
+          problems,
+          window,
+        })
+      : buildLearningAnalytics({
+          now,
+          problems,
+          submissions: learningData.submissions,
+          window,
+        });
   const activeProblems = problems.filter((problem) => problem.archivedAt === null);
   const activeProblemIds = activeRows.flatMap(({ problemId }) =>
     problemId === null ? [] : [problemId],

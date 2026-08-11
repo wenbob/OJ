@@ -357,6 +357,7 @@ export function ProblemSubmitForm({
     result?.caseResults?.find((item) => item.status !== "Accepted") ??
     result?.caseResults?.[0];
   const hasActualOutput =
+    !outputCase?.studentDetailsHidden &&
     outputCase?.actualOutput !== undefined && outputCase.actualOutput !== null;
   // AppShell 的入场动画会让内容祖先保留 transform；挂到 body 后，
   // fixed 遮罩才能始终以当前视口为参照，不受结果区自动滚动影响。
@@ -551,6 +552,11 @@ export function ProblemSubmitForm({
               <StatusBadge status={result.status} />
               <span>{result.passedCount}/{result.totalCount} 测试点</span>
               <span>{formatRuntime(result.runtimeMs)}</span>
+              {outputCase?.studentDetailsHidden ? (
+                <span className="mt-2 border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                  正式提交的测试输入、标准输出、程序输出和详细运行错误不公开；请使用公开样例或自定义输入调试。
+                </span>
+              ) : null}
               {hasActualOutput ? (
                 <div className="mt-2 grid gap-1">
                   <span className="text-xs font-black text-ink-600">
