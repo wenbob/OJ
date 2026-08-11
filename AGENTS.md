@@ -28,8 +28,8 @@ Next.js App Router + Prisma + SQLite 的 C++ 在线 OJ。生产目录 `/www/oj`�
 
 ## Judge、提交与可见性
 
-- 生产只能使用 Docker Judge；保留无网络、内存/CPU/PID、capability、`no-new-privileges` 和只读根文件系统限制。运行阶段工作目录只读，编译阶段限制产物大小。单题最多 100 个测试点，单点输入输出合计 256KB、整题 2MB；整任务默认 60 秒预算，首个 TLE/运行异常停止后续测试点。超时清理必须有最终 watchdog 并确认容器已移除，不能无限占用队列槽。
-- 学生可达的编程提交响应（创建、详情、列表）以及编程 AI 的最近提交上下文必须由 `sanitizeSubmissionForStudent` 清空每个测试点的 `input`、`expectedOutput`、`actualOutput`，并把运行阶段错误替换为不含测试数据的通用状态提示；编译错误可保留，管理员和有权老师继续读取完整数据。不要用前端隐藏或 `isSample` 判断替代服务端脱敏。
+- 生产只用 Docker Judge；保留无网络、内存/CPU/PID、capability、`no-new-privileges` 和只读根文件系统限制。运行目录只读，编译限制产物大小。单题最多 100 个测试点，单点输入输出合计 256KB、整题 2MB；整任务默认 60 秒预算，首个 TLE/运行异常即停止。超时清理须由最终 watchdog 确认容器移除，不能占住队列槽。
+- 学生可达的编程提交（创建、详情、列表）及编程 AI 最近提交必须由 `sanitizeSubmissionForStudent` 清空每个测试点的 `input`、`expectedOutput`、`actualOutput`，并把运行阶段错误替换为不含测试数据的通用提示；编译错误可保留，管理员和有权老师继续读取完整数据。不要用前端隐藏或 `isSample` 代替服务端脱敏。
 - `POST /api/problems/[id]/run` 只运行编程题公开样例或自定义输入，不创建 `Submission`，不影响积分、错题本、考试成绩或专项进度。样例输入/答案只由服务端读取，自定义输入不判 Accepted/WA。
 - 试运行与正式提交共用队列；正式提交优先于未开始的试运行但不中断运行中任务。同优先级按账号轮转，每账号默认最多运行 1 个、等待 2 个 Judge 任务；服务端另限制每账号一个试运行和结束后 5 秒冷却。
 - 学生考试试运行必须验证发布状态、题目归属、已开始且未交卷/超时；后台校题不创建 `ExamRecord`。
