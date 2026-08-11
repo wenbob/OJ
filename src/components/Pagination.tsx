@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@/components/NavigationLink";
 
 type SearchValue = string | string[] | undefined;
 
@@ -31,24 +31,26 @@ export function Pagination({
             上一页
           </span>
         ) : (
-          <Link
+          <NavigationLink
             className="btn btn-secondary px-3 py-2"
             href={pageHref(basePath, searchParams, previousPage, pageSize)}
+            pendingLabel="正在加载上一页"
           >
             上一页
-          </Link>
+          </NavigationLink>
         )}
         {page >= totalPages ? (
           <span className="btn btn-secondary pointer-events-none px-3 py-2 opacity-50">
             下一页
           </span>
         ) : (
-          <Link
+          <NavigationLink
             className="btn btn-secondary px-3 py-2"
             href={pageHref(basePath, searchParams, nextPage, pageSize)}
+            pendingLabel="正在加载下一页"
           >
             下一页
-          </Link>
+          </NavigationLink>
         )}
       </div>
     </div>

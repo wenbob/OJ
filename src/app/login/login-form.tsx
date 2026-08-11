@@ -31,7 +31,6 @@ export function LoginForm({ reason }: { reason?: string }) {
     }
 
     router.push(data.redirectTo);
-    router.refresh();
   }
 
   return (

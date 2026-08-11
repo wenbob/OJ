@@ -98,7 +98,6 @@ export function ExamFormClient({
           ? `${basePath}/exams/${examId}/edit`
           : `${basePath}/exams`,
       );
-      router.refresh();
     } catch {
       setMessage("网络异常，保存失败，请检查连接后重试");
     } finally {

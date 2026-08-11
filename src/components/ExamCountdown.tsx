@@ -40,7 +40,6 @@ export function ExamCountdown({
         () => null,
       );
       router.push(`/student/exams/${examId}/result`);
-      router.refresh();
     }
 
     const updateRemaining = () => {

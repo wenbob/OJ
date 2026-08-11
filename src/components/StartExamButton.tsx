@@ -43,7 +43,6 @@ export function StartExamButton({
       }
 
       router.push(data.redirectTo ?? `/student/exams/${examId}/take`);
-      router.refresh();
     } catch {
       setError("网络异常，无法开始考试，请检查连接后重试");
     } finally {

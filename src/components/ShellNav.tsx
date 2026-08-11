@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { NavigationLink } from "@/components/NavigationLink";
 import { isShellNavItemActive } from "@/lib/shellNavigation";
 
 type NavItem = {
@@ -17,15 +17,16 @@ export function ShellNav({ items }: { items: NavItem[] }) {
       {items.map((item) => {
         const active = isShellNavItemActive(pathname, item.href);
         return (
-          <Link
+          <NavigationLink
             aria-current={active ? "page" : undefined}
             className="shell-nav-link"
             data-active={active}
             href={item.href}
             key={item.href}
+            pendingLabel={`正在打开${item.label}`}
           >
             {item.label}
-          </Link>
+          </NavigationLink>
         );
       })}
     </nav>

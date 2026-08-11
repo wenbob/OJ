@@ -268,7 +268,6 @@ export function ImportClient() {
     router.push(
       `/admin/problems?problemType=${preview[0]?.problemType ?? "programming"}`,
     );
-    router.refresh();
   }
 
   return (

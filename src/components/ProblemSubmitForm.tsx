@@ -317,7 +317,6 @@ export function ProblemSubmitForm({
       }
 
       router.push(examData.resultHref ?? `/student/exams/${examId}/result`);
-      router.refresh();
       return;
     }
 

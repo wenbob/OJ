@@ -25,7 +25,6 @@ export function ExamSubmitButton({ examId }: { examId: number }) {
       }
 
       router.push(data.resultHref ?? `/student/exams/${examId}/result`);
-      router.refresh();
     } catch {
       setError("网络异常，交卷失败，请检查连接后重试");
     } finally {

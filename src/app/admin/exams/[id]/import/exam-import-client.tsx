@@ -146,7 +146,6 @@ export function ExamImportClient({
 
     setSuccess(`成功导入 ${data.count} 道题，并加入当前考试`);
     router.push(`/admin/exams/${examId}/edit`);
-    router.refresh();
   }
 
   return (

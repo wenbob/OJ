@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { AcceptedProblemIndicator } from "@/components/AcceptedProblemIndicator";
 import { AppShell } from "@/components/AppShell";
+import { NavigationLink } from "@/components/NavigationLink";
 import { Pagination } from "@/components/Pagination";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import { isProblemType } from "@/lib/objectiveProblem";
@@ -281,15 +282,16 @@ function CategoryLink({
   href: string;
 }) {
   return (
-    <Link
+    <NavigationLink
       className={`border px-3 py-2 text-sm font-black ${
         active
           ? "border-ink-950 bg-ink-950 text-white"
           : "border-ink-950/10 bg-white/65 text-ink-800 hover:border-steel hover:text-steel"
       }`}
       href={href}
+      pendingLabel="正在筛选题目"
     >
       {children}
-    </Link>
+    </NavigationLink>
   );
 }
