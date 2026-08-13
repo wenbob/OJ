@@ -60,7 +60,7 @@ export async function AppShell({
   );
 
   return (
-    <div className="min-h-screen" data-app-shell-root>
+    <div className="flex min-h-0 flex-1 flex-col" data-app-shell-root>
       {user.role === "student" ? <SessionPresenceGuard /> : null}
       <header className="arena-shell-header" data-app-shell-header>
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
@@ -116,7 +116,7 @@ export async function AppShell({
         </div>
         {!locked ? <ShellNav items={shellNav} /> : null}
       </header>
-      <main className="app-stage mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-9">
+      <main className="app-stage mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6 md:py-9">
         {children}
       </main>
     </div>

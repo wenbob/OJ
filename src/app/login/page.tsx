@@ -18,7 +18,7 @@ export default async function LoginPage({
   if (user) redirect(roleHome(user.role));
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+    <main className="relative flex flex-1 items-center justify-center overflow-hidden px-4 py-10">
       <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full border-[52px] border-clay/5" />
       <div className="absolute -bottom-40 -right-28 h-[30rem] w-[30rem] rounded-full border-[64px] border-steel/5" />
       <section className="relative grid w-full max-w-6xl overflow-hidden border border-ink-950/12 bg-[#fffdf7] shadow-[0_28px_80px_rgba(50,42,29,0.14)] md:grid-cols-[1.08fr_0.92fr]">

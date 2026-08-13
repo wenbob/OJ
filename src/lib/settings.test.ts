@@ -7,8 +7,10 @@ import {
   getPublicSettings,
   normalizeSystemSettingsPayload,
   validateBrowserIcon,
+  validatePublicSecurityRecordIcon,
   validateSystemSettings,
 } from "@/lib/settings";
+import { MAX_PUBLIC_SECURITY_RECORD_ICON_BYTES } from "@/lib/siteCompliance";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -25,6 +27,9 @@ function pngDataUrl(size = 8) {
     : Buffer.concat([signature, Buffer.alloc(size - signature.length)]);
   return `data:image/png;base64,${bytes.toString("base64")}`;
 }
+
+const publicSecurityPngDataUrl =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAJklEQVQ4jWOQ8ur6T03MMGrg/9Ew/D+abP6P5pT/o4XD/xFYHgIAm2kCfq3CV6UAAAAASUVORK5CYII=";
 
 describe("browser identity system settings", () => {
   it("normalizes browser title and icon fields", () => {
@@ -53,9 +58,67 @@ describe("browser identity system settings", () => {
   it("does not expose an invalid icon already stored in the database", async () => {
     vi.mocked(prisma.systemSetting.findMany).mockResolvedValueOnce([
       { key: "browserIcon", value: "data:image/png;base64,SGVsbG8=" },
+      { key: "icpRecordNumber", value: "not-an-icp-record" },
+      {
+        key: "publicSecurityRecordNumber",
+        value: "陕公网安备61011302001964号",
+      },
+      { key: "publicSecurityRecordIcon", value: "data:image/png;base64,SGVsbG8=" },
     ] as never);
 
-    await expect(getPublicSettings()).resolves.toMatchObject({ browserIcon: "" });
+    await expect(getPublicSettings()).resolves.toMatchObject({
+      browserIcon: "",
+      icpRecordNumber: "",
+      publicSecurityRecordIcon: "",
+      publicSecurityRecordNumber: "",
+    });
+  });
+
+  it("validates ICP-only and complete public-security settings", () => {
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        icpRecordNumber: "陕ICP备2026021441号-1",
+      }),
+    ).toBe("");
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        icpRecordNumber: "陕ICP备2026021441号-1",
+        publicSecurityRecordIcon: publicSecurityPngDataUrl,
+        publicSecurityRecordNumber: "陕公网安备61011302001964号",
+      }),
+    ).toBe("");
+  });
+
+  it("rejects incomplete, disguised, oversized, and unreasonable police icons", () => {
+    expect(
+      validateSystemSettings({
+        ...defaultSystemSettings,
+        publicSecurityRecordNumber: "陕公网安备61011302001964号",
+      }),
+    ).toContain("同时填写");
+    expect(
+      validatePublicSecurityRecordIcon("data:image/png;base64,SGVsbG8="),
+    ).toContain("格式不匹配");
+    expect(
+      validatePublicSecurityRecordIcon(
+        `data:image/png;base64,${Buffer.alloc(
+          MAX_PUBLIC_SECURITY_RECORD_ICON_BYTES + 1,
+        ).toString("base64")}`,
+      ),
+    ).toContain("64KB");
+
+    const invalidDimensions = Buffer.from(
+      publicSecurityPngDataUrl.slice("data:image/png;base64,".length),
+      "base64",
+    );
+    invalidDimensions.writeUInt32BE(513, 16);
+    expect(
+      validatePublicSecurityRecordIcon(
+        `data:image/png;base64,${invalidDimensions.toString("base64")}`,
+      ),
+    ).toContain("512×512");
   });
 
   it("allows an empty browser title but limits custom titles to 60 characters", () => {

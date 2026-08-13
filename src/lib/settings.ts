@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { MAX_BROWSER_ICON_BYTES } from "@/lib/browserIdentity";
+import {
+  MAX_PUBLIC_SECURITY_RECORD_ICON_BYTES,
+  normalizeIcpRecordNumber,
+  normalizePublicSecurityRecordNumber,
+  validateIcpRecordNumber,
+  validatePublicSecurityRecordNumber,
+} from "@/lib/siteCompliance";
 import { cache } from "react";
 
 export const defaultCppTemplate = `#include <bits/stdc++.h>
@@ -40,6 +47,9 @@ export const defaultSystemSettings = {
   siteSubtitle: "在线练习平台",
   browserTitle: "",
   browserIcon: "",
+  icpRecordNumber: "",
+  publicSecurityRecordNumber: "",
+  publicSecurityRecordIcon: "",
   studentNotice: "欢迎进入 C++ OJ 练习平台",
   adminNotice: "欢迎进入后台管理",
   defaultCppTemplate,
@@ -170,11 +180,28 @@ export const getPublicSettings = cache(async function getPublicSettings() {
   const browserIcon = validateBrowserIcon(settings.browserIcon)
     ? defaultSystemSettings.browserIcon
     : settings.browserIcon;
+  const icpRecordNumber = normalizeIcpRecordNumber(settings.icpRecordNumber);
+  const publicSecurityRecordNumber = normalizePublicSecurityRecordNumber(
+    settings.publicSecurityRecordNumber,
+  );
+  const hasValidIcpRecord =
+    Boolean(icpRecordNumber) && !validateIcpRecordNumber(icpRecordNumber);
+  const hasValidPublicSecurityRecord =
+    Boolean(publicSecurityRecordNumber && settings.publicSecurityRecordIcon) &&
+    !validatePublicSecurityRecordNumber(publicSecurityRecordNumber) &&
+    !validatePublicSecurityRecordIcon(settings.publicSecurityRecordIcon);
   return {
     siteName: settings.siteName,
     siteSubtitle: settings.siteSubtitle,
     browserTitle: settings.browserTitle,
     browserIcon,
+    icpRecordNumber: hasValidIcpRecord ? icpRecordNumber : "",
+    publicSecurityRecordNumber: hasValidPublicSecurityRecord
+      ? publicSecurityRecordNumber
+      : "",
+    publicSecurityRecordIcon: hasValidPublicSecurityRecord
+      ? settings.publicSecurityRecordIcon
+      : "",
     studentNotice: settings.studentNotice,
   };
 });
@@ -226,6 +253,14 @@ export function normalizeSystemSettingsPayload(body: unknown): SystemSettings {
       key === "aiStaffProgrammingAssistEnabled"
     ) {
       settings[key] = value === true || value === "true" ? "true" : "false";
+    } else if (key === "icpRecordNumber") {
+      settings[key] =
+        typeof value === "string" ? normalizeIcpRecordNumber(value) : "";
+    } else if (key === "publicSecurityRecordNumber") {
+      settings[key] =
+        typeof value === "string"
+          ? normalizePublicSecurityRecordNumber(value)
+          : "";
     } else {
       settings[key] =
         typeof value === "string"
@@ -261,6 +296,22 @@ export function validateSystemSettings(settings: SystemSettings) {
   }
   const browserIconError = validateBrowserIcon(settings.browserIcon);
   if (browserIconError) return browserIconError;
+  const icpRecordError = validateIcpRecordNumber(settings.icpRecordNumber);
+  if (icpRecordError) return icpRecordError;
+  const publicSecurityRecordError = validatePublicSecurityRecordNumber(
+    settings.publicSecurityRecordNumber,
+  );
+  if (publicSecurityRecordError) return publicSecurityRecordError;
+  const publicSecurityRecordIconError = validatePublicSecurityRecordIcon(
+    settings.publicSecurityRecordIcon,
+  );
+  if (publicSecurityRecordIconError) return publicSecurityRecordIconError;
+  if (
+    Boolean(settings.publicSecurityRecordNumber) !==
+    Boolean(settings.publicSecurityRecordIcon)
+  ) {
+    return "公安备案号与公安备案图标必须同时填写或同时留空";
+  }
   if (positiveInt(settings.defaultTimeLimitMs, 0) <= 0) {
     return "默认评测时间限制必须大于 0";
   }
@@ -402,6 +453,37 @@ export function validateBrowserIcon(value: string) {
     bytes[3] === 0;
   if (match[1] === "image/png" ? !isPng : !isIco) {
     return "浏览器标签图标文件内容与格式不匹配";
+  }
+  return "";
+}
+
+export function validatePublicSecurityRecordIcon(value: string) {
+  if (!value) return "";
+  const match = value.match(
+    /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/,
+  );
+  if (!match) return "公安备案图标仅支持 PNG 文件";
+
+  const bytes = Buffer.from(match[1], "base64");
+  if (bytes.length === 0) return "公安备案图标内容为空";
+  if (bytes.length > MAX_PUBLIC_SECURITY_RECORD_ICON_BYTES) {
+    return "公安备案图标不能超过 64KB";
+  }
+
+  const pngSignature = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
+  const hasValidHeader =
+    bytes.length >= 33 &&
+    bytes.subarray(0, 8).equals(pngSignature) &&
+    bytes.readUInt32BE(8) === 13 &&
+    bytes.subarray(12, 16).equals(Buffer.from("IHDR"));
+  if (!hasValidHeader) return "公安备案图标文件内容与 PNG 格式不匹配";
+
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  if (width < 8 || height < 8 || width > 512 || height > 512) {
+    return "公安备案图标尺寸必须在 8×8 至 512×512 像素之间";
   }
   return "";
 }

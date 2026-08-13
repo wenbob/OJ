@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { BrowserIdentity } from "@/components/BrowserIdentity";
+import { SiteComplianceFooter } from "@/components/SiteComplianceFooter";
 import { resolveBrowserTitle } from "@/lib/browserIdentity";
 import { getPublicSettings } from "@/lib/settings";
 import "katex/dist/katex.min.css";
@@ -36,9 +37,10 @@ export default async function RootLayout({
 
   return (
     <html lang="zh-CN">
-      <body className="min-h-screen font-sans antialiased">
+      <body className="flex min-h-screen flex-col font-sans antialiased">
         <BrowserIdentity initialSettings={settings} />
-        {children}
+        <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+        <SiteComplianceFooter settings={settings} />
       </body>
     </html>
   );

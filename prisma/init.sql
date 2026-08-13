@@ -431,6 +431,15 @@ INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
 VALUES ('browserIcon', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('icpRecordNumber', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('publicSecurityRecordNumber', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
+VALUES ('publicSecurityRecordIcon', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO "SystemSetting" ("key", "value", "createdAt", "updatedAt")
 VALUES ('aiConversationRetentionDays', '180', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 PRAGMA foreign_keys=ON;

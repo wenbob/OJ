@@ -40,6 +40,18 @@ test("slow navigation shows feedback and a content skeleton while the shell stay
   page,
 }) => {
   const publicSettingsRequests: string[] = [];
+  let delayedRsc = false;
+  let releaseLeaderboardRsc = () => {};
+  const leaderboardRscGate = new Promise<void>((resolve) => {
+    releaseLeaderboardRsc = resolve;
+  });
+  await page.route("**/student/leaderboard*", async (route) => {
+    if (route.request().headers().rsc === "1") {
+      delayedRsc = true;
+      await leaderboardRscGate;
+    }
+    await route.continue();
+  });
   page.on("request", (request) => {
     if (new URL(request.url()).pathname === "/api/settings/public") {
       publicSettingsRequests.push(request.url());
@@ -53,44 +65,40 @@ test("slow navigation shows feedback and a content skeleton while the shell stay
     element.setAttribute("data-persistence-probe", "student-shell");
   });
 
-  let delayedRsc = false;
-  page.on("request", (request) => {
-    if (
-      request.headers().rsc === "1" &&
-      new URL(request.url()).pathname === "/student/leaderboard"
-    ) {
-      delayedRsc = true;
-    }
-  });
-
   const link = page.getByRole("link", { name: "天梯榜", exact: true });
   const startedAt = Date.now();
   await link.evaluate((element) => (element as HTMLElement).click());
-  const pendingIndicator = link.locator(".navigation-pending-indicator");
-  await expect(pendingIndicator).toHaveCSS("opacity", "1", { timeout: 250 });
-  expect(Date.now() - startedAt).toBeLessThan(300);
-  await expect(link.locator("[aria-busy='true']")).toBeAttached();
-  await expect(page.locator("[data-route-loading]")).toBeVisible();
-  await expect(header.getByRole("link").first()).toBeEnabled();
+  const releaseTimer = setTimeout(releaseLeaderboardRsc, 800);
+  try {
+    const pendingIndicator = link.locator(".navigation-pending-indicator");
+    await expect(pendingIndicator).toHaveCSS("opacity", "1", { timeout: 250 });
+    expect(Date.now() - startedAt).toBeLessThan(300);
+    await expect(link.locator("[aria-busy='true']")).toBeAttached();
+    await expect(page.locator("[data-route-loading]")).toBeVisible();
+    await expect(header.getByRole("link").first()).toBeEnabled();
 
-  await expect(page).toHaveURL(/\/student\/leaderboard/);
-  expect(delayedRsc).toBe(true);
-  await expect(header).toHaveAttribute(
-    "data-persistence-probe",
-    "student-shell",
-  );
+    await expect(page).toHaveURL(/\/student\/leaderboard/);
+    expect(delayedRsc).toBe(true);
+    await expect(header).toHaveAttribute(
+      "data-persistence-probe",
+      "student-shell",
+    );
 
-  const animation = await page
-    .locator("main.app-stage > *")
-    .first()
-    .evaluate((element) => {
-      const style = getComputedStyle(element);
-      return {
-        delay: style.animationDelay,
-        duration: style.animationDuration,
-      };
-    });
-  expect(animation).toEqual({ delay: "0s", duration: "0.18s" });
+    const animation = await page
+      .locator("main.app-stage > section, main.app-stage > div")
+      .first()
+      .evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          delay: style.animationDelay,
+          duration: style.animationDuration,
+        };
+      });
+    expect(animation).toEqual({ delay: "0s", duration: "0.18s" });
+  } finally {
+    clearTimeout(releaseTimer);
+    releaseLeaderboardRsc();
+  }
 });
 
 test("all three role shells persist across same-role navigation", async ({ browser }) => {
@@ -178,7 +186,7 @@ test("reduced-motion mode effectively disables page entrance motion", async ({
   const page = await context.newPage();
   await login(page, "e2e-teacher", "e2e-teacher-password");
   const duration = await page
-    .locator("main.app-stage > *")
+    .locator("main.app-stage > section, main.app-stage > div")
     .first()
     .evaluate((element) => parseFloat(getComputedStyle(element).animationDuration));
   expect(duration).toBeLessThanOrEqual(0.001);

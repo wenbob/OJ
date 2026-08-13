@@ -6,11 +6,19 @@ import { ImagePlus, RotateCcw, Save } from "lucide-react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useState } from "react";
 import { notifyBrowserIdentityUpdated } from "@/components/BrowserIdentity";
+import { SiteComplianceFooter } from "@/components/SiteComplianceFooter";
 import type {
   AiProviderAdminStatus,
   AiProviderAdminStatuses,
 } from "@/lib/aiProvider";
 import { MAX_BROWSER_ICON_BYTES, resolveBrowserTitle } from "@/lib/browserIdentity";
+import {
+  ICP_RECORD_NUMBER_MAX_CHARS,
+  MAX_PUBLIC_SECURITY_RECORD_ICON_BYTES,
+  PUBLIC_SECURITY_RECORD_NUMBER_MAX_CHARS,
+  validateIcpRecordNumber,
+  validatePublicSecurityRecordNumber,
+} from "@/lib/siteCompliance";
 import {
   AI_CUSTOM_PROMPT_MAX_CHARS,
   AI_COOLDOWN_MAX_SECONDS,
@@ -82,6 +90,42 @@ export function SettingsForm({
     reader.readAsDataURL(file);
   }
 
+  function uploadPublicSecurityRecordIcon(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setMessage("");
+    setError("");
+
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (extension !== "png") {
+      setError("公安备案图标仅支持 PNG 文件");
+      return;
+    }
+    if (file.size > MAX_PUBLIC_SECURITY_RECORD_ICON_BYTES) {
+      setError("公安备案图标不能超过 64KB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => setError("公安备案图标读取失败，请重新选择");
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const commaIndex = result.indexOf(",");
+      if (commaIndex === -1) {
+        setError("公安备案图标读取失败，请重新选择");
+        return;
+      }
+      update(
+        "publicSecurityRecordIcon",
+        `data:image/png;base64,${result.slice(commaIndex + 1)}`,
+      );
+    };
+    reader.readAsDataURL(file);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
@@ -89,6 +133,25 @@ export function SettingsForm({
 
     if (!settings.siteName.trim()) {
       setError("平台名称不能为空");
+      return;
+    }
+    const icpRecordError = validateIcpRecordNumber(settings.icpRecordNumber);
+    if (icpRecordError) {
+      setError(icpRecordError);
+      return;
+    }
+    const publicSecurityRecordError = validatePublicSecurityRecordNumber(
+      settings.publicSecurityRecordNumber,
+    );
+    if (publicSecurityRecordError) {
+      setError(publicSecurityRecordError);
+      return;
+    }
+    if (
+      Boolean(settings.publicSecurityRecordNumber.trim()) !==
+      Boolean(settings.publicSecurityRecordIcon)
+    ) {
+      setError("公安备案号与公安备案图标必须同时填写或同时留空");
       return;
     }
     if (Number(settings.defaultTimeLimitMs) <= 0) {
@@ -179,7 +242,7 @@ export function SettingsForm({
       }
       notifyBrowserIdentityUpdated(savedSettings);
       router.refresh();
-      setMessage("设置已保存，两类 AI 模型、提示词与角色触发间隔已经生效");
+      setMessage("系统设置已保存并生效");
     } catch {
       setError("保存设置失败，请检查本地服务");
     } finally {
@@ -268,6 +331,83 @@ export function SettingsForm({
             <RotateCcw size={16} />恢复默认图标
           </button>
           <p className="text-xs font-semibold text-ink-500">建议使用正方形 64×64 或 128×128 图片，最大 256KB。</p>
+        </div>
+      </section>
+
+      <section className="surface p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-black">备案信息</h2>
+            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-ink-600">
+              保存后显示在全站页脚。公安备案尚未通过时保持对应两项为空；审核通过后填入备案号并上传平台提供的官方图标即可生效。
+            </p>
+          </div>
+          <span className="border border-steel/20 bg-steel/10 px-3 py-1.5 text-xs font-black text-steel">
+            固定官方查询链接
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <TextInput
+            label="ICP备案号"
+            maxLength={ICP_RECORD_NUMBER_MAX_CHARS}
+            onChange={(value) => update("icpRecordNumber", value)}
+            placeholder="例如：陕ICP备2026021441号-1"
+            value={settings.icpRecordNumber}
+          />
+          <TextInput
+            label="公安备案号"
+            maxLength={PUBLIC_SECURITY_RECORD_NUMBER_MAX_CHARS}
+            onChange={(value) => update("publicSecurityRecordNumber", value)}
+            placeholder="审核通过后填写，例如：陕公网安备61011302000000号"
+            value={settings.publicSecurityRecordNumber}
+          />
+        </div>
+
+        <div className="mt-5 border-t border-ink-950/10 pt-5">
+          <p className="text-sm font-bold text-ink-800">公安备案官方图标</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <label className="btn btn-secondary cursor-pointer">
+              <ImagePlus size={16} />上传 PNG
+              <input
+                accept=".png,image/png"
+                className="sr-only"
+                onChange={uploadPublicSecurityRecordIcon}
+                type="file"
+              />
+            </label>
+            <button
+              className="btn btn-secondary"
+              disabled={!settings.publicSecurityRecordIcon}
+              onClick={() => update("publicSecurityRecordIcon", "")}
+              type="button"
+            >
+              <RotateCcw size={16} />清除图标
+            </button>
+            {settings.publicSecurityRecordIcon ? (
+              <span className="inline-flex items-center gap-2 border border-ink-950/10 bg-paper-50 px-3 py-2 text-xs font-bold text-ink-600">
+                <Image
+                  alt="公安备案图标预览"
+                  className="h-5 w-5 object-contain"
+                  height={20}
+                  src={settings.publicSecurityRecordIcon}
+                  unoptimized
+                  width={20}
+                />
+                已选择官方图标
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-2 text-xs font-semibold text-ink-500">
+            仅支持全国互联网安全管理服务平台提供的 PNG，最大 64KB；公安备案号与图标须同时填写。
+          </p>
+        </div>
+
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-ink-500">
+            全站页脚预览
+          </p>
+          <SiteComplianceFooter preview settings={settings} />
         </div>
       </section>
 

@@ -65,6 +65,9 @@ export async function prepareE2eDatabase() {
     const settings = [
       { key: "siteName", value: "OJ E2E" },
       { key: "siteSubtitle", value: "隔离浏览器回归环境" },
+      { key: "icpRecordNumber", value: "陕ICP备2026021441号-1" },
+      { key: "publicSecurityRecordNumber", value: "" },
+      { key: "publicSecurityRecordIcon", value: "" },
       { key: "allowStudentRegister", value: "false" },
       { key: "aiPracticeEnabled", value: "true" },
       { key: "aiObjectiveExplanationEnabled", value: "true" },
@@ -261,7 +264,7 @@ export async function prepareE2eDatabase() {
       },
     });
 
-    for (const examId of [201, 202, 203]) {
+    for (const examId of [201, 202, 203, 204]) {
       await prisma.exam.create({
         data: {
           aiEnabled: false,

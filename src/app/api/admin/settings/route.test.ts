@@ -33,6 +33,8 @@ vi.mock("@/lib/prisma", () => ({
 const pngIcon = `data:image/png;base64,${Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 ]).toString("base64")}`;
+const publicSecurityPngIcon =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAJklEQVQ4jWOQ8ur6T03MMGrg/9Ew/D+abP6P5pT/o4XD/xFYHgIAm2kCfq3CV6UAAAAASUVORK5CYII=";
 
 function request(
   settings: unknown,
@@ -91,6 +93,51 @@ describe("PUT /api/admin/settings", () => {
   it("rejects settings requests above the dedicated limit", async () => {
     const response = await PUT(request(defaultSystemSettings, 512 * 1024 + 1) as never);
     expect(response.status).toBe(413);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("stores ICP-only and complete public-security fields atomically", async () => {
+    const response = await PUT(
+      request({
+        ...defaultSystemSettings,
+        icpRecordNumber: "  陕ICP备2026021441号-1  ",
+        publicSecurityRecordIcon: publicSecurityPngIcon,
+        publicSecurityRecordNumber: "陕公网安备61011302001964号",
+      }) as never,
+    );
+    expect(response.status).toBe(200);
+    expect(prisma.systemSetting.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: { key: "icpRecordNumber", value: "陕ICP备2026021441号-1" },
+      }),
+    );
+    expect(prisma.systemSetting.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: {
+          key: "publicSecurityRecordIcon",
+          value: publicSecurityPngIcon,
+        },
+      }),
+    );
+  });
+
+  it("rejects malformed or incomplete compliance fields before writing", async () => {
+    const malformed = await PUT(
+      request({
+        ...defaultSystemSettings,
+        icpRecordNumber: "javascript:alert(1)",
+      }) as never,
+    );
+    expect(malformed.status).toBe(400);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+
+    const incomplete = await PUT(
+      request({
+        ...defaultSystemSettings,
+        publicSecurityRecordNumber: "陕公网安备61011302001964号",
+      }) as never,
+    );
+    expect(incomplete.status).toBe(400);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
