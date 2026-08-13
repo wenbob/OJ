@@ -617,6 +617,19 @@ tar -tzf oj-release.tgz | grep 'libquery_engine'
 
 发布包应包含源码、`public`、`prisma`、`scripts`、package 文件、`.next/standalone` 和 `.next/static`；必须排除 `.env`、`*.db`、SQLite 派生文件、`.next/cache`、仓库压缩包和 Windows 本机的根 `node_modules`。standalone 目录内的最小运行依赖是 Next.js 产物的一部分，可以保留。若 `package-lock.json` 已改变，必须另外包含同一次本地 Linux 构建生成的根 `node_modules`，不能复用旧服务器依赖。
 
+Linux 临时打包目录若由 `mktemp -d` 创建，默认通常是 `0700`。直接从该目录打包会把归档根权限带到 `/www/oj`，导致 Nginx 用户无法穿透目录，页面 HTML 正常但 `/_next/static/` CSS/JS 返回 403。打包前和服务器解包后都要显式校验目录权限；应用根保持 `0755`，生产 `.env` 单独保持 `0600`：
+
+```bash
+chmod 0755 "$stage"
+tar -czf oj-release.tgz -C "$stage" .
+
+# 服务器解包并复制 .env 后
+chmod 0755 /www/oj-new
+chmod 0600 /www/oj-new/.env
+test "$(stat -c %a /www/oj-new)" = 755
+test "$(stat -c %a /www/oj-new/.env)" = 600
+```
+
 不能只排除仓库根目录的 `.env`。Next 构建追踪可能把它复制为 `.next/standalone/.env`；发布前必须检查压缩包内的全部归档条目，发现任意层级的环境文件或数据库文件就停止上传：
 
 ```bash
@@ -674,6 +687,8 @@ test -d /www/oj-new/.next/standalone/public
 test -f /www/oj-new/.env
 test -d /www/oj-new/node_modules
 test -f /www/oj-new/prisma/prod.db
+test "$(stat -c %a /www/oj-new)" = 755
+test "$(stat -c %a /www/oj-new/.env)" = 600
 
 mv /www/oj /www/oj-old-${stamp}
 mv /www/oj-new /www/oj

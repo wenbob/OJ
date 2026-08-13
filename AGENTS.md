@@ -19,7 +19,7 @@ Next.js App Router + Prisma + SQLite 的 C++ 在线 OJ。生产目录 `/www/oj`�
 - 不提交 `.env`、数据库、备份、`.next`、根 `node_modules`、发布压缩包或密钥；删旧备份前先确认保留备份真实存在。
 - 2 核 2GB 生产机不承担常规 `npm ci` 或 Next 构建。用本地 Linux/Docker 生成 Ubuntu standalone；Windows `.next/standalone` 不能上传。
 - Linux 构建需安装 OpenSSL 3；包内 Prisma 引擎必须是 `libquery_engine-debian-openssl-3.0.x.so.node`。若容器加载生产环境，使用 `npm ci --include=dev`。
-- 发布包逐条目排除所有层级 `.env`、数据库、备份、`.next/cache` 和嵌套压缩包；把 `.next/static`、`public` 复制进 `.next/standalone`。启动必须走 `npm run start`，不得裸跑 standalone server。
+- 发布包逐条目排除所有层级 `.env`、数据库、备份、`.next/cache` 和嵌套压缩包；把 `.next/static`、`public` 复制进 `.next/standalone`。Linux 打包阶段必须让归档根目录和解包后的 `/www/oj` 保持 `0755`，生产 `.env` 保持 `0600`，否则 Nginx 直出的 CSS/JS 会因无法穿透目录返回 403。启动必须走 `npm run start`，不得裸跑 standalone server。
 - 依赖未变可复用服务器根 `node_modules`；依赖变化时上传 Linux 依赖或安排停机窗口。不要在 `/www/oj-new` 迁移绝对路径生产库；停 PM2、备份/复制最新 DB、切换目录后再在新 `/www/oj` 执行 `db:deploy`。
 - 只有无法本地构建时才按 `docs/deploy.md` 停 PM2 并用单 worker、`--max-old-space-size=768` 应急构建。
 - OJ 清理只允许 `/www/oj-old-*`、失败残留 `/www/oj-new` 和 OJ 发布包；前后检查当前目录、PM2 与健康接口。不得动其它站点、股票系统或未经确认执行 Docker 全局 prune。
