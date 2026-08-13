@@ -318,6 +318,7 @@ CREATE TABLE "ExamRecord" (
   "submittedAt" DATETIME,
   "status" TEXT NOT NULL DEFAULT 'in_progress',
   "totalScore" INTEGER,
+  "resumeLoginAllowed" BOOLEAN NOT NULL DEFAULT false,
   CONSTRAINT "ExamRecord_examId_fkey" FOREIGN KEY ("examId") REFERENCES "Exam"("id") ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "ExamRecord_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -325,6 +326,21 @@ CREATE TABLE "ExamRecord" (
 CREATE UNIQUE INDEX "ExamRecord_examId_userId_key" ON "ExamRecord"("examId", "userId");
 CREATE INDEX "ExamRecord_userId_status_idx" ON "ExamRecord"("userId", "status");
 CREATE INDEX "ExamRecord_examId_status_idx" ON "ExamRecord"("examId", "status");
+
+CREATE TABLE "ExamRecordResumeAudit" (
+  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "examRecordId" INTEGER NOT NULL,
+  "operatorId" INTEGER,
+  "operatorUsername" TEXT NOT NULL,
+  "operatorRole" TEXT NOT NULL,
+  "reason" TEXT NOT NULL,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "ExamRecordResumeAudit_examRecordId_fkey" FOREIGN KEY ("examRecordId") REFERENCES "ExamRecord"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "ExamRecordResumeAudit_operatorId_fkey" FOREIGN KEY ("operatorId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE INDEX "ExamRecordResumeAudit_examRecordId_createdAt_idx" ON "ExamRecordResumeAudit"("examRecordId", "createdAt");
+CREATE INDEX "ExamRecordResumeAudit_operatorId_createdAt_idx" ON "ExamRecordResumeAudit"("operatorId", "createdAt");
 
 CREATE TABLE "SystemSetting" (
   "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,

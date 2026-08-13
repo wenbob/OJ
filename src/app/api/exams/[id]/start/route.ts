@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
 import { finishExamRecord, isExamExpired } from "@/lib/examScoring";
-import { runExamStartSerialized } from "@/lib/examStartLock";
+import { runExamRecordSerialized } from "@/lib/examStartLock";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = {
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "考试 ID 不合法" }, { status: 400 });
   }
 
-  const outcome = await runExamStartSerialized(auth.user.id, () =>
+  const outcome = await runExamRecordSerialized(auth.user.id, () =>
     prisma.$transaction(async (tx) => {
       const exam = await tx.exam.findUnique({
         where: { id: examId },

@@ -18,7 +18,9 @@ function assertE2eDatabasePath() {
     path.dirname(e2eDatabasePath) !== prismaDirectory ||
     path.basename(e2eDatabasePath) !== "e2e.db"
   ) {
-    throw new Error("E2E database path escaped the repository prisma directory");
+    throw new Error(
+      "E2E database path escaped the repository prisma directory",
+    );
   }
 }
 
@@ -140,6 +142,50 @@ export async function prepareE2eDatabase() {
           ],
         },
         title: "E2E 加法题",
+      },
+    });
+    await prisma.problem.create({
+      data: {
+        category: "E2E",
+        dataRange: null,
+        description: "判断数据是否存储在内存中。",
+        difficulty: "入门",
+        id: 105,
+        inputDescription: "",
+        objectiveItems: JSON.stringify([
+          {
+            answer: "True",
+            kind: "judge",
+            options: [],
+            score: 1,
+            stem: "变量可以保存在内存中。",
+          },
+        ]),
+        outputDescription: "",
+        problemType: "objective",
+        sampleInput: "",
+        sampleOutput: "",
+        sortOrder: 4,
+        title: "E2E 判断题",
+      },
+    });
+    await prisma.problem.create({
+      data: {
+        category: "E2E",
+        dataRange: "1 <= n <= 1000",
+        description: "输入一个整数并输出它的两倍。",
+        difficulty: "入门",
+        id: 104,
+        inputDescription: "一个整数。",
+        outputDescription: "该整数的两倍。",
+        problemType: "programming",
+        sampleInput: "4",
+        sampleOutput: "8",
+        sortOrder: 3,
+        testCases: {
+          create: [{ input: "4\n", isSample: true, output: "8\n" }],
+        },
+        title: "E2E 双倍题",
       },
     });
     await prisma.problem.create({
@@ -289,6 +335,137 @@ export async function prepareE2eDatabase() {
         },
       });
     }
+    await prisma.exam.create({
+      data: {
+        aiEnabled: false,
+        createdById: 1,
+        description: "浏览器多题布局回归专用考试。",
+        durationMin: 60,
+        examType: "programming",
+        id: 205,
+        problems: {
+          create: [
+            {
+              order: 1,
+              problemId: 101,
+              score: 50,
+              snapshotAt: new Date(),
+              snapshotProblemType: "programming",
+              snapshotScore: 50,
+              snapshotTitle: "E2E 加法题",
+            },
+            {
+              order: 2,
+              problemId: 104,
+              score: 50,
+              snapshotAt: new Date(),
+              snapshotProblemType: "programming",
+              snapshotScore: 50,
+              snapshotTitle: "E2E 双倍题",
+            },
+          ],
+        },
+        status: "published",
+        title: "E2E 多题考试",
+      },
+    });
+    await prisma.exam.create({
+      data: {
+        aiEnabled: false,
+        createdById: 1,
+        description: "浏览器客观题布局回归专用考试。",
+        durationMin: 60,
+        examType: "objective",
+        id: 206,
+        problems: {
+          create: [
+            {
+              order: 1,
+              problemId: 103,
+              score: 1,
+              snapshotAt: new Date(),
+              snapshotObjectiveItems: JSON.stringify([
+                {
+                  answer: "B",
+                  kind: "choice",
+                  options: [
+                    { label: "A", text: "处理器" },
+                    { label: "B", text: "存储器" },
+                  ],
+                  score: 1,
+                  stem: "哪个部件负责保存数据？",
+                },
+              ]),
+              snapshotProblemType: "objective",
+              snapshotScore: 1,
+              snapshotTitle: "E2E 客观题",
+            },
+            {
+              order: 2,
+              problemId: 105,
+              score: 1,
+              snapshotAt: new Date(),
+              snapshotObjectiveItems: JSON.stringify([
+                {
+                  answer: "True",
+                  kind: "judge",
+                  options: [],
+                  score: 1,
+                  stem: "变量可以保存在内存中。",
+                },
+              ]),
+              snapshotProblemType: "objective",
+              snapshotScore: 1,
+              snapshotTitle: "E2E 判断题",
+            },
+          ],
+        },
+        status: "published",
+        title: "E2E 客观多题考试",
+      },
+    });
+    await prisma.submission.createMany({
+      data: [
+        {
+          code: "// accepted before",
+          examId: 205,
+          id: 504,
+          language: "C++17",
+          passedCount: 1,
+          problemId: 104,
+          status: "Accepted",
+          submissionType: "exam",
+          totalCount: 1,
+          userId: 2,
+        },
+        {
+          code: "// later wrong answer",
+          examId: 205,
+          id: 505,
+          language: "C++17",
+          passedCount: 0,
+          problemId: 104,
+          status: "Wrong Answer",
+          submissionType: "exam",
+          totalCount: 1,
+          userId: 2,
+        },
+      ],
+    });
+    await prisma.submission.create({
+      data: {
+        code: "A",
+        examId: 206,
+        id: 506,
+        language: "Objective",
+        passedCount: 0,
+        problemId: 103,
+        status: "Wrong Answer",
+        submissionType: "exam",
+        totalCount: 1,
+        userId: 2,
+      },
+    });
 
     await prisma.aiConversation.create({
       data: {

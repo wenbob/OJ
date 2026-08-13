@@ -211,7 +211,7 @@ describe("exam deadline scoring", () => {
           startedAt,
           exam: { durationMin: 10 },
         }),
-        update: vi.fn().mockResolvedValue({ id: 7, totalScore: 100 }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       examProblem: {
         findMany: vi.fn().mockResolvedValue([
@@ -256,8 +256,8 @@ describe("exam deadline scoring", () => {
         }),
       }),
     );
-    expect(tx.examRecord.update).toHaveBeenCalledWith({
-      where: { id: 7 },
+    expect(tx.examRecord.updateMany).toHaveBeenCalledWith({
+      where: { id: 7, status: { not: "in_progress" } },
       data: { totalScore: 100 },
     });
   });

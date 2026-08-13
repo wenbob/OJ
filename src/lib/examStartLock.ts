@@ -1,6 +1,6 @@
 const tails = new Map<number, Promise<void>>();
 
-export async function runExamStartSerialized<T>(
+export async function runExamRecordSerialized<T>(
   userId: number,
   task: () => Promise<T>,
 ) {
@@ -19,6 +19,6 @@ export async function runExamStartSerialized<T>(
   }
 }
 
-export function clearExamStartLocks() {
+export function clearExamRecordLocks() {
   tails.clear();
 }

@@ -11,7 +11,7 @@ import {
 } from "@/lib/loginRateLimit";
 import { verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
-import { finishExamRecord } from "@/lib/examScoring";
+import { settleStudentExamsForLoginAndRotateSession } from "@/lib/examScoring";
 import {
   PayloadTooLargeError,
   REQUEST_LIMITS,
@@ -111,28 +111,7 @@ export async function POST(request: NextRequest) {
 
   let sessionUser;
   if (user.role === "student") {
-    const inProgressRecords = await prisma.examRecord.findMany({
-      where: { status: "in_progress", userId: user.id },
-      select: { examId: true },
-    });
-    for (const record of inProgressRecords) {
-      await finishExamRecord({
-        examId: record.examId,
-        status: "submitted",
-        userId: user.id,
-      });
-    }
-
-    sessionUser = await prisma.user.update({
-      where: { id: user.id },
-      data: { sessionVersion: { increment: 1 } },
-      select: {
-        id: true,
-        role: true,
-        sessionVersion: true,
-        username: true,
-      },
-    });
+    sessionUser = await settleStudentExamsForLoginAndRotateSession(user.id);
   } else {
     sessionUser = {
       id: user.id,

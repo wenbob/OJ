@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ExamCountdown } from "@/components/ExamCountdown";
 import { ExamExitGuard } from "@/components/ExamExitGuard";
 import { ExamSubmitButton } from "@/components/ExamSubmitButton";
+import { NavigationLink } from "@/components/NavigationLink";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
 import { ProblemRichText } from "@/components/ProblemRichText";
 import { ProblemSamples } from "@/components/ProblemSamples";
@@ -87,31 +87,36 @@ export default async function StudentExamTakePage({
     null;
 
   const problemIds = exam.problems.map((item) => item.problemId);
-  const [latestSubmissions, defaultCodeTemplate, aiCooldownSeconds] = await Promise.all([
-    prisma.submission.findMany({
-      where: {
-        examId,
-        userId: user.id,
-        submissionType: "exam",
-        problemId: { in: problemIds },
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        problemId: true,
-        status: true,
-        passedCount: true,
-        totalCount: true,
-        runtimeMs: true,
-        createdAt: true,
-      },
-    }),
-    getDefaultCppTemplate(),
-    getAiCooldownSeconds("programming", "student"),
-  ]);
+  const [latestSubmissions, defaultCodeTemplate, aiCooldownSeconds] =
+    await Promise.all([
+      prisma.submission.findMany({
+        where: {
+          examId,
+          userId: user.id,
+          submissionType: "exam",
+          problemId: { in: problemIds },
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          problemId: true,
+          status: true,
+          passedCount: true,
+          totalCount: true,
+          runtimeMs: true,
+          createdAt: true,
+        },
+      }),
+      getDefaultCppTemplate(),
+      getAiCooldownSeconds("programming", "student"),
+    ]);
 
   const latestByProblem = new Map<number, (typeof latestSubmissions)[number]>();
+  const acceptedProblemIds = new Set<number>();
   latestSubmissions.forEach((submission) => {
+    if (submission.status === "Accepted") {
+      acceptedProblemIds.add(submission.problemId);
+    }
     if (!latestByProblem.has(submission.problemId)) {
       latestByProblem.set(submission.problemId, submission);
     }
@@ -144,8 +149,7 @@ export default async function StudentExamTakePage({
         })),
       })
     : [];
-  const showProblemList =
-    exam.examType !== "objective" || exam.problems.length > 1;
+  const showProblemTabs = exam.problems.length > 1;
 
   return (
     <>
@@ -159,7 +163,9 @@ export default async function StudentExamTakePage({
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <ProblemTypeBadge type={exam.examType} />
             <p className="text-sm font-semibold text-ink-600">
-              {exam.durationMin ? `考试时长：${exam.durationMin} 分钟` : "不限时"}
+              {exam.durationMin
+                ? `考试时长：${exam.durationMin} 分钟`
+                : "不限时"}
             </p>
           </div>
         </div>
@@ -175,147 +181,152 @@ export default async function StudentExamTakePage({
         </div>
       </section>
 
-      {selectedProblem ? (
-        <div
-          className={`grid gap-6 ${
-            showProblemList ? "xl:grid-cols-[300px_minmax(0,1fr)]" : ""
-          }`}
+      {showProblemTabs && selectedProblem ? (
+        <nav
+          aria-label="考试题目切换"
+          className="surface mb-6"
+          data-exam-problem-tabs
         >
-          {showProblemList ? (
-            <aside className="surface overflow-hidden">
-              <div className="border-b border-ink-950/10 p-4">
-                <h2 className="font-black">考试题目</h2>
-              </div>
-              <div className="divide-y divide-ink-950/10">
-                {exam.problems.map((item, index) => {
-                  const latest = latestByProblem.get(item.problemId);
-                  const active = item.problemId === selectedProblem.id;
-                  const isAccepted = latest?.status === "Accepted";
-                  return (
-                    <Link
-                      className={`block p-4 transition-colors ${
-                        isAccepted
-                          ? "bg-emerald-50/80 hover:bg-emerald-100/70"
-                          : active
-                            ? "problem-hover-incomplete bg-white/75"
-                            : "problem-hover-incomplete"
-                      }`}
-                      href={`/student/exams/${exam.id}/take?problemId=${item.problemId}`}
-                      key={item.id}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-black text-ink-500">
-                            第 {index + 1} 题
-                          </p>
-                          <h3 className="mt-1 font-black">
-                            {item.problem.title}
-                          </h3>
-                          <p className="mt-1 text-xs font-bold text-ink-600">
-                            {item.problem.category || "未分类"} / {item.score} 分
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3">
-                        {latest ? (
-                          <StatusBadge status={latest.status} />
-                        ) : (
-                          <span className="inline-flex border border-ink-950/10 bg-white/70 px-2.5 py-1 text-xs font-bold text-ink-600">
-                            未提交
-                          </span>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            </aside>
-          ) : null}
-
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(500px,42%)]">
-            <article className="surface p-6">
-              <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-3xl font-black">{selectedProblem.title}</h2>
-                <span className="border border-ink-950/10 bg-white/65 px-2.5 py-1 text-xs font-bold text-ink-700">
-                  {selectedProblem.difficulty}
-                </span>
-                <span className="border border-ink-950/10 bg-white/65 px-2.5 py-1 text-xs font-bold text-ink-700">
-                  {selectedProblem.category || "未分类"}
-                </span>
-                <ProblemTypeBadge type={selectedProblemType} />
-                <CopyProblemButton
-                  category={selectedProblem.category}
-                  dataRange={selectedProblem.dataRange}
-                  description={selectedProblem.description}
-                  difficulty={selectedProblem.difficulty}
-                  inputDescription={selectedProblem.inputDescription}
-                  outputDescription={selectedProblem.outputDescription}
-                  samples={samples}
-                  title={selectedProblem.title}
-                  problemType={selectedProblemType}
-                  objectiveItems={objectiveItems}
-                />
-              </div>
-              <ProblemSection title="题目描述" value={selectedProblem.description} />
-              {selectedProblemType === "objective" ? (
-                <ObjectiveProblemContent items={objectiveItems} />
-              ) : (
-                <>
-                  <ProblemSection title="输入格式" value={selectedProblem.inputDescription} />
-                  <ProblemSection title="输出格式" value={selectedProblem.outputDescription} />
-                  <ProblemSamples samples={samples} />
-                  <ProblemSection title="数据范围" value={selectedProblem.dataRange || "暂无"} />
-                </>
-              )}
-            </article>
-
-            <aside className="grid content-start gap-4 xl:self-start">
-              {selectedLatest ? (
-                <section className="surface p-5">
-                  <h2 className="text-lg font-black">本题最近一次考试提交</h2>
-                  <div className="mt-3 grid gap-2 text-sm font-semibold text-ink-700">
-                    {selectedProblemType === "objective" ? (
-                      <span>
-                        答对 {selectedLatest.passedCount}/{selectedLatest.totalCount} 小题
-                      </span>
-                    ) : (
-                      <>
-                        <StatusBadge status={selectedLatest.status} />
-                        <span>
-                          {selectedLatest.passedCount}/{selectedLatest.totalCount} 测试点
-                        </span>
-                        <span>{selectedLatest.runtimeMs}ms</span>
-                        <span>{formatDate(selectedLatest.createdAt)}</span>
-                      </>
-                    )}
-                  </div>
-                </section>
-              ) : null}
-              <ProblemSubmitForm
-                aiCooldownSeconds={aiCooldownSeconds ?? undefined}
-                aiEnabled={
-                  selectedProblemType === "programming" &&
-                  exam.aiEnabled &&
-                  Boolean(studentProfile?.aiAccessEnabled)
-                }
-                aiStudentId={user.id}
-                key={`exam-${exam.id}-problem-${selectedProblem.id}-${
-                  Number.isInteger(fromSubmissionId) ? fromSubmissionId : "draft"
-                }`}
-                defaultCodeTemplate={defaultCodeTemplate}
-                detailHrefBase="/student/submissions"
-                examId={exam.id}
-                examEndsAt={endAt}
-                fromSubmissionId={
-                  Number.isInteger(fromSubmissionId) ? fromSubmissionId : undefined
-                }
-                problemType={selectedProblemType}
-                problemId={selectedProblem.id}
-                sampleCount={samples.length}
-                refreshOnSuccess
-              />
-            </aside>
+          <div className="exam-problem-tabs-track">
+            {exam.problems.map((item, index) => {
+              const latest = latestByProblem.get(item.problemId);
+              const active = item.problemId === selectedProblem.id;
+              const isProgramming =
+                normalizeProblemType(
+                  item.snapshotProblemType ?? item.problem.problemType,
+                ) === "programming";
+              const isAccepted =
+                isProgramming && acceptedProblemIds.has(item.problemId);
+              const statusLabel = isAccepted
+                ? "已通过"
+                : latest
+                  ? isProgramming
+                    ? "未通过"
+                    : "已作答"
+                  : "未提交";
+              return (
+                <NavigationLink
+                  aria-current={active ? "page" : undefined}
+                  className={`exam-problem-tab ${
+                    isAccepted ? "is-accepted" : "problem-hover-incomplete"
+                  } ${active ? "is-active" : ""}`}
+                  href={`/student/exams/${exam.id}/take?problemId=${item.problemId}`}
+                  key={item.id}
+                  pendingLabel={`正在打开第 ${index + 1} 题`}
+                  contentClassName="exam-problem-tab-content"
+                >
+                  <span className="exam-problem-tab-index">{index + 1}</span>
+                  <span className="exam-problem-tab-title">
+                    {item.snapshotTitle ?? item.problem.title}
+                  </span>
+                  <span className="exam-problem-tab-status">{statusLabel}</span>
+                </NavigationLink>
+              );
+            })}
           </div>
+        </nav>
+      ) : null}
+
+      {selectedProblem ? (
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,58fr)_minmax(420px,42fr)]">
+          <article className="surface p-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-3xl font-black">{selectedProblem.title}</h2>
+              <span className="border border-ink-950/10 bg-white/65 px-2.5 py-1 text-xs font-bold text-ink-700">
+                {selectedProblem.difficulty}
+              </span>
+              <span className="border border-ink-950/10 bg-white/65 px-2.5 py-1 text-xs font-bold text-ink-700">
+                {selectedProblem.category || "未分类"}
+              </span>
+              <ProblemTypeBadge type={selectedProblemType} />
+              <CopyProblemButton
+                category={selectedProblem.category}
+                dataRange={selectedProblem.dataRange}
+                description={selectedProblem.description}
+                difficulty={selectedProblem.difficulty}
+                inputDescription={selectedProblem.inputDescription}
+                outputDescription={selectedProblem.outputDescription}
+                samples={samples}
+                title={selectedProblem.title}
+                problemType={selectedProblemType}
+                objectiveItems={objectiveItems}
+              />
+            </div>
+            <ProblemSection
+              title="题目描述"
+              value={selectedProblem.description}
+            />
+            {selectedProblemType === "objective" ? (
+              <ObjectiveProblemContent items={objectiveItems} />
+            ) : (
+              <>
+                <ProblemSection
+                  title="输入格式"
+                  value={selectedProblem.inputDescription}
+                />
+                <ProblemSection
+                  title="输出格式"
+                  value={selectedProblem.outputDescription}
+                />
+                <ProblemSamples samples={samples} />
+                <ProblemSection
+                  title="数据范围"
+                  value={selectedProblem.dataRange || "暂无"}
+                />
+              </>
+            )}
+          </article>
+
+          <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:self-start">
+            {selectedLatest ? (
+              <section className="surface p-5">
+                <h2 className="text-lg font-black">本题最近一次考试提交</h2>
+                <div className="mt-3 grid gap-2 text-sm font-semibold text-ink-700">
+                  {selectedProblemType === "objective" ? (
+                    <span>
+                      答对 {selectedLatest.passedCount}/
+                      {selectedLatest.totalCount} 小题
+                    </span>
+                  ) : (
+                    <>
+                      <StatusBadge status={selectedLatest.status} />
+                      <span>
+                        {selectedLatest.passedCount}/{selectedLatest.totalCount}{" "}
+                        测试点
+                      </span>
+                      <span>{selectedLatest.runtimeMs}ms</span>
+                      <span>{formatDate(selectedLatest.createdAt)}</span>
+                    </>
+                  )}
+                </div>
+              </section>
+            ) : null}
+            <ProblemSubmitForm
+              aiCooldownSeconds={aiCooldownSeconds ?? undefined}
+              aiEnabled={
+                selectedProblemType === "programming" &&
+                exam.aiEnabled &&
+                Boolean(studentProfile?.aiAccessEnabled)
+              }
+              aiStudentId={user.id}
+              key={`exam-${exam.id}-problem-${selectedProblem.id}-${
+                Number.isInteger(fromSubmissionId) ? fromSubmissionId : "draft"
+              }`}
+              defaultCodeTemplate={defaultCodeTemplate}
+              detailHrefBase="/student/submissions"
+              examId={exam.id}
+              examEndsAt={endAt}
+              fromSubmissionId={
+                Number.isInteger(fromSubmissionId)
+                  ? fromSubmissionId
+                  : undefined
+              }
+              problemType={selectedProblemType}
+              problemId={selectedProblem.id}
+              sampleCount={samples.length}
+              refreshOnSuccess
+            />
+          </aside>
         </div>
       ) : (
         <section className="surface p-10 text-center text-sm font-semibold text-ink-600">

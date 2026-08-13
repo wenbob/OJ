@@ -5,6 +5,7 @@ import {
   parseObjectiveItems,
 } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
+import { runExamRecordSerialized } from "@/lib/examStartLock";
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
 
@@ -171,7 +172,9 @@ export async function calculateExamScore({
       : [];
     const maxScore =
       examProblem.snapshotScore ??
-      (isObjective ? getObjectiveTotalScore(objectiveItems) : examProblem.score);
+      (isObjective
+        ? getObjectiveTotalScore(objectiveItems)
+        : examProblem.score);
     const bestObjectiveSubmission = isObjective
       ? selectBestObjectiveSubmission({
           items: objectiveItems,
@@ -180,11 +183,15 @@ export async function calculateExamScore({
       : null;
     const score = isObjective
       ? Math.min(bestObjectiveSubmission?.score ?? 0, maxScore)
-      : problemSubmissions.some((submission) => submission.status === "Accepted")
+      : problemSubmissions.some(
+            (submission) => submission.status === "Accepted",
+          )
         ? maxScore
         : 0;
     const accepted =
-      problemSubmissions.some((submission) => submission.status === "Accepted") ||
+      problemSubmissions.some(
+        (submission) => submission.status === "Accepted",
+      ) ||
       (isObjective && maxScore > 0 && score === maxScore);
 
     return {
@@ -194,7 +201,7 @@ export async function calculateExamScore({
       maxScore,
       bestStatus: accepted
         ? "Accepted"
-        : problemSubmissions[0]?.status ?? "未提交",
+        : (problemSubmissions[0]?.status ?? "未提交"),
       submissionCount: problemSubmissions.length,
       reviewSubmissionId: bestObjectiveSubmission?.submissionId ?? null,
     };
@@ -215,42 +222,125 @@ export async function finishExamRecord({
   status: "submitted" | "expired";
   userId: number;
 }) {
-  return prisma.$transaction(async (tx) => {
-    const record = await tx.examRecord.findUnique({
-      where: {
-        examId_userId: {
-          examId,
-          userId,
+  return runExamRecordSerialized(userId, () =>
+    prisma.$transaction(async (tx) => {
+      const record = await tx.examRecord.findUnique({
+        where: {
+          examId_userId: {
+            examId,
+            userId,
+          },
         },
-      },
-    });
+      });
 
-    if (!record) {
-      throw new Error("考试记录不存在");
-    }
+      if (!record) {
+        throw new Error("考试记录不存在");
+      }
 
-    if (record.status !== "in_progress") return record;
+      if (record.status !== "in_progress") return record;
 
-    const exam = await tx.exam.findUnique({
-      where: { id: examId },
-      select: { durationMin: true },
-    });
+      const exam = await tx.exam.findUnique({
+        where: { id: examId },
+        select: { durationMin: true },
+      });
 
-    const score = await calculateExamScore({
-      db: tx,
-      examId,
-      submittedBefore: getExamEndAt(record.startedAt, exam?.durationMin ?? null),
-      userId,
-    });
-    return tx.examRecord.update({
-      where: { id: record.id },
-      data: {
-        status,
-        submittedAt: new Date(),
-        totalScore: score.totalScore,
-      },
-    });
-  });
+      const score = await calculateExamScore({
+        db: tx,
+        examId,
+        submittedBefore: getExamEndAt(
+          record.startedAt,
+          exam?.durationMin ?? null,
+        ),
+        userId,
+      });
+      return tx.examRecord.update({
+        where: { id: record.id },
+        data: {
+          resumeLoginAllowed: false,
+          status,
+          submittedAt: new Date(),
+          totalScore: score.totalScore,
+        },
+      });
+    }),
+  );
+}
+
+export async function settleStudentExamsForLoginAndRotateSession(
+  userId: number,
+) {
+  return runExamRecordSerialized(userId, () =>
+    prisma.$transaction(async (tx) => {
+      const records = await tx.examRecord.findMany({
+        where: { status: "in_progress", userId },
+        include: { exam: { select: { durationMin: true, status: true } } },
+        orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+      });
+      const resumableRecords = records.filter(
+        (record) =>
+          record.resumeLoginAllowed &&
+          record.exam.status === "published" &&
+          !isExamExpired({
+            durationMin: record.exam.durationMin,
+            startedAt: record.startedAt,
+          }),
+      );
+      const resumableRecordId =
+        resumableRecords.length === 1 ? resumableRecords[0].id : null;
+      let consumedResumeLogin = false;
+
+      for (const record of records) {
+        const canResumeAfterLogin =
+          !consumedResumeLogin && record.id === resumableRecordId;
+
+        if (canResumeAfterLogin) {
+          consumedResumeLogin = true;
+          await tx.examRecord.update({
+            where: { id: record.id },
+            data: { resumeLoginAllowed: false },
+          });
+          continue;
+        }
+
+        const score = await calculateExamScore({
+          db: tx,
+          examId: record.examId,
+          submittedBefore: getExamEndAt(
+            record.startedAt,
+            record.exam.durationMin,
+          ),
+          userId,
+        });
+        await tx.examRecord.update({
+          where: { id: record.id },
+          data: {
+            resumeLoginAllowed: false,
+            status:
+              record.exam.status === "published" &&
+              !isExamExpired({
+                durationMin: record.exam.durationMin,
+                startedAt: record.startedAt,
+              })
+                ? "submitted"
+                : "expired",
+            submittedAt: new Date(),
+            totalScore: score.totalScore,
+          },
+        });
+      }
+
+      return tx.user.update({
+        where: { id: userId },
+        data: { sessionVersion: { increment: 1 } },
+        select: {
+          id: true,
+          role: true,
+          sessionVersion: true,
+          username: true,
+        },
+      });
+    }),
+  );
 }
 
 export async function refreshFinishedExamScore({
@@ -262,32 +352,41 @@ export async function refreshFinishedExamScore({
   examId: number;
   userId: number;
 }) {
-  return db.$transaction(async (tx) => {
-    const record = await tx.examRecord.findUnique({
-      where: {
-        examId_userId: {
-          examId,
-          userId,
+  return runExamRecordSerialized(userId, () =>
+    db.$transaction(async (tx) => {
+      const record = await tx.examRecord.findUnique({
+        where: {
+          examId_userId: {
+            examId,
+            userId,
+          },
         },
-      },
-      include: {
-        exam: { select: { durationMin: true } },
-      },
-    });
+        include: {
+          exam: { select: { durationMin: true } },
+        },
+      });
 
-    if (!record || record.status === "in_progress") return record;
+      if (!record || record.status === "in_progress") return record;
 
-    const score = await calculateExamScore({
-      db: tx,
-      examId,
-      submittedBefore: getExamEndAt(record.startedAt, record.exam.durationMin),
-      userId,
-    });
-    return tx.examRecord.update({
-      where: { id: record.id },
-      data: { totalScore: score.totalScore },
-    });
-  });
+      const score = await calculateExamScore({
+        db: tx,
+        examId,
+        submittedBefore: getExamEndAt(
+          record.startedAt,
+          record.exam.durationMin,
+        ),
+        userId,
+      });
+      const updated = await tx.examRecord.updateMany({
+        where: { id: record.id, status: { not: "in_progress" } },
+        data: { totalScore: score.totalScore },
+      });
+      if (updated.count !== 1) {
+        return tx.examRecord.findUnique({ where: { id: record.id } });
+      }
+      return tx.examRecord.findUnique({ where: { id: record.id } });
+    }),
+  );
 }
 
 export async function expireExamRecordIfNeeded({

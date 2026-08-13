@@ -25,10 +25,11 @@ export function ExamCountdown({
 }) {
   const router = useRouter();
   const expiredRef = useRef(false);
-  const endTime = useMemo(() => (endAt ? new Date(endAt).getTime() : null), [endAt]);
-  const [remainingMs, setRemainingMs] = useState(() =>
-    endTime ? Math.max(0, endTime - Date.now()) : null,
+  const endTime = useMemo(
+    () => (endAt ? new Date(endAt).getTime() : null),
+    [endAt],
   );
+  const [remainingMs, setRemainingMs] = useState<number | null>(null);
 
   useEffect(() => {
     if (!endTime) return;
@@ -64,8 +65,11 @@ export function ExamCountdown({
   }
 
   return (
-    <div className="border border-ink-950/10 bg-white/65 px-4 py-3 text-sm font-bold text-ink-700">
-      剩余时间：{formatRemaining(remainingMs ?? 0)}
+    <div
+      aria-live="off"
+      className="border border-ink-950/10 bg-white/65 px-4 py-3 text-sm font-bold text-ink-700"
+    >
+      剩余时间：{remainingMs === null ? "--:--" : formatRemaining(remainingMs)}
     </div>
   );
 }

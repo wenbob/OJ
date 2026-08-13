@@ -38,41 +38,7 @@
 - [管理员使用和运维说明](docs/admin-guide.md)
 - [线上部署与维护手册](docs/deploy.md)
 
-以上四份是当前操作指南；下面的 `ops-review-*` 是按日期保留的历史发布与事故记录，其中的旧命令可能已被后续流程取代，实际部署以 [线上部署与维护手册](docs/deploy.md) 和 `AGENTS.md` 为准。
-
-- [2026-05-06 线上更新复盘与运维经验](docs/ops-review-2026-05-06.md)
-- [2026-05-12 单文件热更新记录](docs/ops-review-2026-05-12.md)
-- [2026-05-16 复制代码修复记录](docs/ops-review-2026-05-16.md)
-- [2026-05-17 模拟考试切题状态修复记录](docs/ops-review-2026-05-17.md)
-- [2026-05-29 复制本题与低内存上线记录](docs/ops-review-2026-05-29.md)
-- [2026-05-31 学生复制题面与管理员考试练习模式上线记录](docs/ops-review-2026-05-31.md)
-- [2026-06-07 Monaco 代码提示关闭上线记录](docs/ops-review-2026-06-07.md)
-- [2026-06-13 编辑器字号与 AC 弹窗上线记录](docs/ops-review-2026-06-13.md)
-- [2026-06-28 选择判断题型与 standalone 发布记录](docs/ops-review-2026-06-28.md)
-- [2026-06-29 OJ 旧版本目录磁盘清理记录](docs/ops-review-2026-06-29.md)
-- [2026-07-01 头衔天梯与安全加固上线记录](docs/ops-review-2026-07-01.md)
-- [2026-07-02 AI 思路上线与低内存发布事故修正记录](docs/ops-review-2026-07-02.md)
-- [2026-07-10 生产运行时加固与发布记录](docs/ops-review-2026-07-10.md)
-- [2026-07-11 竞技学院视觉与天梯升级记录](docs/ops-review-2026-07-11.md)
-- [2026-07-12 天梯积分差展示上线记录](docs/ops-review-2026-07-12.md)
-- [2026-07-15 AI 分层辅导、教师学情看板、专项练习与浏览器标签配置上线记录](docs/ops-review-2026-07-15.md)
-- [2026-07-16 运行样例、历史积分保护与学生会话加固记录](docs/ops-review-2026-07-16.md)
-- [2026-07-21 多文档导入与选择判断公式渲染上线记录](docs/ops-review-2026-07-21.md)
-- [2026-07-22 管理员题目与分类排序上线记录](docs/ops-review-2026-07-22.md)
-- [2026-07-24 管理员历史通过状态与快捷入口上线记录](docs/ops-review-2026-07-24.md)
-- [2026-07-25 独立老师端、AI 模型配置与教学管理增强上线记录](docs/ops-review-2026-07-25.md)
-- [2026-07-26 后台选择判断 AI 解析与学生答案面板跟随上线记录](docs/ops-review-2026-07-26.md)
-- [2026-07-27 全角色选择判断逐题反馈上线记录](docs/ops-review-2026-07-27.md)
-- [2026-08-01 批量作业发布、学情通讯录与低内存上线记录](docs/ops-review-2026-08-01.md)
-- [2026-08-04 间歇性 504 与 AC 图片优化器修复记录](docs/ops-review-2026-08-04.md)
-- [2026-08-04 学生客观题 AI 与自定义提示词发布记录](docs/ops-review-2026-08-04-ai-student-release.md)
-- [2026-08-05 选择判断答案区高度与滚动体验修正记录](docs/ops-review-2026-08-05.md)
-- [2026-08-08 正式域名同步与首次 AC 图片预加载记录](docs/ops-review-2026-08-08.md)
-- [2026-08-09 OJ P0–P2 加固与生产发布记录](docs/ops-review-2026-08-09.md)
-- [2026-08-10 未完成题目悬停高亮与生产发布记录](docs/ops-review-2026-08-10-problem-hover.md)
-- [2026-08-11 P1/P2 风险修复与生产发布记录](docs/ops-review-2026-08-11-p1-p2.md)
-- [2026-08-11 全站页面切换流畅度优化与生产发布记录](docs/ops-review-2026-08-11-navigation-performance.md)
-- [2026-08-13 全角色灰色骨架等待页移除与生产发布记录](docs/ops-review-2026-08-13-no-loading-skeletons.md)
+以上四份是当前操作指南；`docs/ops-review-*.md` 按日期保留历史发布与事故证据，其中旧命令可能已被后续流程取代。实际部署始终以 [线上部署与维护手册](docs/deploy.md) 和 `AGENTS.md` 为准。
 
 ## 技术栈
 
@@ -490,12 +456,12 @@ oj-code-exam-${examId}-problem-${problemId}
 - 点击开始考试会创建 `ExamRecord`。
 - 同一学生同一场考试只创建一条考试记录。
 - 已有 `in_progress` 记录时继续考试。
-- 已交卷或超时后不能继续答题，只能查看结果。
+- 已交卷或超时后默认只能查看结果；考试仍发布且原倒计时未结束时，管理员或考试所属老师可填写原因恢复误交卷记录，超时记录不能恢复。
 - 考试答题页使用锁定布局，隐藏全站导航、退出和返回链接；离开考试路由、后退、刷新或关闭页面会直接调用幂等交卷接口，同场切题不交卷。
 - 切换浏览器标签、最小化窗口或切换其他软件不会触发交卷。
-- 编程考试和多大题考试答题页显示题目列表和每题当前状态。
-- 单大题选择判断考试隐藏题目列表，扩大题面展示区域。
-- 主体区域显示当前题目详情、Monaco Editor、提交按钮和最新一次提交结果。
+- 多题考试使用顶部单行横向题签切题，显示题号、标题和本场状态；单题考试不显示冗余题签。
+- 编程题在本场考试任意一次 `Accepted` 后持续显示淡绿色，即使后续提交失败也不取消；客观题显示“已作答/未提交”。
+- 桌面端题面与代码/答案区约为 `58% / 42%`，右侧编辑区随页面吸顶；移动端上下排列。
 - 考试中切换题目时，编辑器会加载当前题目的独立草稿和结果区域。
 - 考试中提交成功后，有题目列表时会刷新该题的最新评测状态。
 - 考试中提交代码会保存 `submissionType = exam` 和当前 `examId`。
@@ -638,8 +604,8 @@ POST /api/admin/problems/bulk-delete
 
 ```ts
 {
-  archivedCount: number
-  deletedCount: number
+  archivedCount: number;
+  deletedCount: number;
 }
 ```
 
@@ -818,6 +784,8 @@ ended      已结束，学生端不可继续答题和提交
 - 分页展示考试记录，默认每页 20 条。
 - 显示学生、开始时间、交卷时间、状态和总分。
 - 支持按用户名搜索。
+- 管理员可恢复全部未超时的 `submitted` 记录；老师只能恢复自己考试中的记录。恢复不重置原倒计时，保留提交，并要求填写 2–200 字原因。
+- 每次恢复记录操作者、角色、时间和原因；学生重新登录可消费一次恢复登录许可，不会在登录时立即再次交卷。
 
 ### 系统设置
 
@@ -960,8 +928,8 @@ judgeCppCode({
   code,
   testCases,
   timeLimitMs,
-  memoryLimitMb
-})
+  memoryLimitMb,
+});
 ```
 
 试运行使用独立的 `runCppCode` 接口：样例模式比较公开样例，自定义模式只执行程序；两者复用同一套编译执行层和安全限制，正式 `judgeCppCode` 的返回结构保持不变。
@@ -1072,7 +1040,8 @@ JUDGE_TASK_TIMEOUT_MS=60000
 - `Exam`：模拟考试；`createdById` 记录管理员或老师创建者，列表用关联用户名显示“出卷人”标签；老师只能管理自己的考试，历史空归属考试仅管理员可管理并显示“未记录”。
 - `Exam.examType`：限制整场考试只能包含同类型题目。
 - `ExamProblem`：考试和题目的关联，包含题目顺序、分值，以及发布时固化的标题、题型、客观题内容和分值快照；历史计分优先使用快照。
-- `ExamRecord`：学生参加某场考试的记录，包含开始时间、交卷时间、状态和总分。
+- `ExamRecord`：学生参加某场考试的记录，包含开始时间、交卷时间、状态、总分和一次性恢复登录许可。
+- `ExamRecordResumeAudit`：误交卷恢复审计，保存考试记录、操作者快照、恢复原因和时间。
 - `LearningAssignment`：教师下发给学生的专项练习，保存标题、说明、截止日期和归档状态。
 - `LearningAssignmentProblem`：专项练习题目及顺序、题目信息快照和 `completedAt`；编辑任务时保留行会保留完成状态，新加题创建新快照。
 - `LearningInsightSnapshot`：按学生和分析周期缓存 AI 教师摘要及聚合统计哈希。
@@ -1136,6 +1105,7 @@ npm run seed
 0015_ai_custom_prompts
 0016_exam_integrity_hardening
 0017_submission_status_user_problem_index
+0018_exam_record_resume_audit
 ```
 
 本地开发创建新迁移：
@@ -1254,7 +1224,7 @@ POST /api/auth/logout
 GET  /api/auth/me
 ```
 
-学生登录会原子递增 `sessionVersion`，新登录设备会使旧学生会话失效；管理员登录不递增版本。学生登录前若仍有 `in_progress` 考试，服务端会先按幂等交卷流程结算。`GET /api/auth/me` 对被替换或旧版学生会话返回 401，并通过 `reason` 区分 `session_replaced`、`session_invalid` 等原因。
+学生登录会原子递增 `sessionVersion`，新登录设备会使旧学生会话失效；管理员登录不递增版本。学生登录前若仍有 `in_progress` 考试，服务端会先按幂等交卷流程结算；老师或管理员刚恢复的考试可消费一次登录许可后继续，且仍沿用首次开考的截止时间。`GET /api/auth/me` 对被替换或旧版学生会话返回 401，并通过 `reason` 区分 `session_replaced`、`session_invalid` 等原因。
 
 公共设置：
 
@@ -1346,10 +1316,13 @@ POST   /api/admin/exams/[id]/problems
 DELETE /api/admin/exams/[id]/problems/[examProblemId]
 POST   /api/admin/exams/[id]/import/parse
 POST   /api/admin/exams/[id]/import/confirm
+POST   /api/admin/exams/[id]/records/[recordId]/resume
 
 GET    /api/admin/settings
 PUT    /api/admin/settings
 ```
+
+`POST /api/admin/exams/:id/records/:recordId/resume` 接收 `{ "reason": "学生误触交卷" }`。管理员可操作全部考试，老师仅可操作自己创建的考试；越权统一返回 404。接口只恢复仍发布且原截止时间未到的 `submitted` 学生记录，成功返回更新后的记录、原截止时间和剩余秒数；状态冲突返回 409，恢复原因必须为 2–200 字。
 
 管理员用户接口支持 `customTitle`、`aiAccessEnabled` 和 `objectiveAiAccessEnabled`：管理员创建或编辑学生时可设置最多 20 字的自定义头衔，并分别开通编程与选择判断 AI。老师使用同一组受分级鉴权保护的地址，但 `POST /api/admin/users` 只接受用户名和两项 AI 权限，`PATCH /api/admin/users/[id]` 只切换学生 AI 权限，选择判断批量授权使用 `/api/admin/users/ai-access/bulk`，固定密码重置必须调用 `/reset-password`；老师不能调用完整编辑或删除能力。
 

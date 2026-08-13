@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pagination } from "@/components/Pagination";
+import { ResumeExamRecordControl } from "@/components/ResumeExamRecordControl";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   calculateExamScore,
@@ -77,7 +78,6 @@ export async function StaffExamRecordsPage({
         }),
       ),
     );
-
   }
 
   const recordWhere = {
@@ -94,6 +94,17 @@ export async function StaffExamRecordsPage({
     prisma.examRecord.findMany({
       where: recordWhere,
       include: {
+        _count: { select: { resumeAudits: true } },
+        resumeAudits: {
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: {
+            createdAt: true,
+            operatorRole: true,
+            operatorUsername: true,
+            reason: true,
+          },
+          take: 1,
+        },
         user: {
           select: {
             id: true,
@@ -117,16 +128,19 @@ export async function StaffExamRecordsPage({
     await Promise.all(
       pagedRecords
         .filter((record) => record.status !== "in_progress")
-        .map(async (record) => [
-          record.id,
-          (
-            await calculateExamScore({
-              examId,
-              submittedBefore: getExamEndAt(record.startedAt, durationMin),
-              userId: record.userId,
-            })
-          ).totalScore,
-        ] as const),
+        .map(
+          async (record) =>
+            [
+              record.id,
+              (
+                await calculateExamScore({
+                  examId,
+                  submittedBefore: getExamEndAt(record.startedAt, durationMin),
+                  userId: record.userId,
+                })
+              ).totalScore,
+            ] as const,
+        ),
     ),
   );
 
@@ -161,7 +175,10 @@ export async function StaffExamRecordsPage({
             <button className="btn btn-primary" type="submit">
               筛选
             </button>
-            <Link className="btn btn-secondary" href={`${basePath}/exams/${exam.id}/records`}>
+            <Link
+              className="btn btn-secondary"
+              href={`${basePath}/exams/${exam.id}/records`}
+            >
               重置
             </Link>
           </div>
@@ -170,7 +187,7 @@ export async function StaffExamRecordsPage({
 
       <section className="surface mt-6 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] border-collapse">
+          <table className="w-full min-w-[1180px] border-collapse">
             <thead>
               <tr className="border-b border-ink-950/10 bg-white/55 text-left">
                 <th className="table-head px-5 py-3">用户名</th>
@@ -179,45 +196,95 @@ export async function StaffExamRecordsPage({
                 <th className="table-head px-5 py-3">交卷时间</th>
                 <th className="table-head px-5 py-3">状态</th>
                 <th className="table-head px-5 py-3">总分</th>
+                <th className="table-head px-5 py-3">恢复记录</th>
                 <th className="table-head px-5 py-3 text-right">操作</th>
               </tr>
             </thead>
             <tbody>
-              {pagedRecords.map((record) => (
-                <tr className="border-b border-ink-950/10" key={record.id}>
-                  <td className="px-5 py-4 font-black">{record.user.username}</td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {record.user.role}
-                  </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {formatDate(record.startedAt)}
-                  </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {record.submittedAt ? formatDate(record.submittedAt) : "未交卷"}
-                  </td>
-                  <td className="px-5 py-4">
-                    <StatusBadge status={record.status} />
-                  </td>
-                  <td className="px-5 py-4 text-sm font-semibold text-ink-700">
-                    {record.status === "in_progress"
-                      ? "-"
-                      : scoreByRecordId.get(record.id) ?? record.totalScore ?? "-"}
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <Link
-                      className="btn btn-secondary px-3 py-2 text-sm"
-                      href={`${basePath}/exam-submissions?examId=${exam.id}&username=${encodeURIComponent(record.user.username)}`}
-                    >
-                      查看提交
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {pagedRecords.map((record) => {
+                const latestResume = record.resumeAudits[0];
+                const canResume =
+                  examStatus === "published" &&
+                  record.user.role === "student" &&
+                  record.status === "submitted" &&
+                  !isExamExpired({ durationMin, startedAt: record.startedAt });
+
+                return (
+                  <tr
+                    className="border-b border-ink-950/10 align-top"
+                    key={record.id}
+                  >
+                    <td className="px-5 py-4 font-black">
+                      {record.user.username}
+                    </td>
+                    <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                      {record.user.role}
+                    </td>
+                    <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                      {formatDate(record.startedAt)}
+                    </td>
+                    <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                      {record.submittedAt
+                        ? formatDate(record.submittedAt)
+                        : "未交卷"}
+                    </td>
+                    <td className="px-5 py-4">
+                      <StatusBadge status={record.status} />
+                    </td>
+                    <td className="px-5 py-4 text-sm font-semibold text-ink-700">
+                      {record.status === "in_progress"
+                        ? "-"
+                        : (scoreByRecordId.get(record.id) ??
+                          record.totalScore ??
+                          "-")}
+                    </td>
+                    <td className="max-w-72 px-5 py-4 text-sm text-ink-700">
+                      {latestResume ? (
+                        <div className="grid gap-1">
+                          <span className="font-black">
+                            共 {record._count.resumeAudits} 次
+                          </span>
+                          <span className="text-xs font-semibold">
+                            最近：{latestResume.operatorUsername}（
+                            {latestResume.operatorRole}）·{" "}
+                            {formatDate(latestResume.createdAt)}
+                          </span>
+                          <span
+                            className="line-clamp-2 text-xs font-semibold text-ink-600"
+                            title={latestResume.reason}
+                          >
+                            原因：{latestResume.reason}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="font-semibold text-ink-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Link
+                          className="btn btn-secondary px-3 py-2 text-sm"
+                          href={`${basePath}/exam-submissions?examId=${exam.id}&username=${encodeURIComponent(record.user.username)}`}
+                        >
+                          查看提交
+                        </Link>
+                        {canResume ? (
+                          <ResumeExamRecordControl
+                            examId={exam.id}
+                            recordId={record.id}
+                            studentUsername={record.user.username}
+                          />
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {pagedRecords.length === 0 ? (
                 <tr>
                   <td
                     className="px-5 py-12 text-center text-sm font-semibold text-ink-600"
-                    colSpan={7}
+                    colSpan={8}
                   >
                     暂无学生参加该考试。
                   </td>

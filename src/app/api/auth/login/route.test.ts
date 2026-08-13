@@ -4,14 +4,12 @@ import { POST } from "./route";
 
 const mocks = vi.hoisted(() => ({
   attachSessionResponse: vi.fn((response) => response),
-  examRecordFindMany: vi.fn(),
-  finishExamRecord: vi.fn(),
   getLoginRateLimitStatus: vi.fn(),
   recordFailedLogin: vi.fn(),
   recordFailedLoginForIp: vi.fn(),
   reserveLoginVerification: vi.fn(),
+  settleStudentExamsForLoginAndRotateSession: vi.fn(),
   userFindUnique: vi.fn(),
-  userUpdate: vi.fn(),
   verifyPassword: vi.fn(),
 }));
 
@@ -21,7 +19,8 @@ vi.mock("@/lib/auth", () => ({
     role === "admin" ? "/admin" : role === "teacher" ? "/teacher" : "/student",
 }));
 vi.mock("@/lib/examScoring", () => ({
-  finishExamRecord: mocks.finishExamRecord,
+  settleStudentExamsForLoginAndRotateSession:
+    mocks.settleStudentExamsForLoginAndRotateSession,
 }));
 vi.mock("@/lib/loginRateLimit", () => ({
   clearLoginFailures: vi.fn(),
@@ -35,10 +34,8 @@ vi.mock("@/lib/loginRateLimit", () => ({
 vi.mock("@/lib/password", () => ({ verifyPassword: mocks.verifyPassword }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    examRecord: { findMany: mocks.examRecordFindMany },
     user: {
       findUnique: mocks.userFindUnique,
-      update: mocks.userUpdate,
     },
   },
 }));
@@ -59,8 +56,12 @@ describe("login session rotation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.verifyPassword.mockResolvedValue(true);
-    mocks.examRecordFindMany.mockResolvedValue([]);
-    mocks.finishExamRecord.mockResolvedValue({ status: "submitted" });
+    mocks.settleStudentExamsForLoginAndRotateSession.mockResolvedValue({
+      id: 3,
+      role: "student",
+      sessionVersion: 6,
+      username: "alice",
+    });
     mocks.getLoginRateLimitStatus.mockReturnValue({
       limited: false,
       retryAfterSeconds: 0,
@@ -80,8 +81,7 @@ describe("login session rotation", () => {
       sessionVersion: 5,
       username: "alice",
     });
-    mocks.examRecordFindMany.mockResolvedValue([{ examId: 10 }, { examId: 12 }]);
-    mocks.userUpdate.mockResolvedValue({
+    mocks.settleStudentExamsForLoginAndRotateSession.mockResolvedValue({
       id: 3,
       role: "student",
       sessionVersion: 6,
@@ -91,25 +91,9 @@ describe("login session rotation", () => {
     const response = await POST(request());
 
     expect(response.status).toBe(200);
-    expect(mocks.finishExamRecord).toHaveBeenCalledTimes(2);
-    expect(mocks.finishExamRecord).toHaveBeenNthCalledWith(1, {
-      examId: 10,
-      status: "submitted",
-      userId: 3,
-    });
-    expect(mocks.userUpdate).toHaveBeenCalledWith({
-      data: { sessionVersion: { increment: 1 } },
-      select: {
-        id: true,
-        role: true,
-        sessionVersion: true,
-        username: true,
-      },
-      where: { id: 3 },
-    });
-    expect(mocks.finishExamRecord.mock.invocationCallOrder[1]).toBeLessThan(
-      mocks.userUpdate.mock.invocationCallOrder[0],
-    );
+    expect(
+      mocks.settleStudentExamsForLoginAndRotateSession,
+    ).toHaveBeenCalledWith(3);
     expect(mocks.attachSessionResponse).toHaveBeenCalledWith(
       response,
       expect.objectContaining({ sessionVersion: 6 }),
@@ -128,8 +112,9 @@ describe("login session rotation", () => {
     const response = await POST(request());
 
     expect(response.status).toBe(200);
-    expect(mocks.examRecordFindMany).not.toHaveBeenCalled();
-    expect(mocks.userUpdate).not.toHaveBeenCalled();
+    expect(
+      mocks.settleStudentExamsForLoginAndRotateSession,
+    ).not.toHaveBeenCalled();
     expect(mocks.attachSessionResponse).toHaveBeenCalledWith(
       response,
       expect.objectContaining({ role: "admin", sessionVersion: 2 }),
@@ -150,8 +135,9 @@ describe("login session rotation", () => {
 
     expect(response.status).toBe(200);
     expect(body.redirectTo).toBe("/teacher");
-    expect(mocks.examRecordFindMany).not.toHaveBeenCalled();
-    expect(mocks.userUpdate).not.toHaveBeenCalled();
+    expect(
+      mocks.settleStudentExamsForLoginAndRotateSession,
+    ).not.toHaveBeenCalled();
     expect(mocks.attachSessionResponse).toHaveBeenCalledWith(
       response,
       expect.objectContaining({ role: "teacher", sessionVersion: 3 }),
@@ -202,7 +188,9 @@ describe("login session rotation", () => {
       release,
       retryAfterSeconds: 0,
     });
-    mocks.userFindUnique.mockRejectedValueOnce(new Error("database unavailable"));
+    mocks.userFindUnique.mockRejectedValueOnce(
+      new Error("database unavailable"),
+    );
 
     await expect(POST(request())).rejects.toThrow("database unavailable");
     expect(release).toHaveBeenCalledTimes(1);

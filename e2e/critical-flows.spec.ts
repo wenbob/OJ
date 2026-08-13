@@ -115,9 +115,7 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
       ),
     ).toBeVisible();
     await expect(page.locator("body")).not.toContainText("HIDDEN_INPUT_E2E");
-    await expect(page.locator("body")).not.toContainText(
-      "HIDDEN_EXPECTED_E2E",
-    );
+    await expect(page.locator("body")).not.toContainText("HIDDEN_EXPECTED_E2E");
     await expect(page.locator("body")).not.toContainText("HIDDEN_ACTUAL_E2E");
     await expect(page.locator("body")).not.toContainText("HIDDEN_STDERR_E2E");
   });
@@ -146,15 +144,11 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     expect(blocked.status).toBe(403);
     expect(String(blocked.body.error)).toContain("正式考试");
 
-    const programmingBlocked = await postJson(
-      page,
-      "/api/ai/problem-assist",
-      {
-        code: "",
-        mode: "overview",
-        problemId: 102,
-      },
-    );
+    const programmingBlocked = await postJson(page, "/api/ai/problem-assist", {
+      code: "",
+      mode: "overview",
+      problemId: 102,
+    });
     expect(programmingBlocked.status).toBe(403);
     expect(String(programmingBlocked.body.error)).toContain(
       "考试期间不能使用日常练习 AI",
@@ -196,13 +190,7 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
 
     await page.getByRole("button", { name: "开始考试" }).click();
     await expect(page).toHaveURL(/\/student\/exams\/202\/take$/);
-    const studentExamProblem = page
-      .locator("aside .problem-hover-incomplete")
-      .filter({ hasText: "E2E 加法题" });
-    await expectHoverBackground(
-      studentExamProblem,
-      incompleteHoverBackground,
-    );
+    await expect(page.locator("[data-exam-problem-tabs]")).toHaveCount(0);
     await page.route("**/api/exams/202/submit", (route) => route.abort());
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "交卷", exact: true }).click();
@@ -215,6 +203,107 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     expect(submitted.status).toBe(200);
   });
 
+  await test.step("formal exam uses compact top tabs and preserves accepted state", async () => {
+    const started = await postJson(page, "/api/exams/205/start");
+    expect(started.status).toBe(201);
+    await page.goto("/student/exams/205/take");
+    const tabs = page.locator("[data-exam-problem-tabs]");
+    await expect(tabs).toBeVisible();
+    await expect(page.locator("aside .problem-hover-incomplete")).toHaveCount(
+      0,
+    );
+
+    const acceptedTab = tabs.getByRole("link", { name: /E2E 双倍题/ });
+    await expect(acceptedTab).toContainText("已通过");
+    await expect
+      .poll(() =>
+        acceptedTab.evaluate(
+          (element) => getComputedStyle(element).backgroundColor,
+        ),
+      )
+      .toBe("rgba(236, 253, 245, 0.88)");
+
+    const secondTab = tabs.getByRole("link", { name: /E2E 加法题/ });
+    await expect(secondTab).toContainText("未提交");
+    let submitRequestsDuringSwitch = 0;
+    await page.route("**/api/exams/205/submit", async (route) => {
+      submitRequestsDuringSwitch += 1;
+      await route.continue();
+    });
+    await acceptedTab.click();
+    await expect(page).toHaveURL(/problemId=104/);
+    await expect(
+      tabs.getByRole("link", { name: /E2E 双倍题/ }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(
+      page.getByRole("heading", { name: "E2E 双倍题" }),
+    ).toBeVisible();
+    expect(submitRequestsDuringSwitch).toBe(0);
+    await page.unroute("**/api/exams/205/submit");
+
+    const columns = await page
+      .locator("article.surface")
+      .evaluate((article) => {
+        const grid = article.parentElement;
+        const editor = grid?.querySelector("aside");
+        const gridColumns = grid
+          ? getComputedStyle(grid).gridTemplateColumns
+          : "";
+        return {
+          articleWidth: article.getBoundingClientRect().width,
+          editorPosition: editor ? getComputedStyle(editor).position : "",
+          editorWidth: editor?.getBoundingClientRect().width ?? 0,
+          gridColumns,
+        };
+      });
+    expect(columns.gridColumns).not.toBe("none");
+    const problemShare =
+      columns.articleWidth / (columns.articleWidth + columns.editorWidth);
+    expect(problemShare).toBeGreaterThan(0.56);
+    expect(problemShare).toBeLessThan(0.6);
+    expect(columns.editorPosition).toBe("sticky");
+
+    const submitted = await postJson(page, "/api/exams/205/submit");
+    expect(submitted.status).toBe(200);
+  });
+
+  await test.step("objective tabs show answer state and adapt on mobile", async () => {
+    const started = await postJson(page, "/api/exams/206/start");
+    expect(started.status).toBe(201);
+    await page.setViewportSize({ height: 844, width: 390 });
+    await page.goto("/student/exams/206/take");
+
+    const tabs = page.locator("[data-exam-problem-tabs]");
+    await expect(tabs).toBeVisible();
+    await expect(tabs.getByRole("link", { name: /E2E 客观题/ })).toContainText(
+      "已作答",
+    );
+    await expect(tabs.getByRole("link", { name: /E2E 判断题/ })).toContainText(
+      "未提交",
+    );
+    const mobileLayout = await page
+      .locator("article.surface")
+      .evaluate((article) => {
+        const grid = article.parentElement;
+        const editor = grid?.querySelector("aside");
+        const track = document.querySelector(".exam-problem-tabs-track");
+        return {
+          editorPosition: editor ? getComputedStyle(editor).position : "",
+          gridColumns: grid ? getComputedStyle(grid).gridTemplateColumns : "",
+          horizontalOverflow: track
+            ? track.scrollWidth > track.clientWidth
+            : false,
+        };
+      });
+    expect(mobileLayout.gridColumns.split(" ")).toHaveLength(1);
+    expect(mobileLayout.editorPosition).not.toBe("sticky");
+    expect(mobileLayout.horizontalOverflow).toBe(true);
+
+    const submitted = await postJson(page, "/api/exams/206/submit");
+    expect(submitted.status).toBe(200);
+    await page.setViewportSize({ height: 720, width: 1280 });
+  });
+
   await test.step("the final administrator cannot demote itself", async () => {
     const adminContext = await browser.newContext();
     const adminPage = await adminContext.newPage();
@@ -223,10 +312,7 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     const adminIncompleteRow = adminPage.getByRole("row").filter({
       hasText: "E2E 加法题",
     });
-    await expectHoverBackground(
-      adminIncompleteRow,
-      incompleteHoverBackground,
-    );
+    await expectHoverBackground(adminIncompleteRow, incompleteHoverBackground);
     await expect(
       adminIncompleteRow.getByRole("link", { name: "进入做题" }),
     ).toHaveAttribute("href", "/admin/practice/problems/101");
@@ -295,6 +381,35 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
       adminPage.getByRole("button", { name: "搜索", exact: true }),
     ).toBeEnabled();
     await adminPage.unroute("**/api/admin/problems/search?*");
+
+    await adminPage.goto("/admin/exams/201/records");
+    const recordRow = adminPage.getByRole("row").filter({
+      hasText: "e2e-student",
+    });
+    await recordRow.getByRole("button", { name: "恢复考试" }).click();
+    await recordRow.getByLabel("恢复原因").fill("学生误触交卷");
+    adminPage.once("dialog", (dialog) => dialog.accept());
+    await recordRow.getByRole("button", { name: "确认恢复" }).click();
+    await expect(recordRow).toContainText("in_progress");
+    await expect(recordRow).toContainText("共 1 次");
+    await expect(recordRow).toContainText("学生误触交卷");
+
     await adminContext.close();
+
+    const resumedStudentContext = await browser.newContext();
+    const resumedStudentPage = await resumedStudentContext.newPage();
+    await login(resumedStudentPage, "e2e-student", "e2e-student-password");
+    await resumedStudentPage.goto("/student/exams/201");
+    await expect(
+      resumedStudentPage.getByRole("button", { name: "继续考试" }),
+    ).toBeVisible();
+    await resumedStudentPage.getByRole("button", { name: "继续考试" }).click();
+    await expect(resumedStudentPage).toHaveURL(/\/student\/exams\/201\/take$/);
+    const resubmitted = await postJson(
+      resumedStudentPage,
+      "/api/exams/201/submit",
+    );
+    expect(resubmitted.status).toBe(200);
+    await resumedStudentContext.close();
   });
 });

@@ -20,6 +20,7 @@ model User {
   learningAssignments              LearningAssignment[]      @relation("LearningAssignmentStudent")
   createdLearningAssignments       LearningAssignment[]      @relation("LearningAssignmentCreator")
   createdExams                     Exam[]                    @relation("ExamCreator")
+  examRecordResumeAudits           ExamRecordResumeAudit[]   @relation("ExamRecordResumeOperator")
   learningInsightSnapshots         LearningInsightSnapshot[]
   aiConversations                  AiConversation[]
   generatedObjectiveAiExplanations ObjectiveAiExplanation[]  @relation("ObjectiveAiExplanationGenerator")
@@ -209,19 +210,36 @@ model Exam {
 }
 
 model ExamRecord {
-  id          Int       @id @default(autoincrement())
-  examId      Int
-  userId      Int
-  startedAt   DateTime  @default(now())
-  submittedAt DateTime?
-  status      String    @default("in_progress")
-  totalScore  Int?
-  exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 Int                     @id @default(autoincrement())
+  examId             Int
+  userId             Int
+  startedAt          DateTime                @default(now())
+  submittedAt        DateTime?
+  status             String                  @default("in_progress")
+  totalScore         Int?
+  resumeLoginAllowed Boolean                 @default(false)
+  exam               Exam                    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  user               User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumeAudits       ExamRecordResumeAudit[]
 
   @@unique([examId, userId])
   @@index([userId, status])
   @@index([examId, status])
+}
+
+model ExamRecordResumeAudit {
+  id               Int        @id @default(autoincrement())
+  examRecordId     Int
+  operatorId       Int?
+  operatorUsername String
+  operatorRole     String
+  reason           String
+  createdAt        DateTime   @default(now())
+  examRecord       ExamRecord @relation(fields: [examRecordId], references: [id], onDelete: Cascade)
+  operator         User?      @relation("ExamRecordResumeOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([examRecordId, createdAt])
+  @@index([operatorId, createdAt])
 }
 
 model ExamProblem {

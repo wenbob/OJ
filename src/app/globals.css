@@ -425,6 +425,119 @@ a:focus-visible {
   }
 }
 
+[data-exam-problem-tabs] {
+  overflow: hidden;
+  padding: 0.55rem;
+}
+
+.exam-problem-tabs-track {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.exam-problem-tab {
+  position: relative;
+  display: grid;
+  flex: 0 0 clamp(12rem, 19vw, 17rem);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 3.25rem;
+  border: 1px solid rgb(31 41 55 / 12%);
+  background: rgb(255 255 255 / 68%);
+  padding: 0.6rem 0.7rem;
+  color: var(--arena-ink);
+  transition: background-color 180ms ease, border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.exam-problem-tab-content {
+  position: relative;
+  display: grid;
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.55rem;
+}
+
+.exam-problem-tab-content > .navigation-pending-indicator {
+  position: absolute;
+  top: -0.2rem;
+  right: -0.2rem;
+}
+
+.exam-problem-tab::after {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  left: -1px;
+  height: 3px;
+  background: transparent;
+  content: "";
+}
+
+.exam-problem-tab.is-active {
+  border-color: rgb(79 111 136 / 65%);
+}
+
+.exam-problem-tab.is-active::after {
+  background: rgb(79 111 136);
+}
+
+.exam-problem-tab.is-accepted {
+  border-color: rgb(16 185 129 / 28%);
+  background: rgb(236 253 245 / 88%);
+}
+
+.exam-problem-tab.is-accepted.is-active::after {
+  background: rgb(5 150 105);
+}
+
+.exam-problem-tab-index {
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  place-items: center;
+  border: 1px solid rgb(31 41 55 / 12%);
+  background: rgb(255 255 255 / 72%);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.exam-problem-tab-title {
+  overflow: hidden;
+  font-size: 0.86rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exam-problem-tab-status {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #6c705f;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .exam-problem-tab.is-accepted:hover {
+    background: rgb(209 250 229 / 92%);
+    transform: translateX(2px);
+  }
+}
+
+@media (max-width: 639px) {
+  [data-exam-problem-tabs] {
+    margin-inline: -0.25rem;
+  }
+
+  .exam-problem-tab {
+    flex-basis: 11.5rem;
+  }
+}
+
 @media (pointer: coarse) {
   .btn,
   .shell-nav-link {

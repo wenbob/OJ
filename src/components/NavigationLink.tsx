@@ -5,17 +5,22 @@ import type { ComponentProps, ReactNode } from "react";
 
 type NavigationLinkProps = Omit<ComponentProps<typeof Link>, "children"> & {
   children: ReactNode;
+  contentClassName?: string;
   pendingLabel?: string;
 };
 
 export function NavigationLink({
   children,
+  contentClassName,
   pendingLabel = "页面加载中",
   ...props
 }: NavigationLinkProps) {
   return (
     <Link {...props}>
-      <NavigationLinkContent pendingLabel={pendingLabel}>
+      <NavigationLinkContent
+        className={contentClassName}
+        pendingLabel={pendingLabel}
+      >
         {children}
       </NavigationLinkContent>
     </Link>
@@ -24,9 +29,11 @@ export function NavigationLink({
 
 function NavigationLinkContent({
   children,
+  className,
   pendingLabel,
 }: {
   children: ReactNode;
+  className?: string;
   pendingLabel: string;
 }) {
   const { pending } = useLinkStatus();
@@ -34,7 +41,7 @@ function NavigationLinkContent({
   return (
     <span
       aria-busy={pending || undefined}
-      className="navigation-link-content"
+      className={`navigation-link-content ${className ?? ""}`}
       data-navigation-pending={pending ? "true" : "false"}
     >
       {children}
