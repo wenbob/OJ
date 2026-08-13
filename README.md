@@ -72,6 +72,7 @@
 - [2026-08-10 未完成题目悬停高亮与生产发布记录](docs/ops-review-2026-08-10-problem-hover.md)
 - [2026-08-11 P1/P2 风险修复与生产发布记录](docs/ops-review-2026-08-11-p1-p2.md)
 - [2026-08-11 全站页面切换流畅度优化与生产发布记录](docs/ops-review-2026-08-11-navigation-performance.md)
+- [2026-08-13 全角色灰色骨架等待页移除与生产发布记录](docs/ops-review-2026-08-13-no-loading-skeletons.md)
 
 ## 技术栈
 
