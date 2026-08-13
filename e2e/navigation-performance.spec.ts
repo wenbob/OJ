@@ -11,32 +11,64 @@ async function login(page: Page, username: string, password: string) {
 async function expectPersistentShellNavigation({
   browser,
   destination,
+  destinationPath,
   linkName,
   password,
   username,
 }: {
   browser: Browser;
   destination: RegExp;
+  destinationPath: string;
   linkName: string;
   password: string;
   username: string;
 }) {
   const context = await browser.newContext();
   const page = await context.newPage();
+  let delayedRsc = false;
+  let releaseDestinationRsc = () => {};
+  const destinationRscGate = new Promise<void>((resolve) => {
+    releaseDestinationRsc = resolve;
+  });
+  await page.route(`**${destinationPath}*`, async (route) => {
+    if (route.request().headers().rsc === "1") {
+      delayedRsc = true;
+      await destinationRscGate;
+    }
+    await route.continue();
+  });
   await login(page, username, password);
   const header = page.locator("[data-app-shell-header]");
+  const currentContent = page.locator("main.app-stage > *").first();
   const marker = `probe-${username}`;
   await header.evaluate((element, value) => {
     element.setAttribute("data-persistence-probe", value);
   }, marker);
+  await currentContent.evaluate((element, value) => {
+    element.setAttribute("data-current-page-probe", value);
+  }, marker);
 
-  await page.getByRole("link", { name: linkName, exact: true }).click();
-  await expect(page).toHaveURL(destination);
-  await expect(header).toHaveAttribute("data-persistence-probe", marker);
-  await context.close();
+  const link = page.getByRole("link", { name: linkName, exact: true });
+  await link.evaluate((element) => (element as HTMLElement).click());
+  const releaseTimer = setTimeout(releaseDestinationRsc, 2_000);
+  try {
+    await expect.poll(() => delayedRsc).toBe(true);
+    await expect(currentContent).toHaveAttribute("data-current-page-probe", marker);
+    await expect(page.locator("[data-route-loading]")).toHaveCount(0);
+    await expect(page.locator(".skeleton-shimmer")).toHaveCount(0);
+    await expect(header.getByRole("link").first()).toBeEnabled();
+
+    releaseDestinationRsc();
+    await expect(page).toHaveURL(destination);
+    await expect(header).toHaveAttribute("data-persistence-probe", marker);
+  } finally {
+    clearTimeout(releaseTimer);
+    releaseDestinationRsc();
+    await context.close();
+  }
 }
 
-test("slow navigation shows feedback and a content skeleton while the shell stays interactive", async ({
+test("slow navigation keeps the current page visible with only link feedback", async ({
   page,
 }) => {
   const publicSettingsRequests: string[] = [];
@@ -61,6 +93,11 @@ test("slow navigation shows feedback and a content skeleton while the shell stay
   expect(publicSettingsRequests).toEqual([]);
 
   const header = page.locator("[data-app-shell-header]");
+  const currentContent = page.locator("main.app-stage > *").first();
+  await expect(currentContent).toBeVisible();
+  await currentContent.evaluate((element) => {
+    element.setAttribute("data-current-page-probe", "student-home");
+  });
   await header.evaluate((element) => {
     element.setAttribute("data-persistence-probe", "student-shell");
   });
@@ -74,9 +111,15 @@ test("slow navigation shows feedback and a content skeleton while the shell stay
     await expect(pendingIndicator).toHaveCSS("opacity", "1", { timeout: 250 });
     expect(Date.now() - startedAt).toBeLessThan(300);
     await expect(link.locator("[aria-busy='true']")).toBeAttached();
-    await expect(page.locator("[data-route-loading]")).toBeVisible();
+    await expect(currentContent).toHaveAttribute(
+      "data-current-page-probe",
+      "student-home",
+    );
+    await expect(page.locator("[data-route-loading]")).toHaveCount(0);
+    await expect(page.locator(".skeleton-shimmer")).toHaveCount(0);
     await expect(header.getByRole("link").first()).toBeEnabled();
 
+    releaseLeaderboardRsc();
     await expect(page).toHaveURL(/\/student\/leaderboard/);
     expect(delayedRsc).toBe(true);
     await expect(header).toHaveAttribute(
@@ -105,6 +148,7 @@ test("all three role shells persist across same-role navigation", async ({ brows
   await expectPersistentShellNavigation({
     browser,
     destination: /\/student\/problems/,
+    destinationPath: "/student/problems",
     linkName: "日常刷题",
     password: "e2e-student-password",
     username: "e2e-student",
@@ -112,6 +156,7 @@ test("all three role shells persist across same-role navigation", async ({ brows
   await expectPersistentShellNavigation({
     browser,
     destination: /\/teacher\/practice/,
+    destinationPath: "/teacher/practice",
     linkName: "题目练习",
     password: "e2e-teacher-password",
     username: "e2e-teacher",
@@ -119,6 +164,7 @@ test("all three role shells persist across same-role navigation", async ({ brows
   await expectPersistentShellNavigation({
     browser,
     destination: /\/admin\/practice/,
+    destinationPath: "/admin/practice",
     linkName: "题目练习",
     password: "e2e-admin-password",
     username: "e2e-admin",
@@ -134,6 +180,22 @@ test("formal exam navigation uses one RSC request and never mounts the normal sh
   const rscRequests: string[] = [];
   page.on("request", (request) => {
     if (request.headers().rsc === "1") rscRequests.push(request.url());
+  });
+  let delayedTakeRsc = false;
+  let releaseTakeRsc = () => {};
+  const takeRscGate = new Promise<void>((resolve) => {
+    releaseTakeRsc = resolve;
+  });
+  await page.route("**/student/exams/203/take*", async (route) => {
+    if (route.request().headers().rsc === "1") {
+      delayedTakeRsc = true;
+      await takeRscGate;
+    }
+    await route.continue();
+  });
+  const currentContent = page.locator("main.app-stage > *").first();
+  await currentContent.evaluate((element) => {
+    element.setAttribute("data-current-page-probe", "exam-detail");
   });
   await page.evaluate(() => {
     const state = window as typeof window & {
@@ -155,8 +217,26 @@ test("formal exam navigation uses one RSC request and never mounts the normal sh
     });
   });
 
-  await page.getByRole("button", { name: "开始考试" }).click();
-  await expect(page).toHaveURL(/\/student\/exams\/203\/take$/);
+  await page
+    .getByRole("button", { name: "开始考试" })
+    .evaluate((element) => (element as HTMLElement).click());
+  const releaseTimer = setTimeout(releaseTakeRsc, 2_000);
+  try {
+    await expect.poll(() => delayedTakeRsc).toBe(true);
+    await expect(currentContent).toHaveAttribute(
+      "data-current-page-probe",
+      "exam-detail",
+    );
+    await expect(page.locator("[data-route-loading]")).toHaveCount(0);
+    await expect(page.locator(".skeleton-shimmer")).toHaveCount(0);
+    await expect(page.locator('nav[aria-label="主导航"]')).toBeVisible();
+
+    releaseTakeRsc();
+    await expect(page).toHaveURL(/\/student\/exams\/203\/take$/);
+  } finally {
+    clearTimeout(releaseTimer);
+    releaseTakeRsc();
+  }
   await expect(page.getByText("考试答题", { exact: true })).toBeVisible();
   await expect(page.locator('nav[aria-label="主导航"]')).toHaveCount(0);
   await expect(page.getByRole("button", { name: /退出/ })).toHaveCount(0);

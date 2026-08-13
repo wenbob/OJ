@@ -1,4 +1,4 @@
-import { cache, Suspense, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -31,15 +31,7 @@ import {
 
 type ProgressStyle = CSSProperties & { "--progress": number };
 
-const getStudentHomeRanking = cache(async (userId: number) =>
-  findRankingByUserId(await getStudentRankings(), userId),
-);
-
-const getStudentHomeLearningReview = cache((userId: number) =>
-  getStudentLearningReview(userId),
-);
-
-const getStudentHomeAssignments = cache(async (userId: number) => {
+const getStudentHomeAssignments = async (userId: number) => {
   const activeAssignments = await prisma.learningAssignment.findMany({
     where: { studentId: userId, status: "active" },
     include: {
@@ -73,7 +65,7 @@ const getStudentHomeAssignments = cache(async (userId: number) => {
       : 0,
     reminderItems,
   };
-});
+};
 
 export default async function StudentHomePage() {
   const user = await requirePageUser("student");
@@ -85,6 +77,8 @@ export default async function StudentHomePage() {
     acceptedCount,
     settings,
     assignmentData,
+    currentRanking,
+    learningReview,
   ] = await Promise.all([
     prisma.problem.count({ where: { archivedAt: null } }),
     prisma.exam.count({ where: { status: "published" } }),
@@ -97,6 +91,10 @@ export default async function StudentHomePage() {
     prisma.submission.count({ where: { userId: user.id, status: "Accepted" } }),
     getPublicSettings(),
     getStudentHomeAssignments(user.id),
+    getStudentRankings().then((rankings) =>
+      findRankingByUserId(rankings, user.id),
+    ),
+    getStudentLearningReview(user.id),
   ]);
 
   return (
@@ -148,26 +146,14 @@ export default async function StudentHomePage() {
             </div>
           </div>
 
-          <Suspense fallback={<RankProgressFallback />}>
-            <StudentRankProgress userId={user.id} />
-          </Suspense>
+          <StudentRankProgress currentRanking={currentRanking} />
         </div>
 
         <div className="grid border-t border-ink-950/10 bg-white/45 sm:grid-cols-2 lg:grid-cols-4">
           <StatItem icon={<History size={19} />} label="日常提交" value={dailySubmissionCount} />
           <StatItem icon={<Timer size={19} />} label="考试提交" value={examSubmissionCount} />
           <StatItem icon={<BookOpenCheck size={19} />} label="Accepted 次数" value={acceptedCount} />
-          <Suspense
-            fallback={
-              <StatItem
-                icon={<Trophy size={19} />}
-                label="当前天梯排名"
-                value={<span className="skeleton-shimmer block h-5 w-14" />}
-              />
-            }
-          >
-            <StudentRankStat userId={user.id} />
-          </Suspense>
+          <StudentRankStat currentRanking={currentRanking} />
         </div>
       </section>
 
@@ -204,14 +190,13 @@ export default async function StudentHomePage() {
             <h2 className="mt-1 text-2xl font-black text-ink-950">复盘与排名</h2>
           </div>
           <div className="grid gap-3">
-            <Suspense fallback={<PersonalLinksFallback />}>
-              <StudentPersonalLinks
-                assignmentPendingCount={assignmentData.pendingCount}
-                dailySubmissionCount={dailySubmissionCount}
-                examSubmissionCount={examSubmissionCount}
-                studentId={user.id}
-              />
-            </Suspense>
+            <StudentPersonalLinks
+              assignmentPendingCount={assignmentData.pendingCount}
+              currentRanking={currentRanking}
+              dailySubmissionCount={dailySubmissionCount}
+              examSubmissionCount={examSubmissionCount}
+              learningReview={learningReview}
+            />
           </div>
         </div>
       </section>
@@ -219,8 +204,11 @@ export default async function StudentHomePage() {
   );
 }
 
-async function StudentRankProgress({ userId }: { userId: number }) {
-  const currentRanking = await getStudentHomeRanking(userId);
+function StudentRankProgress({
+  currentRanking,
+}: {
+  currentRanking: StudentRankingEntry | null;
+}) {
   const rankProgress = currentRanking
     ? getRankTierProgress(currentRanking.points)
     : null;
@@ -246,8 +234,11 @@ async function StudentRankProgress({ userId }: { userId: number }) {
   );
 }
 
-async function StudentRankStat({ userId }: { userId: number }) {
-  const currentRanking = await getStudentHomeRanking(userId);
+function StudentRankStat({
+  currentRanking,
+}: {
+  currentRanking: StudentRankingEntry | null;
+}) {
   return (
     <StatItem
       icon={<Trophy size={19} />}
@@ -297,22 +288,19 @@ function StudentAssignmentOverview({
   );
 }
 
-async function StudentPersonalLinks({
+function StudentPersonalLinks({
   assignmentPendingCount,
+  currentRanking,
   dailySubmissionCount,
   examSubmissionCount,
-  studentId,
+  learningReview,
 }: {
   assignmentPendingCount: number;
+  currentRanking: StudentRankingEntry | null;
   dailySubmissionCount: number;
   examSubmissionCount: number;
-  studentId: number;
+  learningReview: Awaited<ReturnType<typeof getStudentLearningReview>>;
 }) {
-  const [learningReview, currentRanking] = await Promise.all([
-    getStudentHomeLearningReview(studentId),
-    getStudentHomeRanking(studentId),
-  ]);
-
   return (
     <>
       <CompactLink
@@ -345,31 +333,6 @@ async function StudentPersonalLinks({
         meta={currentRanking ? `当前第 ${currentRanking.rank} 名` : "等待首次上榜"}
       />
     </>
-  );
-}
-
-function RankProgressFallback() {
-  return (
-    <div
-      aria-label="天梯信息加载中"
-      className="grid min-h-80 content-center gap-4 bg-ink-950 p-7 md:p-9"
-      role="status"
-    >
-      <span className="skeleton-shimmer block h-14 w-14 border-white/10 bg-white/10" />
-      <span className="skeleton-shimmer block h-4 w-28 border-white/10 bg-white/10" />
-      <span className="skeleton-shimmer block h-8 w-44 max-w-full border-white/10 bg-white/10" />
-      <span className="skeleton-shimmer block h-3 w-full border-white/10 bg-white/10" />
-    </div>
-  );
-}
-
-function PersonalLinksFallback() {
-  return (
-    <div aria-label="学习概况加载中" className="grid gap-3" role="status">
-      {Array.from({ length: 5 }, (_, index) => (
-        <span className="skeleton-shimmer block h-[74px]" key={index} />
-      ))}
-    </div>
   );
 }
 
