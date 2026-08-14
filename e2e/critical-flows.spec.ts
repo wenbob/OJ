@@ -230,6 +230,12 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
       submitRequestsDuringSwitch += 1;
       await route.continue();
     });
+    await page.evaluate(() => {
+      window.localStorage.setItem(
+        "oj-code-exam-205-problem-104",
+        "// BACK_GUARD_DRAFT",
+      );
+    });
     await acceptedTab.click();
     await expect(page).toHaveURL(/problemId=104/);
     await expect(
@@ -238,6 +244,32 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     await expect(
       page.getByRole("heading", { name: "E2E 双倍题" }),
     ).toBeVisible();
+    expect(submitRequestsDuringSwitch).toBe(0);
+
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          window.localStorage.getItem("oj-code-exam-205-problem-104"),
+        ),
+      )
+      .toContain("BACK_GUARD_DRAFT");
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await page.evaluate(() => window.history.back());
+      await page.waitForTimeout(150);
+      await expect(page).toHaveURL(/problemId=104/);
+      await expect(page.locator("[data-exam-history-notice]")).toBeVisible();
+    }
+    await expect(
+      page.getByRole("heading", { name: "E2E 双倍题" }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          window.localStorage.getItem("oj-code-exam-205-problem-104"),
+        ),
+      )
+      .toContain("BACK_GUARD_DRAFT");
     expect(submitRequestsDuringSwitch).toBe(0);
     await page.unroute("**/api/exams/205/submit*");
 
@@ -405,6 +437,21 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     ).toBeVisible();
     await resumedStudentPage.getByRole("button", { name: "继续考试" }).click();
     await expect(resumedStudentPage).toHaveURL(/\/student\/exams\/201\/take$/);
+    let resumedSubmitRequests = 0;
+    await resumedStudentPage.route("**/api/exams/201/submit*", async (route) => {
+      resumedSubmitRequests += 1;
+      await route.continue();
+    });
+    await resumedStudentPage.evaluate(() => window.history.back());
+    await resumedStudentPage.waitForTimeout(150);
+    await expect(resumedStudentPage).toHaveURL(
+      /\/student\/exams\/201\/take$/,
+    );
+    await expect(
+      resumedStudentPage.locator("[data-exam-history-notice]"),
+    ).toBeVisible();
+    expect(resumedSubmitRequests).toBe(0);
+    await resumedStudentPage.unroute("**/api/exams/201/submit*");
     const resubmitted = await postJson(
       resumedStudentPage,
       "/api/exams/201/submit",

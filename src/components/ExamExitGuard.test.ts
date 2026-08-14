@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   consumeReloadOfCurrentExam,
+  createExamHistoryGuardState,
+  getExamHistoryGuardMarker,
+  isMatchingExamHistorySentinel,
   isSameExamTakeUrl,
 } from "./ExamExitGuard";
 
@@ -78,5 +81,112 @@ describe("exam exit URL classification", () => {
         },
       }),
     ).toBe(false);
+  });
+
+  it("preserves Next.js history internals while adding guard metadata", () => {
+    const tree = { segment: "student-exam" };
+    const originalState = {
+      __NA: true,
+      __PRIVATE_NEXTJS_INTERNALS_TREE: tree,
+      customValue: "kept",
+    };
+    const guardedState = createExamHistoryGuardState({
+      examId: 8,
+      phase: "base",
+      state: originalState,
+      token: "guard-token",
+      url: base,
+    });
+
+    expect(guardedState).not.toBe(originalState);
+    expect(guardedState.__NA).toBe(true);
+    expect(guardedState.__PRIVATE_NEXTJS_INTERNALS_TREE).toBe(tree);
+    expect(guardedState.customValue).toBe("kept");
+    expect(getExamHistoryGuardMarker(guardedState)).toEqual({
+      examId: 8,
+      phase: "base",
+      token: "guard-token",
+      url: base,
+    });
+    expect(getExamHistoryGuardMarker(originalState)).toBeNull();
+  });
+
+  it("creates a valid sentinel even when the original state is empty", () => {
+    const guardedState = createExamHistoryGuardState({
+      examId: 8,
+      phase: "sentinel",
+      state: null,
+      token: "guard-token",
+      url: base,
+    });
+
+    expect(
+      isMatchingExamHistorySentinel({
+        examId: 8,
+        state: guardedState,
+        token: "guard-token",
+        url: base,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not reuse a sentinel from another exam, URL, or component", () => {
+    const guardedState = createExamHistoryGuardState({
+      examId: 8,
+      phase: "sentinel",
+      state: { __NA: true },
+      token: "guard-token",
+      url: base,
+    });
+
+    expect(
+      isMatchingExamHistorySentinel({
+        examId: 9,
+        state: guardedState,
+        token: "guard-token",
+        url: base,
+      }),
+    ).toBe(false);
+    expect(
+      isMatchingExamHistorySentinel({
+        examId: 8,
+        state: guardedState,
+        token: "other-token",
+        url: base,
+      }),
+    ).toBe(false);
+    expect(
+      isMatchingExamHistorySentinel({
+        examId: 8,
+        state: guardedState,
+        token: "guard-token",
+        url: `${base}&other=1`,
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects malformed history markers", () => {
+    expect(getExamHistoryGuardMarker(null)).toBeNull();
+    expect(getExamHistoryGuardMarker([])).toBeNull();
+    expect(
+      getExamHistoryGuardMarker({
+        __ojExamGuard: {
+          examId: "8",
+          phase: "sentinel",
+          token: "guard-token",
+          url: base,
+        },
+      }),
+    ).toBeNull();
+    expect(
+      getExamHistoryGuardMarker({
+        __ojExamGuard: {
+          examId: 8,
+          phase: "unknown",
+          token: "guard-token",
+          url: base,
+        },
+      }),
+    ).toBeNull();
   });
 });

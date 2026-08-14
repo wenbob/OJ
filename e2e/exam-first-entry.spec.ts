@@ -46,6 +46,19 @@ test("a reloaded login document does not submit the first exam entry", async ({
   });
   expect(takeStatus).toBe(200);
 
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.evaluate(() => window.history.back());
+    await page.waitForTimeout(150);
+    await expect(page).toHaveURL(/\/student\/exams\/207\/take$/);
+    await expect(page.locator("[data-exam-history-notice]")).toBeVisible();
+  }
+  expect(submitRequests).toEqual([]);
+  const statusAfterBack = await page.evaluate(async () => {
+    const response = await fetch("/api/exams/207/take");
+    return response.status;
+  });
+  expect(statusAfterBack).toBe(200);
+
   await page.reload();
   await expect(page).toHaveURL(/\/student\/exams\/207\/result$/, {
     timeout: 15_000,
