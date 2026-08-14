@@ -306,9 +306,10 @@ export function ProblemSubmitForm({
     }
 
     if (finishExam && examId !== undefined) {
-      const examResponse = await fetch(`/api/exams/${examId}/submit`, {
-        method: "POST",
-      });
+      const examResponse = await fetch(
+        `/api/exams/${examId}/submit?trigger=objective-complete`,
+        { method: "POST" },
+      );
       const examData = await examResponse.json().catch(() => ({}));
 
       if (!examResponse.ok) {

@@ -2,6 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 
+type NavigationTimingLike = Pick<
+  PerformanceNavigationTiming,
+  "name" | "startTime" | "type"
+>;
+
+type ExamSubmitTrigger =
+  | "history-exit"
+  | "link-exit"
+  | "pagehide"
+  | "reload";
+
+const consumedReloadEntries = new Set<string>();
+
 export function isSameExamTakeUrl(value: string, examId: number, base: string) {
   try {
     const url = new URL(value, base);
@@ -15,17 +28,46 @@ export function isSameExamTakeUrl(value: string, examId: number, base: string) {
   }
 }
 
+export function consumeReloadOfCurrentExam({
+  consumedEntries,
+  currentUrl,
+  examId,
+  navigation,
+}: {
+  consumedEntries: Set<string>;
+  currentUrl: string;
+  examId: number;
+  navigation: NavigationTimingLike | undefined;
+}) {
+  if (
+    navigation?.type !== "reload" ||
+    !isSameExamTakeUrl(navigation.name, examId, currentUrl)
+  ) {
+    return false;
+  }
+
+  const entryKey = `${examId}:${navigation.startTime}:${navigation.name}`;
+  if (consumedEntries.has(entryKey)) return false;
+  consumedEntries.add(entryKey);
+  return true;
+}
+
 export function ExamExitGuard({ examId }: { examId: number }) {
   const [error, setError] = useState("");
+  const exitCommittedRef = useRef(false);
   const submittingRef = useRef<Promise<boolean> | null>(null);
+  const unloadSentRef = useRef(false);
 
   useEffect(() => {
-    const submitUrl = `/api/exams/${examId}/submit`;
     const lockedUrl = window.location.href;
 
-    async function submitBeforeNavigation() {
+    function submitUrl(trigger: ExamSubmitTrigger) {
+      return `/api/exams/${examId}/submit?trigger=${trigger}`;
+    }
+
+    async function submitBeforeNavigation(trigger: ExamSubmitTrigger) {
       if (submittingRef.current) return submittingRef.current;
-      const request = fetch(submitUrl, {
+      const request = fetch(submitUrl(trigger), {
         method: "POST",
         credentials: "same-origin",
       })
@@ -47,9 +89,15 @@ export function ExamExitGuard({ examId }: { examId: number }) {
     }
 
     function submitDuringUnload() {
-      const sent = navigator.sendBeacon?.(submitUrl, new Blob([], { type: "text/plain" }));
+      if (exitCommittedRef.current || unloadSentRef.current) return;
+      unloadSentRef.current = true;
+      const url = submitUrl("pagehide");
+      const sent = navigator.sendBeacon?.(
+        url,
+        new Blob([], { type: "text/plain" }),
+      );
       if (!sent) {
-        void fetch(submitUrl, {
+        void fetch(url, {
           method: "POST",
           credentials: "same-origin",
           keepalive: true,
@@ -78,8 +126,11 @@ export function ExamExitGuard({ examId }: { examId: number }) {
       event.preventDefault();
       event.stopPropagation();
       setError("");
-      void submitBeforeNavigation().then((submitted) => {
-        if (submitted) window.location.assign(anchor.href);
+      void submitBeforeNavigation("link-exit").then((submitted) => {
+        if (submitted) {
+          exitCommittedRef.current = true;
+          window.location.assign(anchor.href);
+        }
       });
     }
 
@@ -89,8 +140,11 @@ export function ExamExitGuard({ examId }: { examId: number }) {
 
       window.history.pushState({ examLocked: true }, "", lockedUrl);
       setError("");
-      void submitBeforeNavigation().then((submitted) => {
-        if (submitted) window.location.assign(targetUrl);
+      void submitBeforeNavigation("history-exit").then((submitted) => {
+        if (submitted) {
+          exitCommittedRef.current = true;
+          window.location.assign(targetUrl);
+        }
       });
     }
 
@@ -101,9 +155,17 @@ export function ExamExitGuard({ examId }: { examId: number }) {
     const navigation = performance.getEntriesByType("navigation")[0] as
       | PerformanceNavigationTiming
       | undefined;
-    if (navigation?.type === "reload") {
-      void submitBeforeNavigation().then((submitted) => {
+    if (
+      consumeReloadOfCurrentExam({
+        consumedEntries: consumedReloadEntries,
+        currentUrl: window.location.href,
+        examId,
+        navigation,
+      })
+    ) {
+      void submitBeforeNavigation("reload").then((submitted) => {
         if (submitted) {
+          exitCommittedRef.current = true;
           window.location.replace(`/student/exams/${examId}/result`);
         }
       });

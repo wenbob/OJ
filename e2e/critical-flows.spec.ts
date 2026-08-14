@@ -191,14 +191,14 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     await page.getByRole("button", { name: "开始考试" }).click();
     await expect(page).toHaveURL(/\/student\/exams\/202\/take$/);
     await expect(page.locator("[data-exam-problem-tabs]")).toHaveCount(0);
-    await page.route("**/api/exams/202/submit", (route) => route.abort());
+    await page.route("**/api/exams/202/submit*", (route) => route.abort());
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "交卷", exact: true }).click();
     await expect(page.getByText(/网络异常，交卷失败/)).toBeVisible();
     await expect(
       page.getByRole("button", { name: "交卷", exact: true }),
     ).toBeEnabled();
-    await page.unroute("**/api/exams/202/submit");
+    await page.unroute("**/api/exams/202/submit*");
     const submitted = await postJson(page, "/api/exams/202/submit");
     expect(submitted.status).toBe(200);
   });
@@ -226,7 +226,7 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     const secondTab = tabs.getByRole("link", { name: /E2E 加法题/ });
     await expect(secondTab).toContainText("未提交");
     let submitRequestsDuringSwitch = 0;
-    await page.route("**/api/exams/205/submit", async (route) => {
+    await page.route("**/api/exams/205/submit*", async (route) => {
       submitRequestsDuringSwitch += 1;
       await route.continue();
     });
@@ -239,7 +239,7 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
       page.getByRole("heading", { name: "E2E 双倍题" }),
     ).toBeVisible();
     expect(submitRequestsDuringSwitch).toBe(0);
-    await page.unroute("**/api/exams/205/submit");
+    await page.unroute("**/api/exams/205/submit*");
 
     const columns = await page
       .locator("article.surface")

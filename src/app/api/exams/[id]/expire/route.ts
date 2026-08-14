@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth";
-import { finishExamRecord } from "@/lib/examScoring";
-import { prisma } from "@/lib/prisma";
+import { expireExamRecordIfNeeded } from "@/lib/examScoring";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -17,30 +16,30 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "考试 ID 不合法" }, { status: 400 });
   }
 
-  const record = await prisma.examRecord.findUnique({
-    where: {
-      examId_userId: {
-        examId,
-        userId: auth.user.id,
-      },
-    },
+  const examRecord = await expireExamRecordIfNeeded({
+    examId,
+    userId: auth.user.id,
   });
-
-  if (!record) {
+  if (!examRecord) {
     return NextResponse.json({ error: "考试记录不存在" }, { status: 404 });
   }
 
-  const examRecord =
-    record.status === "in_progress"
-      ? await finishExamRecord({
-          examId,
-          status: "expired",
-          userId: auth.user.id,
-        })
-      : record;
+  const safeExamRecord = { ...examRecord } as typeof examRecord & {
+    exam?: unknown;
+  };
+  delete safeExamRecord.exam;
+  if (safeExamRecord.status === "in_progress") {
+    return NextResponse.json(
+      {
+        error: "考试尚未到截止时间，不能提前结束",
+        examRecord: safeExamRecord,
+      },
+      { status: 409 },
+    );
+  }
 
   return NextResponse.json({
-    examRecord,
+    examRecord: safeExamRecord,
     resultHref: `/student/exams/${examId}/result`,
   });
 }

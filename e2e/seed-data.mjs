@@ -116,6 +116,15 @@ export async function prepareE2eDatabase() {
         username: "e2e-teacher",
       },
     });
+    await prisma.user.create({
+      data: {
+        id: 4,
+        passwordHash: await hash("e2e-exam-student-password", 10),
+        role: "student",
+        studentProfile: { create: {} },
+        username: "e2e-exam-student",
+      },
+    });
 
     await prisma.problem.create({
       data: {
@@ -335,6 +344,29 @@ export async function prepareE2eDatabase() {
         },
       });
     }
+    await prisma.exam.create({
+      data: {
+        aiEnabled: false,
+        createdById: 1,
+        description: "浏览器首次进入考试回归专用。",
+        durationMin: 60,
+        examType: "programming",
+        id: 207,
+        problems: {
+          create: {
+            order: 1,
+            problemId: 101,
+            score: 100,
+            snapshotAt: new Date(),
+            snapshotProblemType: "programming",
+            snapshotScore: 100,
+            snapshotTitle: "E2E 加法题",
+          },
+        },
+        status: "published",
+        title: "E2E 首次进入考试",
+      },
+    });
     await prisma.exam.create({
       data: {
         aiEnabled: false,

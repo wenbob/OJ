@@ -170,7 +170,11 @@ export default async function StudentExamTakePage({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <ExamCountdown endAt={endAt} examId={exam.id} />
+          <ExamCountdown
+            endAt={endAt}
+            examId={exam.id}
+            serverNow={new Date().toISOString()}
+          />
           {exam.examType === "objective" ? (
             <span className="border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900">
               选择判断考试请使用“提交答案”确认交卷

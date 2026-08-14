@@ -14,9 +14,12 @@ export function ExamSubmitButton({ examId }: { examId: number }) {
     setPending(true);
     setError("");
     try {
-      const response = await fetch(`/api/exams/${examId}/submit`, {
-        method: "POST",
-      });
+      const response = await fetch(
+        `/api/exams/${examId}/submit?trigger=manual`,
+        {
+          method: "POST",
+        },
+      );
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
