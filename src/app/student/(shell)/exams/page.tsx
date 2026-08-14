@@ -28,9 +28,6 @@ export default async function StudentExamsPage() {
           Mock Exam
         </p>
         <h1 className="mt-2 text-2xl font-black">模拟考试</h1>
-        <p className="mt-2 text-sm font-semibold text-ink-600">
-          这里只展示管理员已发布的考试。
-        </p>
       </section>
 
       <section className="mt-6 grid gap-4">
