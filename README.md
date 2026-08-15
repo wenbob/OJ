@@ -799,8 +799,7 @@ ended      已结束，学生端不可继续答题和提交
 
 - 平台名称 `siteName`
 - 平台副标题 `siteSubtitle`
-- 浏览器标签名称 `browserTitle`
-- 浏览器标签图标 `browserIcon`
+- 浏览器标签名称 `browserTitle` 与图标 `browserIcon`
 - 学生端公告 `studentNotice`
 - 管理员端公告 `adminNotice`
 - 默认 C++ 代码模板 `defaultCppTemplate`
@@ -814,6 +813,7 @@ ended      已结束，学生端不可继续答题和提交
 - 编程题四种模式提示词 `aiProgrammingOverviewPrompt`、`aiProgrammingNextStepPrompt`、`aiProgrammingCodeReviewPrompt`、`aiProgrammingQuestionPrompt`
 - 选择判断解析提示词 `aiObjectiveExplanationPrompt`
 - 六项角色触发间隔：学生/老师/管理员编程入口与学生/老师/管理员选择判断生成刷新（5–600 秒）
+- ICP 备案号 `icpRecordNumber`、公安备案号 `publicSecurityRecordNumber` 与公安官方 PNG 图标 `publicSecurityRecordIcon`
 - 是否允许学生自助注册 `allowStudentRegister`
 
 说明：
@@ -822,6 +822,7 @@ ended      已结束，学生端不可继续答题和提交
 - 登录页、学生端布局、管理员端布局和首页公告会读取系统设置。
 - 浏览器标签名称留空时使用平台名称；标签图标支持 PNG、ICO，最大 256KB，可恢复为浏览器默认图标。
 - 标签图标以受校验的图片数据保存在 `SystemSetting`，不会因代码发布或目录切换丢失；保存设置后当前标签页立即更新，其他页面刷新后生效。
+- 备案信息由根布局统一显示在全站页脚：ICP 可单独配置；公安备案号与官方 PNG 图标必须同时填写或同时留空。查询链接由服务端固定生成，不接受任意 URL 或 HTML；保存后刷新页面即可生效，无需重新发布。
 - 设置页面携带版本号原子保存；另一个标签页已经保存后，旧页面再次提交会收到 409 并要求刷新，不会静默覆盖新配置。
 - 默认 C++ 模板已接入 Monaco Editor。
 - 默认评测时间和内存已接入提交接口。

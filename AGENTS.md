@@ -97,6 +97,7 @@ Next.js App Router + Prisma + SQLite 的 C++ 在线 OJ。生产目录 `/www/oj`�
 ## 共享界面约束
 
 - 浏览器标题/图标仅由 `BrowserIdentity.tsx` 同步系统设置；图标须为服务端校验、≤256KB 的 PNG/ICO Data URL。
+- 备案页脚仅由根布局的 `SiteComplianceFooter` 读取系统设置；ICP 可单独显示，公安备案号与经校验的 PNG 图标必须成对，官方查询链接由服务端生成，禁止配置任意 URL 或 HTML。
 - `AppShell` 仅在 `layout`；学生考试走 `(exam)` 锁定布局且 URL 不变。`cache()` 只请求内去重，禁跨请求缓存权限或状态。
 - 选择判断 AI 桌面端为“解析在上、答案在下”；解析可内部滚动，答案编辑器使用 `clamp(360px, 44dvh, 520px)`，答案外层不增加滚动；移动端自然排列。
 
