@@ -46,9 +46,6 @@ export default async function LoginPage({
           <p className="arena-kicker">Welcome Back</p>
           <div className="arena-rule mt-3" />
           <h2 className="mt-6 text-3xl font-black text-ink-950">登录竞技学院</h2>
-          <p className="mt-2 text-sm font-semibold leading-6 text-ink-600">
-            使用老师发放的账号进入学生端或管理员端。
-          </p>
           <LoginForm reason={reason} />
         </div>
       </section>
