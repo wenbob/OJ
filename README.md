@@ -1,101 +1,125 @@
-# C++ 在线 OJ 练习平台 Demo
+# C++ 在线 OJ 教学平台
 
-这是一个基于 Next.js 的 C++ 在线 OJ 练习平台 Demo。当前版本已经覆盖编程题与选择判断题两种独立题型、日常刷题、模拟考试、考试防退出、学生单设备登录、历史 AC 题目标记、运行样例与自定义输入、代码提交、自动评测、AI 思路提示、提交详情、错题本与薄弱知识点、教师学情看板、专项练习与批量作业发布、学生头衔和天梯榜、独立老师端、管理员题目管理、分级用户管理、系统设置、Markdown 批量导入、Docker Judge 和基础提交队列等核心流程。
+[![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111827)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma)](https://www.prisma.io/)
+[![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![Online](https://img.shields.io/badge/Online-botcode.work-2E7D32)](https://botcode.work)
 
-当前项目适合作为本地教学演示、功能验证和固定小班、低并发的正式教学使用基础。线上使用时必须启用 Docker Judge、强随机 `SESSION_SECRET`、定期 SQLite 备份和管理员密码安全管理；它仍不适合作为大规模公网 OJ 或高并发竞赛平台。
+面向课堂教学、课后练习和固定小班考试的 C++ 在线评测平台。项目覆盖编程题与选择判断题、Docker Judge、正式考试、分层 AI 辅导、教师学情、专项作业、题库管理和分级权限，是一套可以本地运行、也可以小规模正式部署的完整教学系统。
 
-核心流程：
+> [!IMPORTANT]
+> 当前架构适合本地演示、内部验证和固定小班低并发教学，不建议直接作为大规模公网 OJ 或高并发竞赛平台。生产环境必须使用 Docker Judge、强随机会话密钥、HTTPS 和定期数据库备份。
 
-```text
-学生登录
--> 日常刷题或模拟考试
--> 查看题目
--> 按管理员开关使用 AI 思路提示（仅编程题）
--> 使用 Monaco Editor 编写 C++17 代码
-   或逐行填写选择判断题答案
--> 提交评测
--> 查看整体结果和每个测试点结果
--> 查看日常提交记录或考试提交记录
--> 查看头衔、段位积分和天梯榜
+**在线入口：** [https://botcode.work](https://botcode.work)
 
-管理员登录
--> 管理题目、用户、考试、系统设置
--> 为学生设置自定义头衔
--> Markdown 批量导入题目
--> 查看日常提交、考试提交和考试记录
+**同步仓库：** [wenbob/OJ](https://github.com/wenbob/OJ) · [wenbob/2026-OJC](https://github.com/wenbob/2026-OJC)
 
-老师登录
--> 进入独立 /teacher
--> 管理学生、自己的考试和自己下发的专项练习
--> 使用现有题库组卷和校题
--> 查看学生提交、学情、AI 使用和天梯
-```
+## 项目亮点
 
-## 使用文档
+| 能力 | 说明 |
+| --- | --- |
+| 双题型评测 | 编程题使用 C++17 Judge；选择判断题由服务端逐题判分，同一场考试不混合题型 |
+| 教学型考试 | 支持发布快照、倒计时、自动交卷、防误后退、成绩计算和有审计的误交卷恢复 |
+| 安全评测 | 生产环境使用无网络、只读根文件系统、受限 CPU/内存/PID/capability 的 Docker Judge |
+| 分层 AI 辅导 | 提供理解题目、下一步提示、代码检查和客观题解析；不返回完整代码、最终答案或隐藏测试 |
+| 教师闭环 | 学情诊断、错题分析、推荐练习、批量作业、个性化题单和学生 AI 权限管理 |
+| 权限与数据保护 | 学生、老师、管理员三级角色；隐藏测试服务端脱敏；学生单设备登录；关键考试操作使用事务保护 |
+| 题库运营 | Markdown 批量导入、题型/分类/难度管理、自定义排序、软下架和历史 AC 保留 |
+| 运维基线 | Linux standalone、PM2、Nginx、HTTPS、SQLite 备份、健康检查和完整发布/回滚手册 |
+
+## 角色与边界
+
+| 角色 | 主要能力 | 明确限制 |
+| --- | --- | --- |
+| 学生 | 日常刷题、专项练习、正式考试、提交记录、错题本、天梯和受控 AI 辅导 | 只能读取自己的提交；永远看不到隐藏测试和客观题标准答案 |
+| 老师 | 校题、管理学生、创建自己的考试、发布自己的作业、查看学生学情与 AI 使用 | 不能维护全局题库、系统设置、AI 模型、老师或管理员账号 |
+| 管理员 | 题库、用户、考试、作业、提交、AI 配置、系统设置和全局运营 | 关键写操作按场景受到事务、版本号、最后管理员保护或专项审计约束 |
+
+详细操作请直接阅读对应手册：
 
 - [学生使用说明](docs/student-guide.md)
 - [老师端使用说明](docs/teacher-guide.md)
-- [管理员使用和运维说明](docs/admin-guide.md)
+- [管理员使用说明](docs/admin-guide.md)
 - [线上部署与维护手册](docs/deploy.md)
 
-以上四份是当前操作指南；`docs/ops-review-*.md` 按日期保留历史发布与事故证据，其中旧命令可能已被后续流程取代。实际部署始终以 [线上部署与维护手册](docs/deploy.md) 和 `AGENTS.md` 为准。
+`docs/ops-review-*.md` 保存历史发布和事故证据，其中的旧命令可能已经失效；当前部署与回滚始终以 `docs/deploy.md` 和 `AGENTS.md` 为准。
 
-## 技术栈
+## 系统架构
 
-- Next.js App Router
-- TypeScript
-- React
-- Tailwind CSS
-- Prisma
-- SQLite
-- bcryptjs
-- Monaco Editor
-- KaTeX 数学公式渲染
-- lucide-react
-- Vitest
-- 本地 C++ Judge：调用 `g++ -std=c++17 -O2`
-- Docker C++ Judge：通过 `JUDGE_MODE=docker` 启用
-- 客观题本地判分：不启动 Docker，每行答案对应一道小题
-- 内存提交队列：通过 `JUDGE_CONCURRENCY` 控制并发
+```mermaid
+flowchart LR
+    Browser[浏览器] --> Nginx[Nginx / HTTPS]
+    Nginx --> App[Next.js App Router]
 
-## 目录概览
+    App --> Auth[认证与角色权限]
+    App --> Prisma[Prisma]
+    Prisma --> SQLite[(SQLite)]
 
-```text
-src/app                 App Router 页面和 API Route
-src/components          共享组件，如 Monaco 编辑器、提交详情、分页、状态标签
-src/lib                 认证、Judge、队列、Markdown 解析、考试计分、分页、系统设置等逻辑
-prisma/schema.prisma    Prisma 数据模型
-prisma/init.sql         SQLite 初始化 SQL
-prisma/seed.ts          初始账号、题目、考试和系统设置
-docker/judge-cpp        Docker Judge 镜像定义
+    App --> Queue[统一 Judge 队列]
+    Queue --> Docker[Docker C++ Judge]
+
+    App --> AI[DeepSeek / 豆包 / 自定义 AI]
+    App --> Settings[系统设置与教学策略]
 ```
 
-## 导航、布局与加载
+核心请求流程：
 
-- `/admin`、`/teacher` 和学生普通页面分别由角色 `layout.tsx` 持久挂载 `AppShell`；同角色切页只替换主体，页头、导航和会话守卫不重建。页面组件不要再次包裹外壳。
-- 学生正式答题位于不改变公开 URL 的 `(exam)` 路由组，使用独立锁定外壳；不显示普通导航和退出按钮，既有离开交卷规则保持不变。
-- 普通内容入场统一为 `180ms`、`4px` 且无分段延迟；系统启用“减少动态效果”时近似无动画。高频链接用 `NavigationLink`，导航超过 `100ms` 才显示非阻断等待提示。
-- 页面切换不使用整页或局部灰色骨架：目标页面准备期间保留当前页面，完成后一次性替换；超过 `100ms` 时仅由当前 `NavigationLink` 显示非阻断小圆点。学生首页统计、段位、排名和学情数据并行读取后统一展示；专项练习强提醒仍会先完成服务端判断，避免漏提醒或闪现。
-- 认证和公共设置只使用 React `cache()` 做单次请求内去重，不跨请求缓存权限、考试或提交状态。根布局把公共设置直接传给 `BrowserIdentity`，首次加载不再额外请求 `/api/settings/public`。
-- 天梯统计、分类列表、最近通过记录和后台学生数优先在数据库聚合或有界选取，避免把全量历史 Accepted 或整张题目表加载到应用层。
+```text
+学生读取题目
+  -> 编写 C++17 代码或逐行填写客观题答案
+  -> 样例/自定义输入试运行（不写 Submission）
+  -> 正式提交
+  -> 服务端校验账号、题目、考试和作业上下文
+  -> Judge 队列或客观题判分
+  -> 保存 Submission 与逐测试点/逐小题结果
+  -> 按角色返回脱敏后的结果
+```
+
+### 技术栈
+
+- Next.js App Router、React、TypeScript、Tailwind CSS
+- Prisma、SQLite、bcryptjs
+- Monaco Editor、KaTeX、lucide-react
+- Vitest、Playwright、ESLint
+- C++17、Docker Judge
+- Linux standalone、PM2、Nginx
 
 ## 快速开始
 
-### 1. 安装依赖
+### 环境要求
+
+- Node.js `>= 20.9.0`
+- npm
+- 本地 Judge：PATH 中可用的 `g++`
+- Docker Judge：Docker Engine 和项目 Judge 镜像
+
+### 1. 获取代码并安装依赖
 
 ```bash
-npm install
+git clone https://github.com/wenbob/OJ.git
+cd OJ
+npm ci
 ```
 
-### 2. 准备环境变量
+也可以从同步仓库 `https://github.com/wenbob/2026-OJC.git` 克隆。
 
-项目提供 `.env.example`，可以复制为 `.env`：
+### 2. 创建本地环境配置
+
+macOS / Linux：
 
 ```bash
 cp .env.example .env
 ```
 
-默认配置：
+Windows PowerShell：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+本地最小配置已经写在 `.env.example`。至少应把 `SESSION_SECRET` 替换为自己的长随机字符串：
 
 ```env
 DATABASE_URL="file:./dev.db"
@@ -103,905 +127,195 @@ SESSION_SECRET="replace-this-with-a-long-random-string"
 APP_ORIGIN=http://127.0.0.1:3000
 SESSION_COOKIE_SECURE=false
 OJ_LISTEN_HOST=127.0.0.1
-LOGIN_RATE_LIMIT_MAX_BUCKETS=10000
-LOGIN_MAX_IN_FLIGHT_GLOBAL=16
-LOGIN_MAX_IN_FLIGHT_PER_IP=4
-LOGIN_MAX_IN_FLIGHT_PER_ACCOUNT=1
 JUDGE_MODE=local
-JUDGE_DOCKER_IMAGE=oj-cpp-judge
-JUDGE_CONCURRENCY=1
-JUDGE_MAX_QUEUE_SIZE=50
-JUDGE_QUEUE_WAIT_TIMEOUT_MS=60000
-JUDGE_MAX_RUNNING_PER_OWNER=1
-JUDGE_MAX_PENDING_PER_OWNER=2
-JUDGE_TASK_TIMEOUT_MS=60000
-JUDGE_TIME_LIMIT_MS=2000
-JUDGE_MEMORY_LIMIT_MB=128
-JUDGE_COMPILE_TIMEOUT_MS=30000
-JUDGE_COMPILE_MEMORY_LIMIT_MB=512
-JUDGE_COMPILE_FILE_LIMIT_MB=64
+```
+
+AI 能力是可选项。密钥只能保存在服务器 `.env`：
+
+```env
 DEEPSEEK_API_KEY=
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-v4-pro
 ARK_API_KEY=
 AI_CUSTOM_API_KEY=
 ```
 
-AI 密钥只保存在 `.env`：DeepSeek 使用 `DEEPSEEK_API_KEY`，豆包/火山方舟使用 `ARK_API_KEY`，自定义 OpenAI-compatible 服务使用 `AI_CUSTOM_API_KEY`。管理员页面只显示密钥是否已经配置，不接收或回显密钥；不要提交 `.env` 或把真实 key 写进代码。
+不要把真实 `.env`、API Key、数据库或备份提交到 Git。
 
-### 3. 本地开发初始化数据库
-
-```bash
-npm run db:init
-```
-
-这个命令会生成 Prisma Client，并执行 `prisma/init.sql` 创建 SQLite 表结构。
-
-注意：当前 `prisma/init.sql` 会删除已有表后重建表，本地重置很方便，但执行前请确认不需要保留旧数据。
-
-生产环境禁止运行：
+### 3. 初始化本地数据库
 
 ```bash
 npm run db:init
-```
-
-线上数据库结构必须使用 Prisma Migrate：
-
-```bash
-npm run db:deploy
-```
-
-### 4. 写入 seed 数据
-
-```bash
 npm run seed
 ```
 
-默认账号：
+> [!WARNING]
+> `npm run db:init` 会执行破坏式初始化，只能用于明确允许重建的本地数据库。生产环境禁止执行 `db:init` 和 `seed`，只能使用 `npm run db:deploy` 应用迁移。
 
-```text
-管理员：admin / admin123
-学生一：student1 / 123456
-学生二：student2 / 123456
-```
+Seed 默认创建以下本地演示账号：
 
-Seed 会创建：
+| 角色 | 用户名 | 密码 |
+| --- | --- | --- |
+| 管理员 | `admin` | `admin123` |
+| 学生 | `student1` | `123456` |
+| 学生 | `student2` | `123456` |
 
-- 默认系统设置
-- 默认管理员和学生账号
-- 初始题目：A+B 问题、判断奇偶、求两个数的最大值
-- 每道题至少两组样例和若干测试点
-- 已发布模拟考试：五一 C++ 基础模拟考试
-- 草稿考试示例
+这些密码只用于本地演示；任何外部可访问环境都必须立即修改默认管理员密码。
 
-### 5. 启动开发服务
+### 4. 启动开发服务
 
 ```bash
 npm run dev
 ```
 
-访问：
+访问 [http://127.0.0.1:3000/login](http://127.0.0.1:3000/login)。
 
-```text
-http://localhost:3000
-http://127.0.0.1:3000/login
-```
-
-### 6. 常用检查
+如果要在本地使用 Docker Judge：
 
 ```bash
-npm run test
-npm run test:e2e
-npx tsc --noEmit
-npm run lint
-npm run build
+docker build -t oj-cpp-judge ./docker/judge-cpp
 ```
 
-`npm run test:e2e` 会在隔离的 `prisma/e2e.db` 和 3100 端口运行关键浏览器流程，结束后自动清理测试数据库和构建目录。首次运行若本机缺少 Playwright Chrome，可先执行 `npm run test:e2e:install`。
-
-生产环境上线前还建议执行：
-
-```bash
-npm run check:env
-npm run db:status
-```
-
-## 学生端功能
-
-### 登录与首页
-
-- `/login` 支持账号密码登录。
-- 登录成功后按角色跳转：
-  - `student` -> `/student`
-  - `teacher` -> `/teacher`
-  - `admin` -> `/admin`
-- 学生首页显示系统设置中的 `studentNotice`。
-- 页面顶部平台名称读取系统设置中的 `siteName`。
-- 登录页、学生端和管理员端共用“竞技学院”视觉语言；动效支持 `prefers-reduced-motion`。
-- 学生首页采用“今日任务 + 段位成长”布局，顶部用户信息显示当前头衔、段位积分和天梯排名。
-- 学生进入或刷新首页时，如有需要提醒的未完成专项练习，会先看到不可关闭的汇总弹窗；唯一按钮会带学生进入 `/student/assignments`，其他学生页面不会被弹窗打断。
-
-### 头衔与天梯榜
-
-页面：
-
-```text
-/student/leaderboard
-```
-
-规则：
-
-- 段位积分 = 唯一 Accepted 题数 × 10。
-- 同一题多次 Accepted 只计 1 题，日常刷题和考试提交都会纳入统计。
-- 晋级门槛为：青铜学徒 0、白银新秀 65、黄金精英 130、铂金高手 260、钻石强者 455、星耀大师 715、最强王者 1040、荣耀王者 1560。
-- 管理员自定义头衔只覆盖展示文案，不改变段位积分和排名。
-- 天梯榜排序为：积分、唯一 AC 题数、AC 次数、用户名、用户 ID。
-- 学生榜和管理员榜都会展示前三名领奖台；学生榜额外展示“我的战绩”、距前一名与第一名的积分差和晋级进度。
-- 第四名以后在桌面端使用排名表，移动端使用纵向排名卡片，不需要横向滚动查看核心数据。
-
-### 错题本与薄弱知识点
-
-页面：
-
-```text
-/student/review
-```
-
-规则：
-
-- 日常刷题和模拟考试的历史提交会合并统计。
-- 只要一道题曾经出现非 `Accepted` 提交，就会进入错题本；首次就 `Accepted` 的题不会进入。
-- 尚未通过的错题标记为“待攻克”；后续任意一次 `Accepted` 后自动标记为“已攻克”。
-- 薄弱知识点按题目分类展示掌握率、待攻克题数和失败尝试次数。
-- 可按状态和题目分类筛选，并从最近的日常提交继续修改代码。考试提交会统计进错题本，但不会越权回填到日常练习。
-
-### 分层 AI 学习助手
-
-- 学生编程 AI 助手同时受“学生个人编程 AI 权限”和日常练习/当前考试 AI 开关控制；任一条件关闭时页面隐藏，服务端也拒绝请求。服务端先按账号识别全部进行中考试，考试期间不会因省略 `examId` 或改问题单外题目而降级为日常练习 AI；同时发现多条进行中记录时失败关闭。
-- 学生可以选择“理解题目”“下一步提示”“检查当前代码”，也可以自由追问当前题目；后两类提示和自由提问会读取编辑器里的最新代码。
-- AI 只讲当前题目的意思、思路、下一步动作和问题位置，不提供完整代码、可复制代码语句、最终答案或隐藏测试数据。
-- 学生端在当前浏览器保留最近 20 条消息，发给 AI 时只携带最近 12 条；服务端另存学生实际可见问答和调用统计供老师审阅，但不保存代码快照、完整 Prompt 或内部推理。
-- 同一学生在所有编程题、考试和 AI 模式中共用账号级触发间隔；管理员可在 5–600 秒内调整，默认 20 秒。只有真正调用上游模型时才开始计时，有效缓存和同一请求的幂等重放不会消耗间隔。
-- 请求发出后页面会立即显示思考状态，并每 2 秒更新用时；最终回复通过安全检查后逐段流式出现，难题等待期间不会呈现为页面卡死。
-
-### 共享选择判断题 AI 解析
-
-- 管理员可在系统设置中独立开启 `aiObjectiveExplanationEnabled` 主开关；学生使用还需开启 `aiStudentObjectiveExplanationEnabled` 和该学生个人“选择判断 AI”权限。
-- 管理员和老师可在题目练习详情及模拟考试练习中点击每道小题的“AI 解析”。学生只在日常刷题或专项练习中、当前大题至少提交过一次日常答案后逐题解锁；正式考试及考后结果页始终不开放。
-- 学生首次进入尚未提交的客观题时不显示 AI 回答面板，只展示完整答案输入区；首次日常提交后页面解锁 AI 面板，并自动定位到本次逐题结果。结果明确显示答对、答错和总题数，页面刷新切换布局时仍保留本次结果。
-- 桌面端右侧栏按“AI 解析在上、答案输入在下”排列。长解析可在 AI 面板内滚动；答案编辑器统一为 `360–520px` 响应式高度并完整展开，答案区不再产生横向或纵向内部滚动条，浏览时使用主页面滚动。移动端按题目、解析、答案输入自然纵向排列。
-- 题干、选项和标准答案全部由服务端读取。数据库答案始终是最终依据，选项正误标记由服务端生成，模型只负责解释正确项依据和各错误项原因。
-- 有效解析按题目小题跨角色共享。学生、老师和管理员都可以按各自生成/刷新间隔确认后重新生成；成功会覆盖所有用户看到的共享版本，失败不会破坏旧解析。题面、选项、答案或选择判断模型配置变化后缓存自动失效。
-- 解析缓存只保存结构化中文解析、配置指纹、模型和 Token 统计，不保存 API Key、内部推理、完整 Prompt 或上游原始响应。学生读取和生成会写入 AI 使用审计；有效缓存读取的模型调用和 Token 均为 0。
-
-### 专项练习
-
-- 学生首页和 `/student/assignments` 展示老师下发的专项练习、说明、截止日期和完成进度。
-- 未完成提醒汇总管理员和老师下发的全部进行中任务，并显示发布者、进度与截止时间。学生点击“去完成专项练习”后进入 60 分钟静默期；期间刷新首页、退出重登或使用缓存会话都不重复提醒。满 60 分钟后若仍停留或再次进入首页，系统重新读取任务状态，仍有未完成任务才提醒；新任务或被老师修改的任务在下一次首页读取时立即提醒。
-- 只有从专项练习详情进入题目，并在任务仍为进行中时重新提交 `Accepted`，才会计入该任务；普通日常提交、考试提交、历史 AC 都不会抵扣。
-- 有权限的管理员或老师可以继续调整未归档任务的题目、顺序和说明；学生端会按保存后的任务快照只读跟随。删除已完成题只解除任务关联并重算进度，不删除历史提交或代码。
-- 管理员和老师可从独立“作业发布”页面搜索并选择最多 100 名学生，先编排 1–10 道公共编程题，再通过学生行的“个性化”按钮按需展开单人题单、自动定位并完成增删；编辑区默认不展示。桌面端学生筛选面板会在视口内跟随并使用内部滚动，移动端保持自然文档流。发布采用单事务全有或全无；成功后每名学生获得独立任务，后续互不联动。
-- 批量发布会一次校验账号、题型、下架状态和其他未完成任务冲突。任一学生冲突时不创建任何任务，并在页面定位到对应学生和题目。
-- 如果一道题在评测期间被移出任务，本次提交仍会保存为普通练习，但不会计入专项进度，页面会给出明确说明。
-- 过期任务会标红提醒但仍可补做；归档任务之后的提交不再计入进度，管理员可选择永久删除已归档任务。
-
-### 日常刷题
-
-页面：
-
-```text
-/student/problems
-/student/problems/[id]
-```
-
-已支持：
-
-- 编程题和选择判断题独立筛选。
-- 题目列表分页，默认每页 50 道。
-- 顶部按 `Problem.category` 动态生成分类筛选。
-- 点击“全部”显示全部题目，点击分类只显示该分类题目。
-- 题目列表显示标题、难度、分类、“我的提交”和进入做题入口。
-- “我的提交”只统计当前登录学生自己的日常刷题提交，不显示其他学生的提交次数。
-- 日常或考试中只要曾经 `Accepted`，题目行就会显示淡绿色和“已通过”，操作改为“再次练习”；之后提交失败不会取消标记。
-- 分类切换后分页自动回到第 1 页。
-- 题目详情展示标题、难度、分类、题目描述、输入格式、输出格式、数据范围和样例。
-- 编程题与选择判断题共用题面富文本渲染，支持代码块、行内代码、标题、列表、表格、链接、粗体和 KaTeX 数学公式。
-- 学生日常选择判断题的答案编辑器使用 `360–520px` 响应式高度并完整展开；桌面端和移动端都使用主页面滚动，不在答案区外层增加横向或纵向内部滚动条。
-- 样例优先读取 `TestCase.isSample = true` 的全部测试点，按顺序展示多组样例。
-- 老数据没有样例测试点时，可 fallback 到 `Problem.sampleInput` 和 `Problem.sampleOutput`。
-- 样例标题在代码框外，代码框内只显示真实输入输出内容。
-- 学生日常刷题详情和模拟考试答题页提供“复制本题”按钮，可复制 Markdown 格式完整题面。
-
-### Monaco Editor 代码编辑器
-
-学生日常刷题、考试答题和管理员题目练习均使用 Monaco Editor。
-
-支持：
-
-- C++ 语法高亮
-- 行号
-- Tab 缩进
-- 自动缩进
-- 自动补全括号和引号
-- 括号匹配
-- 代码折叠
-- 粘贴保留格式
-- 暗色主题
-- 固定编辑器高度
-- 编辑器字号调节
-- 本地草稿保存
-
-为减少课堂答题干扰，Monaco Editor 已关闭自动代码提示、单词建议、Tab 补全、参数提示和内联建议；括号和引号自动补全仍保留。
-
-默认代码模板读取系统设置 `defaultCppTemplate`。
-
-选择判断题仍复用 Monaco Editor，但使用纯文本模式，标题显示“答案输入”，每行只填写一道小题的选项字母，例如：
-
-```text
-A
-B
-A
-```
-
-选择判断答案提交成功后，学生、老师和管理员都会立即看到本次提交的逐题结果，包括题号、正确/错误和自己的答案，并可进入完整提交详情再次查询。学生响应始终隐藏标准答案；管理员和老师仍通过校题页原有的“显示答案”控制查看标准答案。
-
-代码加载优先级：
-
-```text
-fromSubmission 历史提交代码
-> localStorage 草稿
-> SystemSetting.defaultCppTemplate
-> 代码内兜底模板
-```
-
-日常题目草稿 key：
-
-```text
-oj-code-problem-${problemId}
-```
-
-模拟考试草稿 key：
-
-```text
-oj-code-exam-${examId}-problem-${problemId}
-```
-
-考试答题页按考试和题目隔离草稿，切换题目时会加载该题自己的草稿，不复用其他考试题目的代码。
-
-### 运行样例与自定义输入
-
-所有编程题编辑器都提供“运行样例 / 自定义输入”双标签，包括学生日常练习、专项练习、编程考试、管理员题目练习和管理员考试练习；选择判断题不显示。
-
-- “运行样例”由服务端读取全部公开样例，一次编译后逐组运行并比较输出；浏览器不能提交或覆盖样例标准答案，也不会读取隐藏测试点。
-- “自定义输入”允许空输入，只展示程序实际输出、运行时间或编译/运行错误，不判定 Accepted 或 Wrong Answer。
-- 试运行结果和正式提交结果相互独立，完成后分别自动滚动到对应结果区。
-- 试运行不会创建 `Submission`，不会影响天梯积分、错题本、考试成绩或专项练习进度，也不会触发 AC 动画。
-- 每个账号同时只能进行一个试运行，完成后等待 5 秒才能再次运行；正式提交仍可在试运行期间发起，并优先于尚未开始的试运行排队。
-
-样例通过只代表公开样例匹配，不代表隐藏测试点全部通过，仍需点击“提交代码”完成正式评测。
-
-### 代码提交与评测
-
-学生可以提交 C++17 代码，评测结果包括：
-
-- Accepted
-- Wrong Answer
-- Compile Error
-- Runtime Error
-- Time Limit Exceeded
-
-提交后保存：
-
-- 整体提交记录 `Submission`
-- 每个测试点结果 `SubmissionCaseResult`
-
-每个测试点结果包含：
-
-- 测试点编号
-- 状态
-- 运行时间
-- 输入内容
-- 用户输出
-- 标准输出
-- 错误信息
-
-上述是数据库和后台排障数据。学生可达的编程正式提交创建、详情和列表响应会在服务端统一清空测试点输入、期望输出和程序输出，并把运行阶段错误替换为不含测试数据的通用状态提示；编程 AI 的最近提交上下文使用同一规则，编译错误仍可展示。管理员和有权老师仍可查看完整信息。
-
-编程题正式提交后的结果卡片展示状态、通过数量、运行时间和隐藏测试保护提示，不展示任何测试点输入、标准输出、程序输出或详细运行错误；需要查看输出时使用独立的公开样例或自定义输入试运行。选择判断题会直接展开逐题正确/错误及自己的答案。完整后台结果仍可由管理员和有权老师查看。
-
-答题组件挂载后会在后台预加载并解码 `/ac-success.png`。当提交结果为 `Accepted` 时，页面从图片真正可绘制后再开始约 1 秒的居中弹入与淡出动效，因此清空浏览器缓存后的首次通过也能显示；加载失败或等待超时会退回简洁的 Accepted 文字反馈，不阻塞评测结果。提示图始终直接请求 `/ac-success.png`，不经过 Next.js `/_next/image` 优化器。
-
-### 日常提交记录
-
-页面：
-
-```text
-/student/submissions
-/student/submissions/[id]
-```
-
-已支持：
-
-- 只显示当前学生自己的日常刷题提交。
-- 只查询 `submissionType = practice`。
-- 分页展示，默认每页 20 条。
-- 查看提交详情。
-- 复制历史代码。
-- 继续修改历史提交代码。
-- 学生不能查看或复制其他学生的提交。
-- 公网 HTTP 页面会使用兼容复制方案，避免浏览器禁用 Clipboard API 导致复制失败。
-
-日常提交的“继续修改”跳转：
-
-```text
-/student/problems/[problemId]?fromSubmission=提交ID
-```
-
-### 模拟考试
-
-页面：
-
-```text
-/student/exams
-/student/exams/[id]
-/student/exams/[id]/take
-/student/exams/[id]/result
-```
-
-已支持：
-
-- 学生只看到 `published` 状态考试。
-- `draft` 和 `ended` 不出现在学生可参加考试列表中。
-- 考试详情展示考试名称、说明、题目数量和考试时长。
-- 点击开始考试会创建 `ExamRecord`。
-- 同一学生同一场考试只创建一条考试记录。
-- 已有 `in_progress` 记录时继续考试。
-- 已交卷或超时后默认只能查看结果；考试仍发布且原倒计时未结束时，管理员或考试所属老师可填写原因恢复误交卷记录，超时记录不能恢复。
-- 考试答题页使用锁定布局，隐藏全站导航、退出和返回链接；普通浏览器后退、`Alt+←` 和鼠标后退键会被拦截，学生继续停留在当前题目且不会交卷。刷新、关闭、地址栏跳转、点击外部链接或退出仍会调用幂等交卷接口，同场切题不交卷。
-- 切换浏览器标签、最小化窗口或切换其他软件不会触发交卷。
-- 多题考试使用顶部单行横向题签切题，显示题号、标题和本场状态；单题考试不显示冗余题签。
-- 编程题在本场考试任意一次 `Accepted` 后持续显示淡绿色，即使后续提交失败也不取消；客观题显示“已作答/未提交”。
-- 桌面端题面与代码/答案区约为 `58% / 42%`，右侧编辑区随页面吸顶；移动端上下排列。
-- 考试中切换题目时，编辑器会加载当前题目的独立草稿和结果区域。
-- 考试中提交成功后，有题目列表时会刷新该题的最新评测状态。
-- 考试中提交代码会保存 `submissionType = exam` 和当前 `examId`。
-- 考试题目状态只统计当前考试下当前学生的提交，不混入日常刷题提交。
-- 页面显示倒计时。
-- 编程考试支持手动交卷；选择判断考试通过“提交答案”二次确认后交卷。
-- 超时后自动结束并跳转结果页。
-- 结果页展示考试记录、状态、开始时间、交卷时间、总分和每题得分；选择判断考试还会展开实际计分提交的逐题对错和自己的答案。
-
-成绩规则：
-
-```text
-编程题：有 Accepted 则获得 ExamProblem.score 满分，否则 0 分。
-选择判断题：按一次提交中答对的小题分值累计，并取该题所有提交中的最高分；同分时使用创建时间较新、提交 ID 较大的记录作为结果页复盘内容。
-```
-
-### 考试提交记录
-
-页面：
-
-```text
-/student/exam-submissions
-```
-
-已支持：
-
-- 题型筛选：编程题 / 选择判断题。
-- 手动新增和编辑选择判断题小题、选项、答案与分值。
-- 只显示当前学生自己的考试提交。
-- 只查询 `submissionType = exam`。
-- 分页展示，默认每页 20 条。
-- 显示考试名称、题目、状态、通过测试点数、运行时间和提交时间。
-- 查看详情。
-- 复制代码。
-- 继续修改。
-
-考试提交的“继续修改”跳转：
-
-```text
-/student/exams/[examId]/take?problemId=题目ID&fromSubmission=提交ID
-```
-
-## 老师端功能
-
-老师账号由管理员创建，登录后进入独立的 `/teacher`。老师可以练习和校验现有题目、创建并管理自己的考试、管理学生账号、查看全部学生提交与学情、批量发布课后练习并维护自己下发的专项练习，以及审阅 AI 使用和天梯。
-
-老师不能访问系统设置、AI 模型配置、题目管理、题目导入、上下架、题序或分类排序，也不能使用考试 Markdown 导入。老师只能查看和新增学生、分别调整编程 AI 与选择判断 AI 权限，以及把学生密码重置为固定初始值 `12345678`；不能修改用户名、角色或自定义头衔，不能删除学生，也不能枚举或管理老师和管理员。老师的考试和专项练习按创建者隔离。
-
-详细操作见 [老师端使用说明](docs/teacher-guide.md)。
-
-## 管理员端功能
-
-### 管理员首页
-
-页面：
-
-```text
-/admin
-```
-
-入口包括：
-
-- 题目管理
-- 用户管理
-- 题目练习
-- 模拟考试管理
-- 日常提交记录
-- 考试提交记录
-- 教师学情看板
-- 作业发布
-- 系统设置功能卡片
-
-管理员首页公告读取系统设置中的 `adminNotice`。
-
-### 教师学情看板与专项练习
-
-页面：
-
-```text
-/admin/learning
-/admin/learning/[studentId]
-/admin/assignments
-```
-
-- 支持近 7 天、近 30 天和全部历史三个分析周期，只分析编程题，日常与考试提交都会纳入。
-- 学生列表按中文姓名拼音、英文 A–Z 和 `#` 固定分组；支持用户名即时搜索和吸顶的 `A–Z #` 通讯录索引，搜索不会改变顶部全体统计。
-- 规则诊断识别近期未训练、持续卡题、编译基础、逻辑判断、运行稳定性和效率问题；累计历史用于判断题目是否曾经通过以及是否仍待攻克。
-- 学生详情页集中展示主要问题、持续卡题、最近失败、AI 学情摘要和推荐练习题，不再单独展示分类掌握率、错误状态分布或题库缺口。
-- 推荐从最薄弱的两个分类轮流选择待攻克题和从未尝试题，排除历史 AC、客观题及其他未完成任务中的重复题。
-- 新建和编辑任务共用题目选择器，支持按管理员保存的分类标签与标题关键词组合搜索。
-- 教师可以搜索、增删和排序 1–10 道编程题后下发；未归档任务仍可把题目草稿、标题、说明和截止日期一次性保存。删除已完成题时会强提醒，历史提交保留且任务进度重新计算；已完成任务加入新题后会重新显示为进行中。
-- 进行中任务不能硬删除；归档后可永久删除。管理员可以维护全部任务，老师只能维护自己创建的任务。
-- `/admin/assignments` 与 `/teacher/assignments` 提供批量课后作业工作台：学生选择跨搜索保留；桌面端筛选名单随视口居中跟随；个性化编辑默认折叠，点击学生行的“个性化”后自动定位；公共题按管理员保存的分类顺序检索，最近记录分别按管理员全量和老师本人范围展示。
-- AI 教师摘要只接收聚合统计，按学生和周期保存缓存；上游 AI 失败不影响规则诊断、推荐和任务下发。
-
-### 题目管理
-
-页面：
-
-```text
-/admin/problems
-```
-
-已支持：
-
-- 创建考试时选择 `programming` 或 `objective`，一场考试不能混合题型。
-- 题目列表分页，默认每页 50 道。
-- 按 `Problem.category` 动态分类筛选。
-- 管理员可以在当前页拖动题目或使用上下按钮调整题序，也可以拖动分类标签后统一保存；保存后的自定义顺序会同步用于学生题库、管理员练习和组卷搜索。
-- 管理员题目管理页可按标题自然顺序或创建时间正倒序预览，并可将当前题型或分类的全部结果保存为一次性自定义题序快照；学生端不显示任何排序入口。
-- 新增题目。
-- 编辑题目。
-- 单个下架题目。
-- 批量选择题目。
-- 全选当前页。
-- 批量下架题目。
-- 下架前二次确认。
-- 下架成功后刷新列表并清空选中状态。
-- 分页或筛选变化后清空选中状态，避免误删。
-- 新增和编辑题目时维护测试点。
-- 新增和编辑题目时至少需要两组样例测试点。
-- 题目分类及管理员保存的分类顺序会影响学生端和管理员端的分类筛选。
-- 题目列表中的提交数量统计日常刷题总提交次数，点击数字会跳转到按该题筛选后的 `/admin/submissions?problemId=题目ID`。
-
-批量下架接口：
-
-```text
-POST /api/admin/problems/bulk-delete
-```
-
-请求：
-
-```ts
-{
-  problemIds: number[]
-}
-```
-
-返回：
-
-```ts
-{
-  archivedCount: number;
-  deletedCount: number;
-}
-```
-
-说明：
-
-- 只有 admin 可以访问。
-- `problemIds` 必须是非空数组。
-- 每个 ID 必须是有效数字。
-- 下架使用事务；不存在或已经下架的 ID 会被忽略，返回实际下架数量。
-- 已发布考试或学生未完成专项练习中的题目会拒绝下架。
-- 接口写入 `Problem.archivedAt`，保留测试点、历史提交、考试关联和学生积分；`deletedCount` 仅为旧客户端兼容字段。
-
-### 管理员题目练习
-
-页面：
-
-```text
-/admin/practice
-/admin/practice/problems/[id]
-```
-
-已支持：
-
-- 管理员可以像学生一样查看题目并提交 C++ 代码。
-- 题目列表支持分类筛选和分页。
-- 题目列表中的提交数量可点击进入该题日常提交记录筛选页。
-- 当前管理员账号只要曾经 `Accepted`，题目练习列表、题目详情和模拟考试练习题单都会持续显示“已通过”；之后提交失败不会取消标记。
-- “已通过”旁提供“查看通过代码/查看通过答案”快捷入口，打开当前管理员最近一次 Accepted 的提交详情。
-- 题目详情复用 Monaco Editor 和 Judge 流程。
-- 题目详情页提供管理员专用“复制本题”按钮，可复制 Markdown 格式完整题面。
-- 独立开关开启后，选择判断题每道小题提供共享 AI 解析；管理员和老师都可以按各自间隔重新生成并覆盖共享版本。编程题还可使用独立后台编程助手开关进行校题提示。
-- 管理员提交也保存到 `Submission`，并可在管理员提交记录中查看。
-
-### 用户管理
-
-页面：
-
-```text
-/admin/users
-```
-
-已支持：
-
-- 查看用户列表。
-- 新增学生、老师或管理员账号。
-- 编辑用户名和角色。
-- 设置或清空学生自定义头衔。
-- 分别为学生开通或关闭“编程 AI”和“选择判断 AI”权限；两项互不影响，选择判断权限默认关闭。
-- 安全重置密码：编辑时留空保持原密码，填写新密码后必须再次确认且至少 8 位、UTF-8 编码不超过 72 字节，并可临时显示或隐藏输入内容。
-- 删除用户。
-- 删除前二次确认。
-- 不能删除当前登录账号。
-- 原密码使用不可逆 `passwordHash` 保存，页面和接口都无法查看或返回；修改密码后会递增 `sessionVersion`，使旧会话失效。
-- 用户目录按服务端搜索和分页读取，默认每页 50 个账号；提交与唯一 AC 只聚合当前页用户，不把全站 Accepted 明细加载到应用内存。
-- 桌面端编辑表单会在视口内自适应居中跟随；内容超过视口时改为面板内部滚动，移动端保持普通上下布局。
-
-老师端 `/teacher/users` 使用受限学生管理：新增学生的初始密码由服务端固定为 `12345678`，可分别设置编程 AI 与选择判断 AI。已有学生提供两项独立权限开关、服务端搜索、当前页全选和选择判断 AI 批量开关，以及固定密码重置；老师不能编辑用户名、角色或自定义头衔，也不能删除学生。学生头衔和段位仍可只读查看。
-
-### AI 使用与对话审阅
-
-页面：
-
-```text
-/admin/ai-usage
-/admin/ai-usage/[studentId]
-```
-
-- 按今天、近 7 天、近 30 天、全部或自定义日期查看学生 AI 使用、真实上游模型调用、缓存、失败和 Token。
-- 今日视图提供北京时间 24 小时分布；总览会保留未使用过 AI 的学生。
-- 学生明细按题目和对话展示学生可见提问、清洗后的最终回复、状态、耗时、模型和 Token。
-- 只记录功能上线后的新请求；学生清空本地面板不会删除教师端历史。
-- 不保存学生代码、客户端历史副本、完整 Prompt、隐藏测试点、完整错误日志或 `reasoning_content`。
-
-### 日常提交记录
-
-页面：
-
-```text
-/admin/submissions
-/admin/submissions/[id]
-```
-
-已支持：
-
-- 只显示 `submissionType = practice` 的日常刷题提交。
-- 管理员可以查看所有用户的日常提交。
-- 分页展示，默认每页 20 条。
-- 支持筛选：
-  - 用户名
-  - 用户角色
-  - 题目
-  - 状态
-  - 开始日期
-  - 结束日期
-- 查看提交详情。
-- 复制提交代码。
-
-### 考试提交记录
-
-页面：
-
-```text
-/admin/exam-submissions
-```
-
-已支持：
-
-- 只显示 `submissionType = exam` 的考试提交。
-- 管理员可以查看所有用户的考试提交。
-- 分页展示，默认每页 20 条。
-- 支持筛选：
-  - 考试
-  - 用户名
-  - 用户角色
-  - 题目
-  - 状态
-  - 开始日期
-  - 结束日期
-- 查看提交详情。
-- 复制提交代码。
-
-### 模拟考试管理
-
-页面：
-
-```text
-/admin/exams
-/admin/exams/new
-/admin/exams/[id]/edit
-/admin/exams/[id]/practice
-/admin/exams/[id]/records
-```
-
-已支持：
-
-- 创建考试。
-- 考试列表在标题旁显示“出卷人：用户名”；历史无归属或创建账号已删除时显示“出卷人：未记录”。
-- 编辑考试名称、说明、时长和状态。
-- 发布考试。
-- 取消发布。
-- 删除考试。
-- 删除前二次确认。
-- 发布前校验：
-  - 考试标题不能为空。
-  - 考试时长必须大于 0。
-  - 考试至少包含 1 道题。
-  - 每道题必须有分值。
-  - 每道题分值必须大于 0。
-- 从已有日常题库搜索题目并添加到考试。
-- 按题目分类筛选可加入考试的题目。
-- 勾选单道题目或全选当前搜索结果，批量加入考试。
-- 从考试中移除题目。
-- 移除前二次确认。
-- 设置考试题目顺序。
-- 设置每题分值。
-- 通过 Markdown 导入题目并自动加入考试。
-- 从考试列表进入管理员练习模式，按考试题单逐题查看和提交代码；该模式不限时、不需要交卷，提交计入日常提交。
-- 查看考试记录。
-
-考试状态：
-
-```text
-draft      草稿，学生不可见
-published  已发布，学生可开始或继续考试
-ended      已结束，学生端不可继续答题和提交
-```
-
-考试记录页面：
-
-```text
-/admin/exams/[id]/records
-```
-
-已支持：
-
-- 分页展示考试记录，默认每页 20 条。
-- 显示学生、开始时间、交卷时间、状态和总分。
-- 支持按用户名搜索。
-- 管理员可恢复全部未超时的 `submitted` 记录；老师只能恢复自己考试中的记录。恢复不重置原倒计时，保留提交，并要求填写 2–200 字原因。
-- 每次恢复记录操作者、角色、时间和原因；学生重新登录可消费一次恢复登录许可，不会在登录时立即再次交卷。
-
-### 系统设置
-
-页面：
-
-```text
-/admin/settings
-```
-
-管理员可以配置：
-
-- 平台名称 `siteName`
-- 平台副标题 `siteSubtitle`
-- 浏览器标签名称 `browserTitle` 与图标 `browserIcon`
-- 学生端公告 `studentNotice`
-- 管理员端公告 `adminNotice`
-- 默认 C++ 代码模板 `defaultCppTemplate`
-- 默认评测时间限制 `defaultTimeLimitMs`
-- 默认评测内存限制 `defaultMemoryLimitMb`
-- 日常练习 AI 助手开关 `aiPracticeEnabled`
-- 选择判断题 AI 主开关 `aiObjectiveExplanationEnabled`、学生总开关 `aiStudentObjectiveExplanationEnabled` 和后台编程助手开关 `aiStaffProgrammingAssistEnabled`（均默认关闭）
-- AI 对话记录保留时间 `aiConversationRetentionDays`（30、90、180、365 天或永久，默认 180 天）
-- 编程题 AI 配置 `aiProvider`、`aiBaseUrl`、`aiModel`、`aiThinkingMode`、`aiCustomThinkingProtocol`
-- 选择判断 AI 配置 `aiObjectiveProvider`、`aiObjectiveBaseUrl`、`aiObjectiveModel`、`aiObjectiveThinkingMode`、`aiObjectiveCustomThinkingProtocol`
-- 编程题四种模式提示词 `aiProgrammingOverviewPrompt`、`aiProgrammingNextStepPrompt`、`aiProgrammingCodeReviewPrompt`、`aiProgrammingQuestionPrompt`
-- 选择判断解析提示词 `aiObjectiveExplanationPrompt`
-- 六项角色触发间隔：学生/老师/管理员编程入口与学生/老师/管理员选择判断生成刷新（5–600 秒）
-- ICP 备案号 `icpRecordNumber`、公安备案号 `publicSecurityRecordNumber` 与公安官方 PNG 图标 `publicSecurityRecordIcon`
-- 是否允许学生自助注册 `allowStudentRegister`
-
-说明：
-
-- 当前暂未开放学生自助注册页，`allowStudentRegister` 是预留开关。
-- 登录页、学生端布局、管理员端布局和首页公告会读取系统设置。
-- 浏览器标签名称留空时使用平台名称；标签图标支持 PNG、ICO，最大 256KB，可恢复为浏览器默认图标。
-- 标签图标以受校验的图片数据保存在 `SystemSetting`，不会因代码发布或目录切换丢失；保存设置后当前标签页立即更新，其他页面刷新后生效。
-- 备案信息由根布局统一显示在全站页脚：ICP 可单独配置；公安备案号与官方 PNG 图标必须同时填写或同时留空。查询链接由服务端固定生成，不接受任意 URL 或 HTML；保存后刷新页面即可生效，无需重新发布。
-- 设置页面携带版本号原子保存；另一个标签页已经保存后，旧页面再次提交会收到 409 并要求刷新，不会静默覆盖新配置。
-- 默认 C++ 模板已接入 Monaco Editor。
-- 默认评测时间和内存已接入提交接口。
-- 日常练习 AI 关闭时，学生日常刷题页不显示 AI 按钮，服务端接口也会拒绝请求。
-- 日常练习 AI 总开关不会绕过个人编程 AI 权限；任一关闭时编程助手不显示，接口返回 403。
-- 模型配置只允许管理员在系统设置中调整，学生端和教师页面只读跟随。编程题配置用于学生助手、后台校题助手与老师/管理员学情摘要；选择判断配置用于三种角色的共享客观题解析。两套配置可选择不同服务商、模型和思考模式，对应配置变化只使对应缓存失效。
-- 管理员还可以分别编辑编程题四种助手模式和选择判断解析的教学提示词。提示词只调整表达、步骤与详略；禁止完整代码、隐藏测试点、数据库标准答案和结构化输出格式等安全规则由服务端固定，不能被自定义内容覆盖。学情摘要继续使用独立固定提示词。
-- 提示词保存后立即作用于新请求。编程题按最终提示词哈希隔离缓存；选择判断提示词变化后，旧共享解析自动失效并在下次调用时重新生成。
-- “获取可用模型”从当前服务商的 `/models` 读取列表；若上游不支持该接口，仍可手工填写 Chat Completions 模型 ID。列表可能包含非对话模型，管理员需要按服务商说明选择。
-- 自定义服务只兼容 OpenAI Chat Completions；生产环境必须使用公共 HTTPS，系统会阻止本机、内网、保留网络、DNS 重绑定和重定向目标。
-- API Key 始终来自服务器环境变量槽，不进入 `SystemSetting`、前端响应或 AI 审计。切换密钥后需要重启本地/服务器进程。
-- 环境变量仍作为系统设置缺失时的兜底。
-
-默认评测限制优先级：
-
-```text
-SystemSetting 默认限制
-> 环境变量 JUDGE_TIME_LIMIT_MS / JUDGE_MEMORY_LIMIT_MB
-> 代码兜底值
-```
-
-相关接口：
-
-```text
-GET /api/settings/public
-GET /api/admin/settings
-PUT /api/admin/settings
-```
-
-## Markdown 导入题目
-
-### 支持能力
-
-当前 Markdown 导入支持：
-
-- 单题导入。
-- 多题批量导入。
-- 一次选择最多 20 个 Markdown 文档，并逐文件解析、预览和报错。
-- 同一批文档可以混合编程题与选择判断题，每道题按自身题型、难度和分类显示标签并入库。
-- 未声明 `## 题型`、但包含 `## 客观题` 的文档会自动识别为选择判断题。
-- 导入到日常题库。
-- 导入到指定考试，并自动加入当前考试。
-- 每道题独立设置难度。
-- 每道题独立设置分类。
-- 页面默认难度和默认分类作为兜底。
-- 每道题至少两组样例。
-- 样例代码块只保存真实输入输出内容，不保存 Markdown 标题和代码块标记。
-- 带编号样例按编号配对并要求从 1 连续递增；输入与输出必须全部编号或全部不编号，重复、缺失和混用会拒绝导入。
-- 二级章节标题只在代码围栏外识别，题面代码块中的 `##` 不会截断或冒充导入章节。
-- 自动忽略文件开头的 UTF-8 BOM，避免从部分 Windows 编辑器导出的文档无法识别首道题。
-- 编程题题面、选择判断题题干与选项、以及导入预览共用富文本渲染，支持代码块、行内代码、标题、列表、表格、链接、粗体和 KaTeX 公式。
-- 后端确认导入时再次校验。
-- 使用数据库事务，避免导入一半成功一半失败。
-
-入口：
-
-```text
-/admin/problems/import
-/admin/exams/[id]/import
-```
-
-### Markdown 标准格式
-
-一个或多个 Markdown 文件均可批量导入；每个文件可以包含一道或多道题，每道题以一级标题 `#` 开始。
-
-每道题推荐包含：
-
-```text
-## 难度
-## 分类
-## 题目描述
-## 输入格式
-## 输出格式
-## 样例
-## 数据范围
-```
-
-编程题与选择判断题的完整标准模板统一维护在
-[管理员手册的 Markdown 标准格式](docs/admin-guide.md#6-markdown-标准格式)，避免 README 与导入规范出现两份不同版本。选择判断题还必须包含 `## 题型`、`## 客观题`、`### 第 N 题`、单行选项、`答案：A` 和正整数分值。
-
-### Markdown 导入限制
-
-- 一次最多选择 20 个 `.md` 文档，每个文档最大 1MB，文档内容合计最大 8MB。
-- 样例必须使用 `### 输入样例 N` 和 `### 输出样例 N`。
-- 样例输入和输出必须成对。
-- 每道题至少两组样例。
-- 样例内容必须放在代码块中。
-- 当前导入的测试点都作为样例测试点保存。
-- 客观题支持单选题和判断题；判断题固定使用 A/B。
-- 客观题分值必须是正整数。
-- 客观题选项必须写成单行 `A. 选项内容`；不要写 `A.` 后再另起代码块。
-- 客观题题干可以使用 Markdown 代码块；做题页会渲染为代码样式，不显示原始 ```cpp 标记。
-- 客观题选项里需要代码或输出时，用行内代码，例如 `A. 输出 \`7\``。
-- 数学公式使用 `$...$`，独立公式可使用 `$$...$$`；多字符上下标写成 `^{...}` 或 `_{...}`。编程题的题目描述、输入格式、输出格式和数据范围同样支持。
-- Markdown 图片仅渲染来自洛谷受信任 CDN 的 `http`/`https` 地址，其他图片语法按普通文本显示。
-- 暂不支持在 Markdown 中设置隐藏测试点、标签、考试分值或排序。
-
-## Judge 与提交队列
-
-当前保留统一接口：
-
-```ts
-judgeCppCode({
-  code,
-  testCases,
-  timeLimitMs,
-  memoryLimitMb,
-});
-```
-
-试运行使用独立的 `runCppCode` 接口：样例模式比较公开样例，自定义模式只执行程序；两者复用同一套编译执行层和安全限制，正式 `judgeCppCode` 的返回结构保持不变。
-
-内部通过 `JUDGE_MODE` 切换实现。
-
-### local Judge
-
-```env
-JUDGE_MODE=local
-```
-
-local Judge 会在本机临时目录写入 `main.cpp`，调用本机 `g++` 编译，并直接运行生成的程序。
-
-保护规则：
-
-- `NODE_ENV=production` 时禁止使用 local Judge。
-- 如果生产环境配置为 `JUDGE_MODE=local`，提交评测和健康检查会报错：`生产环境禁止使用 local Judge，请设置 JUDGE_MODE=docker`。
-
-适合：
-
-- 本地开发
-- 本地 Demo
-- 无 Docker 的快速验证
-
-风险：
-
-- 会直接在宿主机运行用户代码。
-- 不适合公网环境。
-- 不适合真实学生长期使用。
-
-### Docker Judge
+然后在 `.env` 中设置：
 
 ```env
 JUDGE_MODE=docker
 JUDGE_DOCKER_IMAGE=oj-cpp-judge
 ```
 
-构建镜像：
+## 常用命令
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm run dev` | 启动本地开发服务器 |
+| `npm run test` | 运行 Vitest 单元与接口测试 |
+| `npm run test:e2e` | 使用隔离数据库和 3100 端口运行 Playwright 关键流程 |
+| `npx tsc --noEmit` | TypeScript 类型检查 |
+| `npm run lint` | ESLint 检查 |
+| `npm run build` | 生成 Next.js 生产构建 |
+| `npm run check:env` | 校验生产环境变量和危险配置 |
+| `npm run db:init` | 破坏式初始化本地数据库 |
+| `npm run db:migrate` | 创建本地 Prisma migration |
+| `npm run db:deploy` | 应用已有 migration |
+| `npm run db:status` | 查看 migration 状态 |
+| `npm run backup:sqlite` | 在 Windows 备份 SQLite 数据库 |
+
+首次运行 E2E 且本机缺少 Playwright Chrome 时：
 
 ```bash
-docker build -t oj-cpp-judge ./docker/judge-cpp
+npm run test:e2e:install
 ```
 
-启动项目：
+## 主要功能
 
-```bash
-npm run dev
+### 做题与评测
+
+- 编程题与选择判断题独立筛选、导入、组卷和考试。
+- Monaco 提供语法高亮、行号、缩进、括号匹配、字号调节和本地草稿。
+- 为减少课堂干扰，自动建议、单词建议、Tab 补全、参数提示和内联建议默认关闭。
+- 编程题支持公开样例试运行和自定义输入；试运行不创建提交、不影响积分、考试成绩或作业进度。
+- 正式提交支持 Accepted、Wrong Answer、Compile Error、Runtime Error 和 Time Limit Exceeded。
+- 学生正式提交只返回状态和安全错误；隐藏输入、期望输出、程序输出及运行细节在服务端统一脱敏。
+
+### 正式考试
+
+- 草稿、已发布、已结束三种状态；只有草稿可修改题单和核心信息。
+- 发布时固化题目标题、题型、客观题内容和分值，历史成绩不受题库后续修改影响。
+- 支持倒计时、自动超时、幂等交卷、多题题签和按考试隔离的代码草稿。
+- 浏览器后退、`Alt+Left` 和鼠标后退会留在当前题目；刷新、关闭、外部跳转和退出仍按规则交卷。
+- 管理员或考试所属老师可以在原截止时间前恢复误交卷记录；原因和操作者写入审计，恢复不会延长时间。
+
+### AI 教学能力
+
+- 编程助手提供理解题目、下一步提示、检查代码和自由追问。
+- 客观题解析按题目与小题共享，并以数据库答案为唯一权威。
+- 学生 AI 同时受全局开关、个人权限、日常/考试范围和冷却时间控制。
+- AI 不输出完整代码、可复制代码语句、最终答案或隐藏测试。
+- API Key 只读取 `.env`；自定义服务阻止私网地址、DNS 重绑定、重定向和超大响应。
+- 审计只保存学生可见问答和统计，不保存代码快照、完整 Prompt、内部推理、密钥或请求头。
+
+### 教学管理
+
+- 教师学情支持近 7 天、近 30 天和全部历史三个窗口。
+- 支持主要问题、持续卡题、最近失败、规则诊断、AI 摘要和推荐练习。
+- 单份专项练习包含 1–10 道编程题；批量发布支持最多 100 名学生和个性化题单。
+- 一道题必须从专项入口重新 Accepted 才计入该任务；普通练习、考试和历史 AC 不抵扣。
+- 天梯积分按唯一 Accepted 题数实时计算，管理员可设置不影响排名的自定义头衔。
+
+### 题库与后台
+
+- 题目支持分类、难度、自定义排序、Markdown 批量导入和软下架。
+- 下架题不再进入题库、组卷、推荐、提交、试运行或 AI，但历史提交和积分继续保留。
+- Markdown 支持代码块、行内代码、列表、表格、链接、粗体和 KaTeX 公式。
+- 管理员可维护用户、题目、考试、作业、AI 策略、备案信息和站点视觉配置。
+- 老师只管理学生、自己的考试和自己的作业；越权资源统一隐藏存在性。
+
+## 目录结构
+
+```text
+src/app/                 Next.js 页面、布局和 API Route
+src/components/          Monaco、题面、提交、导航等共享组件
+src/lib/                 认证、Judge、AI、考试、学情和数据访问逻辑
+prisma/schema.prisma     Prisma 数据模型
+prisma/migrations/       生产数据库迁移
+prisma/init.sql          本地首次初始化 SQL
+prisma/seed.ts           本地演示数据
+docker/judge-cpp/        Docker C++ Judge 镜像
+deploy/                  Nginx、服务和证书相关配置
+e2e/                     Playwright 关键业务流程
+docs/                    角色手册、部署手册和历史发布证据
+scripts/                 环境检查、备份、同步和测试脚本
 ```
 
-Docker Judge 会在容器中编译和运行学生代码，并尽量使用以下限制：
+## 核心数据模型
 
-- `--network none`：禁止访问网络。
-- `--memory`：限制内存，值来自 `JUDGE_MEMORY_LIMIT_MB`。
-- `--cpus 1`：限制 CPU。
-- `--pids-limit 64`：限制进程数量。
-- `--read-only`：容器根文件系统只读。
-- `--cap-drop ALL`：移除 Linux capabilities。
-- `--security-opt no-new-privileges`：禁止提权。
-- `--tmpfs /tmp:rw,noexec,nosuid,size=64m`：提供临时编译空间。
-- `--ulimit fsize`：限制编译器生成文件的大小。
-- `-v 临时目录:/workspace:rw`：编译阶段只开放单次提交目录写入。
-- `-v 临时目录:/workspace:ro`：运行学生程序时把工作目录切换为只读。
+| 模型 | 职责 |
+| --- | --- |
+| `User` / `StudentProfile` | 账号、角色、会话版本、学生头衔和两类 AI 权限 |
+| `Problem` / `TestCase` | 题面、题型、分类、难度、排序、客观题内容和测试点 |
+| `Submission` / `SubmissionCaseResult` | 日常/考试提交及逐测试点或逐小题结果 |
+| `Exam` / `ExamProblem` | 考试状态、归属、题单、顺序、分值和发布快照 |
+| `ExamRecord` | 学生开考、倒计时、交卷、超时、分数和一次性恢复许可 |
+| `ExamRecordResumeAudit` | 误交卷恢复的操作者、角色、原因和时间 |
+| `LearningAssignment` / `LearningAssignmentProblem` | 专项作业、题目快照、顺序和完成进度 |
+| `LearningInsightSnapshot` | 按学生与分析周期缓存的学情摘要 |
+| `AiConversation` / `AiConversationTurn` | 学生可见 AI 对话、幂等标识和用量统计 |
+| `ObjectiveAiExplanation` | 跨角色共享的逐小题客观题解析缓存 |
+| `SystemSetting` | 站点、Judge 默认值、AI 策略、提示词和备案配置 |
 
-注意：Docker Judge 比本机直接运行更安全，但仍不是完整竞赛级沙箱。后续可以继续接入 nsjail、isolate、seccomp、Kubernetes Job 或独立评测服务。
+完整定义见 [`prisma/schema.prisma`](prisma/schema.prisma)。当前数据库结构同时由 Prisma schema、migration 和本地初始化 SQL 维护，修改结构时必须保持三者一致。
 
-### 基础提交队列
+## API 概览
 
-提交接口会通过内存队列控制评测并发：
+| 范围 | 主要接口 |
+| --- | --- |
+| 认证 | `POST /api/auth/login`、`POST /api/auth/logout`、`GET /api/auth/me` |
+| 健康与公共设置 | `GET /api/health`、`GET /api/settings/public` |
+| 题目与提交 | `/api/problems/*`、`/api/submissions/*`、`/api/exam-submissions/*` |
+| 试运行 | `POST /api/problems/[id]/run` |
+| 编程 AI | `POST /api/ai/problem-assist` |
+| 客观题 AI | `POST /api/problems/[id]/objective-explanation` |
+| 学生考试 | `/api/exams/*`，包括开始、答题、交卷和超时结算 |
+| 题库管理 | `/api/admin/problems/*`，包括导入、排序、下架和后台 AI |
+| 用户管理 | `/api/admin/users/*`，包括分页、AI 权限和密码重置 |
+| 学情与作业 | `/api/admin/learning/*` |
+| 考试管理 | `/api/admin/exams/*`，包括发布、取消、题单和误交卷恢复 |
+| 提交与 AI 审阅 | `/api/admin/submissions/*`、`/api/admin/exam-submissions/*`、`/api/admin/ai-usage/*` |
+| 系统设置 | `GET /api/admin/settings`、`PUT /api/admin/settings` |
+
+所有管理接口都在服务端执行角色和资源归属校验。页面隐藏不是权限边界；任何学生可达响应都必须在服务端完成标准答案、隐藏测试和内部错误脱敏。
+
+## Judge 与队列
+
+本地开发可以设置：
 
 ```env
+JUDGE_MODE=local
+```
+
+生产环境必须设置：
+
+```env
+JUDGE_MODE=docker
+JUDGE_DOCKER_IMAGE=oj-cpp-judge
 JUDGE_CONCURRENCY=1
 JUDGE_MAX_QUEUE_SIZE=50
 JUDGE_QUEUE_WAIT_TIMEOUT_MS=60000
@@ -1010,490 +324,73 @@ JUDGE_MAX_PENDING_PER_OWNER=2
 JUDGE_TASK_TIMEOUT_MS=60000
 ```
 
-说明：
-
-- 默认同时只运行 1 个 Judge 任务。
-- 日常提交、考试提交、样例运行和自定义运行都走同一个队列。
-- 正式提交是高优先级，能够排在尚未开始的试运行之前，但不会强行中断正在执行的任务。
-- 同一优先级在不同账号之间轮转；每个账号默认最多运行 1 个、等待 2 个任务，不能独占全局队列。
-- 每个账号同时只能占用一个试运行请求，试运行结束后服务端强制冷却 5 秒。
-- 单题最多 100 个测试点，单个测试点输入输出合计最多 256KB，全部合计最多 2MB；单次 Docker 任务默认总预算 60 秒，遇到首个 TLE 或运行异常即停止后续测试点。
-- 超时强制清理后会再次确认容器已经移除；清理无法确认时按 Judge 基础设施故障返回，不会长期占住队列槽位。
-- 一个任务失败不会卡住后续任务。
-- 等待队列有容量上限，排队超过 60 秒会返回带 `Retry-After` 的可重试 503。
-- Docker/编译器等基础设施故障不会保存成学生的“编译错误”提交。
-- 当前是 Demo 级内存队列，服务重启后等待中的任务会丢失。
-- 正式多实例部署建议替换为 Redis、消息队列或独立评测服务。
-
-## 数据库模型
-
-核心表：
-
-- `User`：用户账号，包含 `student`、`teacher` 和 `admin` 三种角色；`sessionVersion` 用于废除旧会话，学生只保留最后一次登录，老师和管理员保持多设备登录。
-- `StudentProfile`：学生扩展档案，保存管理员自定义头衔、编程 AI 权限和选择判断 AI 权限；积分和段位实时从提交记录计算，不写入该表。
-- `Problem`：题目主体信息，包含标题、描述、难度、分类和第一组样例。
-- `Problem.sortOrder`：管理员维护的题库自定义顺序，数值越大越靠前；学生端只读跟随。
-- `ProblemCategoryOrder`：按题型保存分类标签顺序。
-- `Problem.problemType`：`programming` 或 `objective`；客观题小题 JSON 保存于 `objectiveItems`。
-- `TestCase`：测试点，包含样例测试点和隐藏测试点。
-- `Submission`：提交记录，保存整体评测结果、提交代码、语言、`submissionType`、可选 `examId` 和可选 `learningAssignmentId`。
-- `SubmissionCaseResult`：单个测试点评测结果。
-- `Exam`：模拟考试；`createdById` 记录管理员或老师创建者，列表用关联用户名显示“出卷人”标签；老师只能管理自己的考试，历史空归属考试仅管理员可管理并显示“未记录”。
-- `Exam.examType`：限制整场考试只能包含同类型题目。
-- `ExamProblem`：考试和题目的关联，包含题目顺序、分值，以及发布时固化的标题、题型、客观题内容和分值快照；历史计分优先使用快照。
-- `ExamRecord`：学生参加某场考试的记录，包含开始时间、交卷时间、状态、总分和一次性恢复登录许可。
-- `ExamRecordResumeAudit`：误交卷恢复审计，保存考试记录、操作者快照、恢复原因和时间。
-- `LearningAssignment`：教师下发给学生的专项练习，保存标题、说明、截止日期和归档状态。
-- `LearningAssignmentProblem`：专项练习题目及顺序、题目信息快照和 `completedAt`；编辑任务时保留行会保留完成状态，新加题创建新快照。
-- `LearningInsightSnapshot`：按学生和分析周期缓存 AI 教师摘要及聚合统计哈希。
-- `ObjectiveAiExplanation`：按题目与小题序号保存学生、老师、管理员共享的结构化选择判断解析；题目内容和 AI 配置变化时通过哈希失效。
-- `AiConversation`：学生在一道题中的一次 AI 对话，保存学生、日常/考试范围和题目/考试标题快照。
-- `AiConversationTurn`：AI 对话回合，使用 `aiProfile` 区分编程与选择判断，并可记录客观题小题序号；保存可见问答、处理状态、响应时长、真实模型调用次数及 API 返回的 Token 数据，不保存代码或内部推理。
-- `SystemSetting`：系统设置，按 key-value 保存站点配置。
-
-提交类型：
-
-```text
-submissionType = practice    日常刷题提交
-submissionType = exam        模拟考试提交
-```
-
-`Submission.examId` 只用于关联具体考试，不再作为判断提交类型的唯一依据。这样即使考试被删除导致 `examId` 变为 `null`，考试提交也不会混入日常提交记录。
-
-重要关系：
-
-- 管理员移除题目时写入 `Problem.archivedAt`，不物理删除题目、测试点或提交；历史 Accepted 继续参与天梯积分。
-- 下架题目不会出现在日常题库、组卷、专项推荐、提交、试运行和 AI 入口。
-- 删除提交会级联删除测试点结果。
-- 删除考试会级联删除考试题目关联和考试记录。
-- 删除老师时其考试创建者会置空并保留；老师被改成学生时同样清空考试归属，转为管理员专属。
-- `Submission.examId` 对 `Exam` 是 `ON DELETE SET NULL`。
-- 删除专项练习会级联删除任务题目和完成进度；关联提交的 `learningAssignmentId` 会置空，提交记录本身保留。
-- 从未归档专项练习中移除单题时，只会清除该题相关提交的 `learningAssignmentId` 并重新计算任务进度；提交结果、源码和天梯统计仍保留。
-
-## 数据库迁移与备份
-
-### 本地重置
-
-本地开发需要清空并重建数据库时可以运行：
-
-```bash
-npm run db:init
-npm run seed
-```
-
-再次提醒：`db:init` 会执行破坏式 `prisma/init.sql`，生产环境禁止运行。
-
-### Prisma Migrate
-
-当前迁移目录按顺序包含：
-
-```text
-0001_initial
-0002_objective_problem_type
-0003_student_profile
-0004_ai_assist
-0005_ai_student_access
-0006_learning_dashboard_assignments
-0007_problem_archiving
-0008_student_single_session
-0009_ai_usage_audit
-0010_problem_custom_ordering
-0011_teacher_role_exam_ownership
-0012_objective_ai_explanations
-0013_ai_profiles_and_cooldowns
-0014_student_objective_ai_access
-0015_ai_custom_prompts
-0016_exam_integrity_hardening
-0017_submission_status_user_problem_index
-0018_exam_record_resume_audit
-```
-
-本地开发创建新迁移：
-
-```bash
-npm run db:migrate
-```
-
-生产环境应用迁移：
-
-```bash
-npm run db:deploy
-```
-
-查看迁移状态：
-
-```bash
-npm run db:status
-```
-
-如果你已经有一个由旧版 `db:init` 创建、且需要保留数据的 SQLite 数据库，不能直接对它执行初始迁移。应先备份数据库，确认表结构与当前 schema 一致后执行：
-
-```bash
-npm run db:baseline
-```
-
-这会把 `0001_initial` 标记为已应用，然后后续新迁移再使用 `npm run db:deploy`。
-
-### SQLite 备份
-
-当前固定小班、低并发教学可以继续使用 SQLite，但必须定期备份。
-
-Windows PowerShell：
-
-```powershell
-npm run backup:sqlite
-# 或
-powershell -ExecutionPolicy Bypass -File scripts/backup-sqlite.ps1
-```
-
-Linux：
-
-```bash
-bash scripts/backup-sqlite.sh
-```
-
-默认备份：
-
-```text
-源文件：prisma/dev.db
-目标目录：backups/
-文件名：dev-YYYYMMDD-HHMMSS.db
-```
-
-Linux cron 示例，每天凌晨 2 点备份：
-
-```bash
-0 2 * * * cd /path/to/oj && bash scripts/backup-sqlite.sh
-```
-
-Windows 可以使用“任务计划程序”定时运行 `scripts/backup-sqlite.ps1`。
-
-## 主要页面
-
-学生端：
-
-```text
-/student
-/student/problems
-/student/problems/[id]
-/student/submissions
-/student/submissions/[id]
-/student/exam-submissions
-/student/review
-/student/assignments
-/student/assignments/[id]
-/student/leaderboard
-/student/exams
-/student/exams/[id]
-/student/exams/[id]/take
-/student/exams/[id]/result
-```
-
-管理员端：
-
-```text
-/admin
-/admin/problems
-/admin/problems/import
-/admin/practice
-/admin/practice/problems/[id]
-/admin/users
-/admin/leaderboard
-/admin/learning
-/admin/learning/[studentId]
-/admin/ai-usage
-/admin/ai-usage/[studentId]
-/admin/submissions
-/admin/submissions/[id]
-/admin/exam-submissions
-/admin/exams
-/admin/exams/new
-/admin/exams/[id]/edit
-/admin/exams/[id]/import
-/admin/exams/[id]/records
-/admin/settings
-```
-
-## 主要 API
-
-认证：
-
-```text
-POST /api/auth/login
-POST /api/auth/logout
-GET  /api/auth/me
-```
-
-学生登录会原子递增 `sessionVersion`，新登录设备会使旧学生会话失效；管理员登录不递增版本。学生登录前若仍有 `in_progress` 考试，服务端会先按幂等交卷流程结算；老师或管理员刚恢复的考试可消费一次登录许可后继续，且仍沿用首次开考的截止时间。`GET /api/auth/me` 对被替换或旧版学生会话返回 401，并通过 `reason` 区分 `session_replaced`、`session_invalid` 等原因。
-
-公共设置：
-
-```text
-GET /api/settings/public
-```
-
-健康检查：
-
-```text
-GET /api/health
-```
-
-返回示例：
-
-```json
-{
-  "ok": true,
-  "database": "ok",
-  "timestamp": "2026-05-04T00:00:00.000Z"
-}
-```
-
-学生端：
-
-```text
-GET  /api/problems
-GET  /api/problems/[id]
-POST /api/problems/[id]/run
-POST /api/problems/[id]/submit
-POST /api/problems/[id]/objective-explanation
-GET  /api/submissions/my
-GET  /api/submissions/[id]
-POST /api/ai/problem-assist
-
-GET  /api/exams
-GET  /api/exams/[id]
-GET  /api/exams/[id]/take
-POST /api/exams/[id]/start
-POST /api/exams/[id]/submit
-POST /api/exams/[id]/expire
-GET  /api/exam-submissions/my
-```
-
-管理员端：
-
-```text
-GET    /api/admin/problems
-POST   /api/admin/problems
-GET    /api/admin/problems/[id]
-PUT    /api/admin/problems/[id]
-DELETE /api/admin/problems/[id]
-POST   /api/admin/problems/bulk-delete
-GET    /api/admin/problems/search
-POST   /api/admin/problems/order
-POST   /api/admin/problems/order/apply
-POST   /api/admin/problems/categories/order
-POST   /api/admin/problems/import/parse
-POST   /api/admin/problems/import/confirm
-POST   /api/admin/problems/[id]/objective-explanation
-POST   /api/admin/problems/[id]/programming-assist
-
-GET    /api/admin/users
-POST   /api/admin/users
-PUT    /api/admin/users/[id]
-PATCH  /api/admin/users/[id]
-PATCH  /api/admin/users/ai-access/bulk
-DELETE /api/admin/users/[id]
-POST   /api/admin/users/[id]/reset-password
-
-GET    /api/admin/submissions
-GET    /api/admin/submissions/[id]
-GET    /api/admin/exam-submissions
-
-POST   /api/admin/learning/insight
-POST   /api/admin/learning/assignments
-POST   /api/admin/learning/assignments/bulk
-PATCH  /api/admin/learning/assignments/[id]
-DELETE /api/admin/learning/assignments/[id]
-
-GET    /api/admin/exams
-POST   /api/admin/exams
-GET    /api/admin/exams/[id]
-PUT    /api/admin/exams/[id]
-DELETE /api/admin/exams/[id]
-POST   /api/admin/exams/[id]/publish
-POST   /api/admin/exams/[id]/unpublish
-POST   /api/admin/exams/[id]/problems
-DELETE /api/admin/exams/[id]/problems/[examProblemId]
-POST   /api/admin/exams/[id]/import/parse
-POST   /api/admin/exams/[id]/import/confirm
-POST   /api/admin/exams/[id]/records/[recordId]/resume
-
-GET    /api/admin/settings
-PUT    /api/admin/settings
-```
-
-`POST /api/admin/exams/:id/records/:recordId/resume` 接收 `{ "reason": "学生误触交卷" }`。管理员可操作全部考试，老师仅可操作自己创建的考试；越权统一返回 404。接口只恢复仍发布且原截止时间未到的 `submitted` 学生记录，成功返回更新后的记录、原截止时间和剩余秒数；状态冲突返回 409，恢复原因必须为 2–200 字。
-
-管理员用户接口支持 `customTitle`、`aiAccessEnabled` 和 `objectiveAiAccessEnabled`：管理员创建或编辑学生时可设置最多 20 字的自定义头衔，并分别开通编程与选择判断 AI。老师使用同一组受分级鉴权保护的地址，但 `POST /api/admin/users` 只接受用户名和两项 AI 权限，`PATCH /api/admin/users/[id]` 只切换学生 AI 权限，选择判断批量授权使用 `/api/admin/users/ai-access/bulk`，固定密码重置必须调用 `/reset-password`；老师不能调用完整编辑或删除能力。
-
-`POST /api/problems/[id]/run` 接收 `code`、`mode = samples|custom`、可选 `customInput` 和学生考试使用的可选 `examId`。代码上限 128KB，自定义输入上限 32KB；接口只支持编程题，不接受 `learningAssignmentId`，样例输入和标准输出只能由服务端读取。参数错误、未登录、考试不可用、内容过大、频率过高和 Judge 不可用分别使用 400、401、403、413、429、503。
-
-`PATCH /api/admin/learning/assignments/:id` 可在未归档任务中同时保存标题、说明、截止时间和完整 `problemItems` 草稿；现有项传 `assignmentProblemId`，新题传 `problemId`。接口在同一事务中校验权限、1–10 道编程题、下架状态、重复和其他未完成任务冲突，然后统一保留、创建、移除和重排。专项练习删除接口只接受已归档任务；进行中的任务返回冲突错误，必须先归档。永久删除会清除任务题目与进度，但不会删除学生原有提交。
-
-`POST /api/admin/learning/assignments/bulk` 接受 1–100 名学生及各自最终 `problemIds`。接口在一个事务内批量读取学生、题目和未完成任务，任一账号、题目或冲突校验失败都会整批回滚；成功时为每名学生写入独立 `LearningAssignment` 和题目快照。管理员和老师均可调用，学生请求拒绝。
-
-## 分页与筛选
-
-已支持分页的页面：
-
-题目列表默认每页 50 道：
-
-- `/student/problems`
-- `/admin/problems`
-- `/admin/practice`
-
-记录类列表默认每页 20 条：
-
-- `/student/submissions`
-- `/student/exam-submissions`
-- `/admin/submissions`
-- `/admin/exam-submissions`
-- `/admin/exams/[id]/records`
-
-分页接口返回结构：
-
-```ts
-{
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
-```
-
-题目列表支持分类筛选：
-
-```text
-GET /api/problems?page=1&pageSize=50&category=基础语法
-GET /api/admin/problems?page=1&pageSize=50&category=基础语法
-```
-
-学生 `GET /api/problems` 的每个题目项包含 `isAccepted`，按该学生全部历史 `Accepted` 实时计算；日常和考试 AC 均计入，后续失败不会清除“已通过”标记。
-
-管理员提交记录支持用户名、角色、题目、状态、日期范围等筛选。管理员考试提交记录额外支持考试筛选。
-
-## 小规模正式部署指南
-
-完整部署、回滚、备份和容量操作以 [docs/deploy.md](docs/deploy.md) 为准，README 只保留关键红线：
-
-- 线上 `/www/oj` 使用 SQLite + Docker Judge + `JUDGE_CONCURRENCY=1`，适合小规模长期使用。
-- 正式入口固定为 `https://botcode.work`；`www.botcode.work`、HTTP 和 HTTP IP 访问只做 301 跳转，应用不直接监听公网端口。
-- 生产 `DATABASE_URL` 必须是绝对路径，例如 `file:/www/oj/prisma/prod.db`，禁止使用 `file:./prod.db`。
-- 生产环境必须设置 `APP_ORIGIN=https://botcode.work`、`SESSION_COOKIE_SECURE=true` 和 `OJ_LISTEN_HOST=127.0.0.1`。
-- 常规发布前必须备份 `/www/oj/prisma/prod.db` 到 `/www/backups`，且确认备份文件存在。
-- 常规发布优先在本地 Linux/Docker 环境生成 Next.js standalone 产物并上传；不要把 Windows 本机 `.next/standalone` 当作 Ubuntu 产物。
-- 2GB 服务器上常规发布不要执行 `npm ci` 或全量 Next build；只有应急时才按 `docs/deploy.md` 的单 worker 低内存流程处理。
-- 发布包必须排除 `.env`、数据库文件、备份文件、`.next/cache` 和压缩包；服务器继续使用 `/www/oj/.env` 和 `/www/oj/prisma/prod.db`。
-- 生产环境禁止常规执行 `npm run seed` 或 `npm run db:init`。
-- 磁盘清理只处理 OJ 明确路径；不要删除其它网站、股票系统目录，或执行未经确认的 Docker 全局 prune。
-
-## 上线前检查清单
-
-```text
-[ ] 服务器 Docker 可用
-[ ] docker run hello-world 通过
-[ ] Docker Judge 镜像构建成功
-[ ] NODE_ENV=production
-[ ] JUDGE_MODE=docker
-[ ] SESSION_SECRET 已改成强随机字符串
-[ ] APP_ORIGIN=https://botcode.work
-[ ] SESSION_COOKIE_SECURE=true
-[ ] 大陆服务器域名已备案，或已配置最小权限 DNS-01 自动验证；公网 ACME 路径无 Beaver 403
-[ ] 当前双域名证书及其实际续期机制已验证；使用 Certbot 时 renew dry-run 通过
-[ ] npm run check:env 通过
-[ ] 默认管理员密码已修改
-[ ] npm run test 通过
-[ ] npm run test:e2e 通过
-[ ] npx tsc --noEmit 通过
-[ ] npm run lint 通过
-[ ] npm run build 通过
-[ ] npm run db:deploy 已执行
-[ ] 数据库已备份
-[ ] 直连和 https://botcode.work/api/health 连续检查均返回 ok
-[ ] 运行样例和自定义输入冒烟测试通过，且未新增 Submission
-[ ] 清空浏览器缓存后的首次 Accepted 冒烟通过，AC 图片直接请求 /ac-success.png，未经过 /_next/image
-[ ] Wrong Answer 冒烟测试通过
-[ ] Compile Error 冒烟测试通过
-[ ] Runtime Error 冒烟测试通过
-[ ] Time Limit Exceeded 冒烟测试通过
-[ ] 学生账号已准备
-[ ] 登录流程已人工验收
-[ ] 日常刷题提交流程已人工验收
-[ ] 模拟考试开始、提交、交卷、结果页已人工验收
-[ ] 管理员提交记录和考试记录已人工验收
-```
-
-## 当前限制和风险
-
-高优先级风险：
-
-- local Judge 会直接在宿主机运行用户代码，不适合公网。
-- Docker Judge 仍不是完整竞赛级沙箱，建议继续增强隔离能力。
-- 当前账号体系使用签名 Cookie 和数据库会话版本；学生新登录会替换旧会话，管理员仍可多设备登录。系统已具备登录失败限流、会话有效期和同源变更请求校验，但还没有验证码、找回密码、操作审计和多因素认证等完整账号安全能力。
-- SQLite 适合 Demo，不适合高并发正式场景。
-- 学生编程正式提交详情会隐藏全部测试点的输入、期望输出、实际输出和详细运行错误；管理员与有权教师仍可查看完整评测信息用于排障。公开样例与自定义输入试运行继续向当前用户显示输出。
-
-工程限制：
-
-- 当前同时维护 Prisma Migrate、`prisma/schema.prisma` 和首次安装使用的 `prisma/init.sql`；结构变更必须让三者保持同步。
-- 内存提交队列不适合多实例部署。
-- 自动化测试已覆盖核心计算、主要 API、权限边界、AI、学情和试运行队列，并用 Playwright 覆盖学生权限跳转、隐藏测试点脱敏、考试幂等、AI 边界和关键按钮异常恢复；跨浏览器与更长业务链路仍需继续扩展。
-
-业务限制：
-
-- 学生自助注册只是系统设置预留项，当前没有开放注册页。
-- 考试已支持开始记录、倒计时、交卷、超时和基础计分，但还没有复杂成绩分析、排行榜、班级维度统计和成绩导出。
-- `ended` 状态由管理员手动维护，不是后台定时自动结束考试。
-- 删除考试后，相关提交的 `submissionType = exam` 会保留，但 `examId` 会变为空，因此提交详情无法继续展示原考试名称。
-- Markdown 导入依赖严格模板，暂不支持隐藏测试点、标签、分值和排序。
-
-## 下一步建议
-
-第 1 阶段：评测安全增强
-
-- 接入 nsjail、isolate 或 seccomp。
-- 为 Docker Judge 增加更细粒度文件系统和系统调用限制。
-- 将内存队列替换为 Redis 或独立评测服务。
-
-第 2 阶段：考试结果完善
-
-- 管理员考试结果汇总页。
-- 学生成绩排名。
-- 每题通过率和错误统计。
-- 成绩导出。
-
-第 3 阶段：教学管理能力
-
-- 班级管理。
-- 批量导入学生账号。
-
-第 4 阶段：工程化
-
-- 为 Prisma migration、schema 和 `init.sql` 增加自动一致性检查。
-- 扩展跨浏览器和更多长业务链路的端到端测试。
-- 补充接口权限测试。
-- 增加操作审计日志。
-
-第 5 阶段：题库增强
-
-- 题目标签系统。
-- 隐藏测试点导入。
-- 题目难度统计。
-- 批量编辑题目分类和难度。
-
-## 当前版本结论
-
-当前版本已经适合作为本地 Demo、课堂演示、内部功能验证，以及固定小班、低并发的正式教学使用。
-
-当前版本不建议直接扩展为大规模公网 OJ 或高并发竞赛平台。真实使用时必须保持 `JUDGE_MODE=docker`、定期备份 SQLite、关闭公网 3000 端口，并避免重复执行 `npm run seed` / `npm run db:init`。
-
-如果要扩大使用规模，最低需要继续完成：
-
-- 将 SQLite 迁移到 PostgreSQL。
-- 将内存队列升级为 Redis / BullMQ 或独立 Judge 服务。
-- 将关键端到端权限测试接入持续集成，并扩展跨浏览器覆盖。
-- 补充真实 Docker Judge 冒烟测试脚本。
-- 增加异地自动备份和更完整的监控告警。
-- 为考试结果和成绩统计补充更完整的管理视图。
+队列规则：
+
+- 正式提交优先于尚未开始的试运行，但不会中断正在执行的任务。
+- 同一优先级在账号之间轮转，并限制单账号运行和等待数量。
+- 单题最多 100 个测试点；单点输入输出合计最多 256KB；整题最多 2MB。
+- 默认整任务预算 60 秒；首个超时或运行异常会停止后续测试点。
+- 队列满、排队超时和 Judge 基础设施故障返回可重试 `503`，不会保存成学生 Compile Error。
+
+当前队列保存在应用进程内，服务重启会丢失等待任务，也不支持安全多实例。扩大规模时应迁移到 Redis/BullMQ 或独立 Judge 服务。
+
+## 安全边界
+
+- 密码只保存不可逆哈希；查询不返回 `passwordHash`。
+- 学生新登录会废除旧设备会话；老师和管理员允许多设备，但改密或改角色会废除旧会话。
+- 学生正式评测结果和编程 AI 上下文在服务端清除隐藏测试、期望输出、程序输出和内部运行错误。
+- 已发布考试使用不可变快照；考试状态、题单修改、开考和恢复使用事务内复核。
+- 应用与 SQLite 触发器共同保证至少保留一个管理员。
+- 变更请求执行同源校验、请求体限制和账号/IP 级登录限流。
+- AI 密钥不进入数据库、浏览器、日志、测试快照或文档示例。
+- Docker Judge 禁网、移除 capabilities、禁止提权并限制文件系统、CPU、内存、PID 和输出。
+
+Docker Judge 仍不是完整竞赛级沙箱。面向不受信任的公网代码时，应继续接入 seccomp、nsjail、isolate 或独立隔离 Worker。
+
+## 小规模生产部署
+
+完整步骤、备份、回滚、证书和故障排查见 [线上部署与维护手册](docs/deploy.md)。关键红线：
+
+- 正式入口为 `https://botcode.work`；应用只监听 `127.0.0.1:3000`，公网流量经 Nginx 进入。
+- 生产环境必须设置 `APP_ORIGIN=https://botcode.work`、`SESSION_COOKIE_SECURE=true`、`OJ_LISTEN_HOST=127.0.0.1`。
+- `DATABASE_URL` 必须使用绝对路径，例如 `file:/www/oj/prisma/prod.db`。
+- 发布前必须备份 `/www/oj/prisma/prod.db` 并确认备份非空。
+- 常规发布在本地 Linux/Docker 中生成 Ubuntu standalone；不要上传 Windows `.next/standalone`。
+- 2 核 2GB 生产机不承担常规 `npm ci` 或 Next.js 构建。
+- 发布包必须排除 `.env`、数据库、备份、`.next/cache`、根 `node_modules` 和嵌套压缩包。
+- 发布目录保持 `0755`，生产 `.env` 保持 `0600`，否则 Nginx 可能无法读取静态资源。
+- 生产环境禁止运行 `npm run seed` 或 `npm run db:init`。
+- 不要执行未经确认的 Docker 全局清理，也不要触碰同机其他站点。
+
+## 当前限制与路线图
+
+### 当前限制
+
+- SQLite 和进程内队列只适合低并发、单实例部署。
+- Docker Judge 不是完整竞赛级沙箱。
+- 账号系统暂未提供验证码、找回密码、多因素认证和通用管理员操作审计。
+- 考试结束状态仍由管理员维护，缺少后台定时状态推进。
+- 尚未提供班级维度统计、复杂成绩分析和成绩导出。
+
+### 推荐演进顺序
+
+1. 增强 Judge 隔离，并将队列拆分为持久化独立服务。
+2. 增加结构化日志、队列指标、告警和通用操作审计。
+3. 为 migration、Prisma schema 和 `init.sql` 增加自动一致性检查与 CI 门禁。
+4. 增加班级管理、考试统计、成绩导出和题目标签。
+5. 需要多实例或更高并发时迁移 PostgreSQL 与 Redis。
+
+## 文档索引
+
+| 文档 | 适用对象 |
+| --- | --- |
+| [学生使用说明](docs/student-guide.md) | 登录、刷题、提交、考试、AI、错题本和专项作业 |
+| [老师端使用说明](docs/teacher-guide.md) | 校题、学生管理、自己的考试、作业、学情和 AI 审阅 |
+| [管理员使用说明](docs/admin-guide.md) | 题库、用户、考试、设置、导入和日常维护 |
+| [线上部署与维护手册](docs/deploy.md) | Linux standalone、PM2、Nginx、HTTPS、备份、发布和回滚 |
+| [`AGENTS.md`](AGENTS.md) | 代码协作红线、权限边界和生产约束 |
+| `docs/ops-review-*.md` | 历史发布、事故与验收证据，不作为当前操作手册 |
+
+## License
+
+本项目使用 [Apache License 2.0](LICENSE)。
