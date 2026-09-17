@@ -344,6 +344,8 @@ curl -fsS -D - -o /dev/null -H 'Accept-Encoding: gzip' \
 
 ## 6. SQLite 数据备份
 
+问题反馈的压缩截图保存在 `FeedbackAttachment` 的二进制字段中，备份数据库即包含附件，不需要单独备份上传目录。每条反馈最多增加约 3 MiB 图片数据；定期检查数据库与备份的磁盘占用。首次启用需按常规发布流程应用 `0019_problem_feedback` 迁移，并确认 Linux 构建产物中可加载 `sharp`；不得用 `db:init` 或 `seed` 升级已有数据。截图上传上限为 16 MiB，当前 Nginx 模板的 `client_max_body_size 25m` 无需调大。详见 [问题反馈功能说明](feedback.md)。
+
 当前线上数据库通常位于：
 
 ```text

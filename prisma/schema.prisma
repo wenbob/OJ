@@ -24,6 +24,54 @@ model User {
   learningInsightSnapshots         LearningInsightSnapshot[]
   aiConversations                  AiConversation[]
   generatedObjectiveAiExplanations ObjectiveAiExplanation[]  @relation("ObjectiveAiExplanationGenerator")
+  feedback                         Feedback[]
+  feedbackReplies                  FeedbackReply[]
+}
+
+model Feedback {
+  id             Int                  @id @default(autoincrement())
+  authorId       Int?
+  authorUsername String
+  authorRole     String
+  title          String
+  content        String
+  status         String               @default("pending")
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @default(now()) @updatedAt
+  author         User?                @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  attachments    FeedbackAttachment[]
+  replies        FeedbackReply[]
+
+  @@index([authorId, createdAt, id])
+  @@index([status, createdAt, id])
+}
+
+model FeedbackAttachment {
+  id         Int      @id @default(autoincrement())
+  feedbackId Int
+  position   Int
+  mimeType   String
+  width      Int
+  height     Int
+  byteSize   Int
+  data       Bytes
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  @@unique([feedbackId, position])
+}
+
+model FeedbackReply {
+  id                    Int      @id @default(autoincrement())
+  feedbackId            Int
+  administratorId       Int?
+  administratorUsername String
+  content               String
+  createdAt             DateTime @default(now())
+  feedback              Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  administrator         User?    @relation(fields: [administratorId], references: [id], onDelete: SetNull)
+
+  @@index([feedbackId, createdAt, id])
+  @@index([administratorId])
 }
 
 model StudentProfile {

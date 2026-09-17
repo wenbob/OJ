@@ -33,7 +33,8 @@
     "next": "16.2.12",
     "pinyin-pro": "^3.28.2",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "sharp": "0.35.3"
   },
   "devDependencies": {
     "@playwright/test": "1.62.0",

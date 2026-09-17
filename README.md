@@ -26,6 +26,7 @@
 | AI 辅导 | 理解题目、下一步提示、代码检查、自由追问，以及独立授权的选择判断解析 |
 | 教师跟进 | 编程学情、持续卡题与最近失败、推荐练习、批量作业、每名学生的个性化题单 |
 | 后台管理 | Markdown 导入、题目分类与排序、软下架、用户权限、AI 配置、站点标题图标和备案页脚 |
+| 问题反馈 | 学生与老师提交文字和截图、查看自己的反馈；管理员统一处理和回复 |
 
 | 角色 | 可以做什么 | 主要边界 | 操作手册 |
 | --- | --- | --- | --- |
@@ -209,6 +210,7 @@ flowchart LR
 | 学生提交脱敏 | [`submissionVisibility.ts`](src/lib/submissionVisibility.ts) |
 | 考试计分与离开保护 | [`examScoring.ts`](src/lib/examScoring.ts)、[`ExamExitGuard.tsx`](src/components/ExamExitGuard.tsx) |
 | 学情与专项练习 | [`learningAnalytics.ts`](src/lib/learningAnalytics.ts)、[`learningAssignments.ts`](src/lib/learningAssignments.ts) |
+| 问题反馈与私有截图 | [`feedback.ts`](src/lib/feedback.ts)、[`feedbackUpload.ts`](src/lib/feedbackUpload.ts)、[反馈功能说明](docs/feedback.md) |
 | 数据库与迁移 | [`schema.prisma`](prisma/schema.prisma)、[`migrations/`](prisma/migrations/)、[`init.sql`](prisma/init.sql) |
 | 浏览器测试与运维 | [`e2e/`](e2e/)、[`scripts/`](scripts/)、[`deploy/`](deploy/) |
 
@@ -227,6 +229,7 @@ flowchart LR
 | `AiConversation` / `AiConversationTurn` | 学生可见 AI 对话、幂等标识与调用统计 |
 | `ObjectiveAiExplanation` | 跨角色共享的逐小题解析缓存 |
 | `SystemSetting` | 站点、AI、Judge 默认值和备案配置 |
+| `Feedback` / `FeedbackAttachment` / `FeedbackReply` | 反馈原文、私有截图与管理员回复；身份快照独立于账号生命周期 |
 
 修改数据库结构时，须同步 Prisma schema、migration 与本地初始化 SQL。
 
@@ -247,6 +250,8 @@ flowchart LR
 | 学情与专项练习 | `/api/admin/learning/*` |
 | 提交与 AI 审阅 | `/api/admin/submissions/*`、`/api/admin/exam-submissions/*`、`/api/admin/ai-usage/*` |
 | 设置与模型发现 | `GET /api/admin/settings`、`PUT /api/admin/settings`、`POST /api/admin/ai-provider/models` |
+| 问题反馈 | `/api/feedback`、`/api/feedback/[id]`、私有附件子接口；仅提交人和管理员可读 |
+| 反馈管理 | `/api/admin/feedback` 及状态、回复子接口；严格仅限管理员，老师不可访问 |
 
 管理 API 的 `/admin/` 路径不代表老师一律不可访问；服务端按具体操作校验角色与资源归属。普通学生题目/提交接口不返回客观题标准答案，授权的客观题 AI 解析使用单独入口。
 
@@ -312,9 +317,10 @@ E2E 的 Windows 配置使用已安装的 Google Chrome；macOS / Linux 首次运
 | 老师如何校题、组卷、管理学生和作业 | [老师端使用说明](docs/teacher-guide.md) |
 | 管理员如何导入题目、配置权限和 AI | [管理员使用说明](docs/admin-guide.md) |
 | 如何部署、备份、回滚和排查异常 | [线上部署与维护手册](docs/deploy.md) |
+| 如何提交和处理私有问题反馈 | [问题反馈功能说明](docs/feedback.md) |
 | 修改代码必须遵守哪些边界 | [`AGENTS.md`](AGENTS.md) |
 | 历史变更有哪些验收证据 | [`docs/`](docs/) 中的 `ops-review-*.md`；仅作历史记录，不替代当前操作手册 |
 
-欢迎通过所用仓库的 Issues 反馈问题或提交 Pull Request。问题报告请说明角色、页面、复现步骤、预期与实际结果；涉及学生信息时先脱敏，不要上传真实代码、账号数据、隐藏测试、数据库、`.env` 或密钥。修改前阅读协作规则，保持两个仓库的代码与文档同步。
+平台学生和老师可优先使用站内“问题反馈”，内容仅本人和管理员可见。开源项目的问题与改进建议也可通过所用仓库的 Issues 或 Pull Request 提交；GitHub Issues 是公开讨论，不要把站内反馈原文或截图直接搬到公开仓库。报告请说明角色、页面、复现步骤、预期与实际结果，并先脱敏，不要上传真实代码、账号数据、隐藏测试、数据库、`.env` 或密钥。修改前阅读协作规则，保持两个仓库的代码与文档同步。
 
 本项目采用 [Apache License 2.0](LICENSE)。

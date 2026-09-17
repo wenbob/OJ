@@ -47,11 +47,16 @@ export async function AppShell({
           href: `${user.role === "admin" ? "/admin" : "/teacher"}/leaderboard`,
           label: "天梯榜",
         },
+        {
+          href: `${user.role === "admin" ? "/admin" : "/teacher"}/feedback`,
+          label: "问题反馈",
+        },
       ]
     : [
         { href: "/student/assignments", label: "专项练习" },
         { href: "/student/review", label: "错题本" },
         { href: "/student/leaderboard", label: "天梯榜" },
+        { href: "/student/feedback", label: "问题反馈" },
       ];
   const shellNav = supplementalItems.reduce(
     (items, item) =>

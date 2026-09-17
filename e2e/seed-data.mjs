@@ -499,6 +499,24 @@ export async function prepareE2eDatabase() {
       },
     });
 
+    await prisma.feedback.create({
+      data: {
+        authorId: 3,
+        authorUsername: "e2e-teacher",
+        authorRole: "teacher",
+        title: "E2E 已处理的老师反馈",
+        content: "仅供当前老师和管理员查看。",
+        status: "resolved",
+        replies: {
+          create: {
+            administratorId: 1,
+            administratorUsername: "e2e-admin",
+            content: "E2E 历史回复已保留。",
+          },
+        },
+      },
+    });
+
     await prisma.aiConversation.create({
       data: {
         clientConversationId: "conversation_e2e_seed",

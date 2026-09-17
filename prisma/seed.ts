@@ -16,6 +16,9 @@ int main() {
 async function main() {
   assertDestructiveDbOperationAllowed();
 
+  await prisma.feedbackReply.deleteMany();
+  await prisma.feedbackAttachment.deleteMany();
+  await prisma.feedback.deleteMany();
   await prisma.submissionCaseResult.deleteMany();
   await prisma.submission.deleteMany();
   await prisma.examProblem.deleteMany();
