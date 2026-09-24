@@ -9,7 +9,7 @@
 
 面向 C++ 入门教学、课后练习和固定小班考试的在线评测平台。学生可以编写 C++17 代码、完成选择判断题、查看反馈；老师可以组卷、跟进学情并下发个性化练习；管理员负责题库、账号和教学策略。
 
-[访问平台](https://botcode.work) · [快速开始](#快速开始) · [功能与角色](#功能与角色) · [AI 辅导](#ai-辅导) · [开发者导航](#开发者导航) · [部署与限制](#部署与限制)
+[访问平台](https://botcode.work) · [交互式架构图](https://wenbob.github.io/OJ/architecture/) · [快速开始](#快速开始) · [功能与角色](#功能与角色) · [AI 辅导](#ai-辅导) · [开发者导航](#开发者导航) · [部署与限制](#部署与限制)
 
 同步仓库：[wenbob/OJ](https://github.com/wenbob/OJ) · [wenbob/2026-OJC](https://github.com/wenbob/2026-OJC)。两者维护同一套项目，任选一个克隆即可。
 
@@ -180,21 +180,18 @@ AI_CUSTOM_API_KEY=
 
 ### 系统架构
 
-```mermaid
-flowchart LR
-    Browser["浏览器 · 学生 / 老师 / 管理员"] --> Nginx["Nginx / HTTPS"]
-    Nginx --> App["Next.js App Router · 认证与业务 API"]
-    App --> Prisma["Prisma"]
-    Prisma --> SQLite[("SQLite")]
-    App --> Queue["进程内 Judge 队列"]
-    Queue --> Judge["Docker · C++17"]
-    App --> Objective["客观题判分"]
-    App --> AI["AI 上游服务"]
-    App --> SSE["编程回复检查与 SSE"]
-    SSE --> Browser
-```
+[![C++ 在线 OJ 系统整体架构：浏览器、Nginx、Next.js、Docker Judge、AI 与 SQLite](docs/architecture/overview.svg)](https://wenbob.github.io/OJ/architecture/)
 
-编程题经队列与 Docker 评测；客观题直接在服务端判分。两类结果写入提交记录，再按角色返回可见信息。正式考试发布时固定题目与分值快照，后续题库编辑不改写历史计分依据。
+**[打开可缩放、可拖动的网页版架构图](https://wenbob.github.io/OJ/architecture/)**，可切换系统总览与学生答题数据流。GitHub README 中的图片为静态预览。
+
+<details>
+<summary>展开：学生答题后的数据流</summary>
+
+[![学生正式提交后的数据流：服务端校验、按题型判分、SQLite 持久化与脱敏返回](docs/architecture/answer-flow.svg)](https://wenbob.github.io/OJ/architecture/?view=answer)
+
+学生点击正式提交后，服务端验证身份和考试/专项上下文；编程题经进程内队列与 Docker 评测，客观题直接在服务端判分。提交与逐测试点/小题结果写入 SQLite，继而参与考试计分、专项进度和天梯统计；返回学生前由服务端脱敏。编辑器草稿留在浏览器，试运行不创建正式提交。生产数据库为 `/www/oj/prisma/prod.db`，备份放在 `/www/backups`。正式考试发布时固定题目与分值快照，后续题库编辑不改写历史计分依据。
+
+</details>
 
 技术栈：Next.js 16、React 19、TypeScript 6、Tailwind CSS、Prisma 6、SQLite、Monaco、KaTeX、Vitest、Playwright。具体依赖以 [`package.json`](package.json) 和 [锁文件](package-lock.json) 为准。
 

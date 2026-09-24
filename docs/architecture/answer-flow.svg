@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1110" viewBox="0 0 1600 1110" role="img" aria-labelledby="title desc">
+  <title id="title">学生答题后的数据流转</title>
+  <desc id="desc">学生在浏览器编辑答案，正式提交到 Next.js API。服务端验证身份、题目及考试或专项任务上下文；编程题经进程内队列和 Docker Judge，客观题直接在服务端判分。提交与逐测试点或小题结果写入 SQLite，并驱动考试计分、专项进度及天梯统计。服务端脱敏后才将结果返回学生。试运行不创建正式提交。</desc>
+  <defs>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M 28 0 L 0 0 0 28" fill="none" stroke="#d7dedc" stroke-width="1" opacity=".35"/></pattern>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 Z" fill="#516e80"/></marker>
+    <marker id="arrowOrange" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 Z" fill="#bb683d"/></marker>
+    <style>
+      text{font-family:Inter,"Microsoft YaHei","Noto Sans CJK SC",sans-serif;fill:#18313b}.kicker{font-size:18;font-weight:700;letter-spacing:3px;fill:#a45d3d}.title{font-size:40;font-weight:800}.subtitle{font-size:18;fill:#5d727b}.card{fill:#fffdf8;stroke:#ccd8d7;stroke-width:2}.head{font-size:22;font-weight:750}.label{font-size:18;font-weight:650}.small{font-size:15;fill:#61737b}.tiny{font-size:14;fill:#60747c}.step{font-size:15;font-weight:800;fill:#fff}.line{fill:none;stroke:#516e80;stroke-width:3;marker-end:url(#arrow)}.orange{stroke:#bb683d;marker-end:url(#arrowOrange)}
+    </style>
+  </defs>
+  <rect width="1600" height="1110" fill="#f4f6f3"/><rect width="1600" height="1110" fill="url(#grid)"/>
+  <text x="48" y="56" class="kicker">BOTCODE / ANSWER JOURNEY</text>
+  <text x="48" y="105" class="title">一次答题，数据如何流转？</text>
+  <text x="48" y="137" class="subtitle">以正式提交为主线；编程与客观题在判分处分叉，随后汇合为同一份提交记录。</text>
+
+  <!-- Main sequence and branch connectors. -->
+  <path d="M358 339 H415" class="line"/>
+  <path d="M750 339 H811" class="line"/>
+  <path d="M962 385 V431" class="line"/>
+  <path d="M962 385 V431" class="line"/>
+  <path d="M962 630 V656 H1219 V664" class="line orange"/>
+  <path d="M962 806 V835 H1219 V664" class="line"/>
+  <path d="M750 339 H788 V736 H812" class="line"/>
+  <path d="M1372 825 V889" class="line"/>
+  <path d="M1204 745 H761 V898" class="line"/>
+
+  <rect x="44" y="206" width="314" height="282" rx="20" class="card"/>
+  <rect x="44" y="206" width="314" height="63" rx="20" fill="#dce9e6"/><rect x="44" y="245" width="314" height="24" fill="#dce9e6"/>
+  <circle cx="80" cy="238" r="19" fill="#3e707a"/><text x="74" y="244" class="step">1</text>
+  <text x="111" y="246" class="head">学生在浏览器作答</text>
+  <text x="69" y="307" class="label">代码 / 选择判断答案</text>
+  <text x="69" y="339" class="small">本地草稿只在浏览器保存</text>
+  <text x="69" y="367" class="small">点击“提交”才发起正式请求</text>
+  <rect x="67" y="397" width="267" height="61" rx="11" fill="#f1f6f5"/>
+  <text x="82" y="423" class="small">POST /api/problems/[id]/submit</text>
+  <text x="82" y="447" class="tiny">可携带 examId / learningAssignmentId</text>
+
+  <rect x="415" y="206" width="335" height="282" rx="20" class="card"/>
+  <rect x="415" y="206" width="335" height="63" rx="20" fill="#dce7f0"/><rect x="415" y="245" width="335" height="24" fill="#dce7f0"/>
+  <circle cx="452" cy="238" r="19" fill="#466f86"/><text x="446" y="244" class="step">2</text>
+  <text x="483" y="246" class="head">服务端校验上下文</text>
+  <text x="438" y="307" class="label">会话、角色、题目状态</text>
+  <text x="438" y="339" class="small">考试是否进行中 / 是否属于本场</text>
+  <text x="438" y="367" class="small">专项任务归属、截止与题目关系</text>
+  <text x="438" y="401" class="small">从 SQLite 读取题目与测试点 / 答案</text>
+  <text x="438" y="443" class="tiny">测试点与标准答案不交给浏览器</text>
+
+  <rect x="811" y="206" width="303" height="179" rx="20" class="card"/>
+  <rect x="811" y="206" width="303" height="63" rx="20" fill="#f6dfd1"/><rect x="811" y="245" width="303" height="24" fill="#f6dfd1"/>
+  <circle cx="848" cy="238" r="19" fill="#b96b43"/><text x="842" y="244" class="step">3</text>
+  <text x="879" y="246" class="head">按题型分流</text>
+  <text x="834" y="309" class="label">编程题 → 队列与 Docker</text>
+  <text x="834" y="345" class="label">客观题 → 服务端判分</text>
+
+  <rect x="811" y="431" width="303" height="199" rx="20" class="card"/>
+  <rect x="830" y="450" width="266" height="37" rx="11" fill="#f6dfd1"/>
+  <text x="846" y="476" class="label">A · 编程题</text>
+  <text x="835" y="527" class="label">进程内 Judge 队列</text>
+  <text x="835" y="558" class="small">正式提交优先；按账号轮转</text>
+  <text x="835" y="594" class="label">Docker 隔离运行 C++17</text>
+  <text x="835" y="617" class="tiny">逐测试点结果与总判定</text>
+
+  <rect x="811" y="664" width="303" height="142" rx="20" class="card"/>
+  <rect x="830" y="683" width="266" height="37" rx="11" fill="#dce7f0"/>
+  <text x="846" y="709" class="label">B · 选择 / 判断题</text>
+  <text x="835" y="754" class="label">Next.js 服务端判分</text>
+  <text x="835" y="783" class="small">逐小题记录结果；不进 Docker</text>
+
+  <rect x="1204" y="206" width="351" height="619" rx="20" class="card"/>
+  <rect x="1204" y="206" width="351" height="63" rx="20" fill="#e8e4d7"/><rect x="1204" y="245" width="351" height="24" fill="#e8e4d7"/>
+  <circle cx="1241" cy="238" r="19" fill="#8a8060"/><text x="1235" y="244" class="step">4</text>
+  <text x="1272" y="246" class="head">写入 SQLite</text>
+  <text x="1228" y="307" class="label">/www/oj/prisma/prod.db</text>
+  <text x="1228" y="340" class="small">通过 Prisma 在事务中保存：</text>
+  <rect x="1228" y="369" width="302" height="89" rx="11" fill="#f0eee6"/>
+  <text x="1245" y="403" class="label">Submission</text>
+  <text x="1245" y="430" class="small">代码 / 答案、状态、分数、归属</text>
+  <rect x="1228" y="470" width="302" height="89" rx="11" fill="#f0eee6"/>
+  <text x="1245" y="504" class="label">SubmissionCaseResult</text>
+  <text x="1245" y="531" class="small">逐测试点 / 逐小题判定</text>
+  <path d="M1228 587 H1530" stroke="#dddcd2"/>
+  <text x="1228" y="623" class="label">基于提交事实更新 / 统计</text>
+  <text x="1228" y="657" class="small">考试：ExamRecord 计分与结果</text>
+  <text x="1228" y="686" class="small">专项：Accepted 更新完成进度</text>
+  <text x="1228" y="715" class="small">天梯：按唯一 Accepted 题数聚合</text>
+  <text x="1228" y="772" class="tiny">考试计分依据发布时的题目与分值快照</text>
+  <text x="1228" y="798" class="tiny">数据库随生产备份保存在 /www/backups</text>
+
+  <rect x="44" y="898" width="438" height="153" rx="19" class="card"/>
+  <rect x="63" y="917" width="398" height="37" rx="10" fill="#f1f6f5"/>
+  <text x="79" y="943" class="label">试运行是另一条路径</text>
+  <text x="67" y="987" class="small">/api/problems/[id]/run 只跑公开样例或自定义输入</text>
+  <text x="67" y="1017" class="small">不创建 Submission；不影响积分、考试或专项进度</text>
+
+  <rect x="531" y="898" width="475" height="153" rx="19" class="card"/>
+  <rect x="550" y="917" width="437" height="37" rx="10" fill="#dce7f0"/>
+  <text x="566" y="943" class="label">读历史与排行</text>
+  <text x="554" y="987" class="small">提交详情按角色查询；学生视图经过服务端脱敏</text>
+  <text x="554" y="1017" class="small">天梯积分实时从有效 Accepted 提交聚合</text>
+
+  <rect x="1058" y="898" width="497" height="153" rx="19" class="card"/>
+  <rect x="1077" y="917" width="459" height="37" rx="10" fill="#f6dfd1"/>
+  <circle cx="1100" cy="936" r="15" fill="#b96b43"/><text x="1095" y="941" class="step">5</text>
+  <text x="1126" y="943" class="label">安全返回给学生</text>
+  <text x="1081" y="987" class="small">显示判定、可见错误与自己的提交记录</text>
+  <text x="1081" y="1017" class="small">隐藏输入 / 标准输出及敏感运行信息不返回</text>
+</svg>
