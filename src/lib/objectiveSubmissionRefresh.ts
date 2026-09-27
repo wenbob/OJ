@@ -1,3 +1,5 @@
+import type { RewardSubmissionUpdate } from "./rewardShared";
+
 export type ObjectiveSubmissionResult = {
   id: number;
   status: string;
@@ -18,6 +20,7 @@ export type ObjectiveSubmissionRefreshState = {
   learningAssignmentDetached: boolean;
   result: ObjectiveSubmissionResult;
   savedAt: number;
+  rewards?: RewardSubmissionUpdate;
 };
 
 const MAX_REFRESH_STATE_AGE_MS = 5 * 60 * 1_000;
@@ -27,12 +30,14 @@ export function createObjectiveSubmissionRefreshState({
   learningAssignmentDetached,
   result,
   savedAt = Date.now(),
+  rewards,
 }: Omit<ObjectiveSubmissionRefreshState, "savedAt"> & { savedAt?: number }) {
   return JSON.stringify({
     countedForLearningAssignment,
     learningAssignmentDetached,
     result,
     savedAt,
+    rewards,
   } satisfies ObjectiveSubmissionRefreshState);
 }
 

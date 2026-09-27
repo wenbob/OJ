@@ -57,7 +57,7 @@
   <text x="662" y="388" class="small">题面读取、提交校验、成绩更新</text>
   <rect x="644" y="416" width="380" height="68" rx="12" fill="#edf4f8"/>
   <text x="662" y="444" class="label">学情 / 专项任务 / 排行</text>
-  <text x="662" y="469" class="small">以提交事实统计，写入任务进度</text>
+  <text x="662" y="469" class="small">提交统计 + 抽奖 / 翻倍奖励，更新进度</text>
   <rect x="644" y="497" width="380" height="68" rx="12" fill="#edf4f8"/>
   <text x="662" y="525" class="label">问题反馈 / 私有截图</text>
   <text x="662" y="550" class="small">管理员处理；附件每次读取鉴权</text>
@@ -78,7 +78,7 @@
   <text x="1130" y="456" class="small">Problem · TestCase · Submission</text>
   <text x="1130" y="481" class="small">SubmissionCaseResult</text>
   <text x="1130" y="522" class="label">教学过程</text>
-  <text x="1130" y="547" class="small">Exam / ExamRecord · LearningAssignment</text>
+  <text x="1130" y="547" class="small">Exam · LearningAssignment · PointReward</text>
   <text x="1130" y="588" class="label">辅导与反馈</text>
   <text x="1130" y="613" class="small">AiConversation · Feedback / 图片 BLOB</text>
   <text x="1130" y="647" class="tiny">隐藏测试、答案和提交代码均留在服务端</text>

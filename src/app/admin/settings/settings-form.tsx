@@ -253,6 +253,19 @@ export function SettingsForm({
   return (
     <form className="grid gap-6" onSubmit={submit}>
       <section className="surface p-5">
+        <h2 className="text-xl font-black">首次通过抽奖</h2>
+        <p className="mt-2 text-sm text-steel">日常与专项首次通过可抽奖；修改仅影响新机会，已获得的奖励与挑战继续有效。</p>
+        <label className="my-4 flex items-center gap-2 font-bold">
+          <input type="checkbox" checked={settings.rewardsEnabled === "true"} onChange={(event) => update("rewardsEnabled", String(event.target.checked))} />
+          开启抽奖奖励
+        </label>
+        <div className="grid gap-4 md:grid-cols-2">
+          <TextInput label="最低奖励积分" value={settings.rewardMinPoints} onChange={(value) => update("rewardMinPoints", value)} />
+          <TextInput label="最高奖励积分" value={settings.rewardMaxPoints} onChange={(value) => update("rewardMaxPoints", value)} />
+        </div>
+        <p className="mt-3 text-sm text-steel">范围包含上下限，须为正整数。接受同类型同分类的随机挑战，24 小时内通过可再获得一次原奖励。</p>
+      </section>
+      <section className="surface p-5">
         <h2 className="text-xl font-black">基础设置</h2>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <TextInput

@@ -24,16 +24,17 @@ export default async function StudentLeaderboardPage() {
               </p>
               <h1 className="mt-2 text-3xl font-black md:text-4xl">天梯竞技场</h1>
               <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#e5ded0]">
-                按唯一 Accepted 题数计算积分，日常刷题和模拟考试都会计入。
+                总积分 = 首次通过题数 × 10 + 抽奖奖励 + 翻倍奖励。
               </p>
               <p className="mt-1 text-xs font-semibold text-[#c8c0b2]">
-                每题首次 Accepted 计 10 分；重复通过同一题不重复加分。
+                每题首次 Accepted 计 10 分；日常与专项新题另有一次抽奖，考试不产生抽奖。
               </p>
             </div>
             {currentRanking ? (
               <div className="border border-[#d6a44a]/40 bg-[#d6a44a]/10 px-4 py-3 text-sm font-black text-[#f2d28c]">
                 <Trophy className="mr-2 inline" size={17} />
                 <span className="data-number">#{currentRanking.rank}</span> · {currentRanking.displayTitle} · {currentRanking.points} 分
+                <span className="mt-1 block text-xs">基础 {currentRanking.basePoints} 分 + 奖励 {currentRanking.rewardPoints} 分</span>
               </div>
             ) : null}
           </div>

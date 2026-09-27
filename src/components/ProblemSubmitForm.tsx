@@ -7,9 +7,12 @@ import { useRouter } from "next/navigation";
 import { SendHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useAutomaticOverlay } from "@/lib/automaticOverlay";
 import { ObjectiveSubmissionBreakdown } from "@/components/ObjectiveSubmissionBreakdown";
 import { ProblemAiAssist } from "@/components/ProblemAiAssist";
 import { ProblemRunPanel } from "@/components/ProblemRunPanel";
+import { RewardAfterAccepted } from "@/components/RewardsPanel";
+import type { RewardSubmissionUpdate } from "@/lib/rewardShared";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   AC_SUCCESS_IMAGE_SRC,
@@ -61,6 +64,7 @@ export function ProblemSubmitForm({
   problemType = "programming",
   problemId,
   refreshShellOnAccepted = false,
+  enableRewards = false,
   refreshOnSuccess = false,
   sampleCount = 0,
 }: {
@@ -82,6 +86,7 @@ export function ProblemSubmitForm({
   problemType?: ProblemType;
   problemId: number;
   refreshShellOnAccepted?: boolean;
+  enableRewards?: boolean;
   refreshOnSuccess?: boolean;
   sampleCount?: number;
 }) {
@@ -113,7 +118,9 @@ export function ProblemSubmitForm({
   const [showObjectiveExamConfirm, setShowObjectiveExamConfirm] =
     useState(false);
   const [showAcceptedPopup, setShowAcceptedPopup] = useState(false);
+  const [rewardUpdate, setRewardUpdate] = useState<RewardSubmissionUpdate | null>(null);
   const [acceptedArtworkReady, setAcceptedArtworkReady] = useState(false);
+  useAutomaticOverlay(pending || showAcceptedPopup || showObjectiveExamConfirm, 100);
   const [countedForLearningAssignment, setCountedForLearningAssignment] =
     useState(false);
   const [learningAssignmentDetached, setLearningAssignmentDetached] =
@@ -135,6 +142,7 @@ export function ProblemSubmitForm({
       setError("");
       setShowObjectiveExamConfirm(false);
       setShowAcceptedPopup(false);
+      setRewardUpdate(null);
       setAcceptedArtworkReady(false);
       setCountedForLearningAssignment(false);
       setLearningAssignmentDetached(false);
@@ -146,6 +154,7 @@ export function ProblemSubmitForm({
         );
         window.sessionStorage.removeItem(objectiveRefreshStorageKey);
         if (restored) {
+          setRewardUpdate(restored.rewards ?? null);
           setResult(restored.result);
           setCountedForLearningAssignment(
             restored.countedForLearningAssignment,
@@ -288,10 +297,12 @@ export function ProblemSubmitForm({
     setResult(null);
     setShowObjectiveExamConfirm(false);
     setShowAcceptedPopup(false);
+    setRewardUpdate(null);
     setAcceptedArtworkReady(false);
     setCountedForLearningAssignment(false);
     setLearningAssignmentDetached(false);
 
+    try {
     const response = await fetch(`/api/problems/${problemId}/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -323,7 +334,6 @@ export function ProblemSubmitForm({
       return;
     }
 
-    setPending(false);
     setResult(data.submission);
     setCountedForLearningAssignment(Boolean(data.countedForLearningAssignment));
     setLearningAssignmentDetached(Boolean(data.learningAssignmentDetached));
@@ -338,6 +348,7 @@ export function ProblemSubmitForm({
             data.learningAssignmentDetached,
           ),
           result: data.submission,
+          rewards: data.rewards,
         }),
       );
     }
@@ -345,6 +356,7 @@ export function ProblemSubmitForm({
       const artworkReady = await preloadAcSuccessImage();
       setAcceptedArtworkReady(artworkReady);
       setShowAcceptedPopup(true);
+      setRewardUpdate(data.rewards ?? null);
     }
     if (
       refreshOnSuccess ||
@@ -353,6 +365,11 @@ export function ProblemSubmitForm({
       data.learningAssignmentDetached
     ) {
       router.refresh();
+    }
+    } catch {
+      setError("网络异常，未能确认提交结果。请查看提交记录；奖励会保存在“我的奖励”中。");
+    } finally {
+      setPending(false);
     }
   }
 
@@ -598,6 +615,7 @@ export function ProblemSubmitForm({
         </div>
       ) : null}
       {acceptedPopup}
+      {enableRewards && examId === undefined && <RewardAfterAccepted key={problemId} problemId={problemId} suspended={pending || showAcceptedPopup} update={rewardUpdate} />}
       </section>
     </>
   );

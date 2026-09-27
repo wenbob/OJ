@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
       updateMany: vi.fn(),
     },
     problemCategoryOrder: { findMany: vi.fn() },
+    rewardDraw: { updateMany: vi.fn() },
+    rewardChallenge: { updateMany: vi.fn() },
   },
   requireApiUser: vi.fn(),
   getPracticeSubmissionCountsByProblem: vi.fn(),
@@ -126,6 +128,8 @@ describe("admin problem archiving", () => {
 
   it("archives a batch in one transaction", async () => {
     const tx = {
+      rewardDraw: { updateMany: vi.fn() },
+      rewardChallenge: { updateMany: vi.fn() },
       examProblem: { findFirst: vi.fn().mockResolvedValue(null) },
       learningAssignmentProblem: { findFirst: vi.fn().mockResolvedValue(null) },
       problem: {

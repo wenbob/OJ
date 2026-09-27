@@ -608,7 +608,7 @@ grep -n 'unoptimized' /www/oj/src/components/ProblemSubmitForm.tsx
 
 ### 方案 A：本地 Linux standalone 包上传
 
-本地确认代码已提交并通过检查后，在 Linux/Docker 环境构建生产产物，再打包上传。不要用 Windows 本机生成的 `.next/standalone` 作为 Ubuntu 服务器产物。
+本地确认待发布范围并通过检查后，在 Linux/Docker 环境构建生产产物，再打包上传。优先使用可追溯的提交；若用户授权发布当前工作区快照，在发布记录写明快照范围与发布包 SHA-256，不自动提交或推送 Git。不要用 Windows 本机生成的 `.next/standalone` 作为 Ubuntu 服务器产物。
 
 构建容器必须安装与生产机兼容的 OpenSSL 后再执行 `npm ci --include=dev`、`prisma generate` 和 `next build`。显式包含 devDependencies 是为了避免构建容器加载 `NODE_ENV=production` 后省略 Tailwind、TypeScript 等构建期依赖。当前 Ubuntu 生产机使用 OpenSSL 3；若使用 `node:22-bookworm-slim`，需先安装 `openssl`，否则 Prisma 可能退回生成 `debian-openssl-1.1.x` 引擎，上传后存在无法加载的风险。打包后应检查 standalone 中的实际引擎：
 
@@ -668,6 +668,17 @@ docker image inspect oj-cpp-judge >/dev/null
 ```
 
 如果 `package-lock.json` 发生依赖变化，不要在 2GB 服务器热运行 `npm ci`。优先在本地 Linux/Docker 环境生成可用于 Ubuntu 的根 `node_modules` 并随发布包上传；否则必须安排维护窗口，先停 PM2 并确认有回滚点后再处理依赖安装。
+
+Schema 变化不一定会改变 lockfile。即使复用根依赖，也要把新目录的 Prisma 生成客户端替换为本次 Linux 构建版本，否则源码脚本可能读不到新增模型。使用 `cp -al` 时，新旧依赖是硬链接，不得直接覆盖共享的 `.prisma` 文件；先移动新目录中的旧客户端，再复制新客户端，仅对尚未执行过此步骤的新发布目录操作：
+
+```bash
+test ! -e /www/oj-new/prisma-client-before
+test -f /www/oj-new/.next/standalone/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
+mv /www/oj-new/node_modules/.prisma /www/oj-new/prisma-client-before
+cp -a /www/oj-new/.next/standalone/node_modules/.prisma /www/oj-new/node_modules/.prisma
+```
+
+奖励与公告升级包含 `0020_problem_rewards`、`0021_announcements`、`0022_reward_offer_expiry`。0020 会补充缺失的三个奖励设置，因此迁移验收不能要求所有表行数绝对不变：旧设置和值必须保留，新增设置只能来自迁移声明；用户、题目、提交等既有业务数据仍须核对。0022 回填接受期限，不重置挑战完成期限或补发积分。此次发布与回滚证据见 [2026-09-27 发布记录](ops-review-2026-09-27-rewards-announcements.md)。
 
 Windows PowerShell 向远程 `bash -s` 传递多行部署脚本时，不要直接使用字符串管道；管道可能把末行转换为 CRLF，使 `trap` 等 Bash 命令在已切换成功后仍报错并触发回滚。应先把只含 LF 的 UTF-8 脚本编码为 Base64，再在服务器执行 `base64 -d | bash`，或上传经过行尾校验的 `.sh` 文件。
 

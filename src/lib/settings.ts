@@ -8,6 +8,7 @@ import {
   validatePublicSecurityRecordNumber,
 } from "@/lib/siteCompliance";
 import { cache } from "react";
+import { validateRewardRange } from "./rewardShared";
 
 export const defaultCppTemplate = `#include <bits/stdc++.h>
 using namespace std;
@@ -43,6 +44,9 @@ export const defaultAiObjectiveExplanationPrompt = `请使用简短、清楚、�
 先说明整体判断思路，再按原顺序解释每个选项：正确项说明为什么正确，错误项逐一指出错在哪里。最后用一句容易记住的话总结知识点。专业术语首次出现时要顺手解释。允许少量 Markdown、行内代码和 LaTeX，但不要使用表格。`;
 
 export const defaultSystemSettings = {
+  rewardsEnabled: "true",
+  rewardMinPoints: "1",
+  rewardMaxPoints: "10",
   siteName: "C++ OJ",
   siteSubtitle: "在线练习平台",
   browserTitle: "",
@@ -94,6 +98,7 @@ export const AI_COOLDOWN_MIN_SECONDS = 5;
 export const AI_COOLDOWN_MAX_SECONDS = 600;
 
 const backwardCompatibleAiSettingKeys = new Set<SystemSettingKey>([
+  "rewardsEnabled", "rewardMinPoints", "rewardMaxPoints",
   "aiObjectiveProvider",
   "aiObjectiveBaseUrl",
   "aiObjectiveModel",
@@ -247,6 +252,7 @@ export function normalizeSystemSettingsPayload(body: unknown): SystemSettings {
     }
     if (
       key === "allowStudentRegister" ||
+      key === "rewardsEnabled" ||
       key === "aiPracticeEnabled" ||
       key === "aiObjectiveExplanationEnabled" ||
       key === "aiStudentObjectiveExplanationEnabled" ||
@@ -290,6 +296,8 @@ export function normalizeSystemSettingsPayload(body: unknown): SystemSettings {
 }
 
 export function validateSystemSettings(settings: SystemSettings) {
+  const rewardError = validateRewardRange(settings.rewardMinPoints, settings.rewardMaxPoints);
+  if (rewardError) return rewardError;
   if (!settings.siteName.trim()) return "平台名称不能为空";
   if (settings.browserTitle.trim().length > 60) {
     return "浏览器标签名称不能超过 60 个字";

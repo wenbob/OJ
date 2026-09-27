@@ -5,6 +5,7 @@ import { LogoutButton } from "@/components/LogoutButton";
 import { RankEmblem } from "@/components/RankEmblem";
 import { ShellNav } from "@/components/ShellNav";
 import { SessionPresenceGuard } from "@/components/SessionPresenceGuard";
+import { AnnouncementNotifier } from "@/components/AnnouncementNotifier";
 import { getStudentRankingSummaryForUser } from "@/lib/ranking";
 import { getPublicSettings } from "@/lib/settings";
 
@@ -56,6 +57,7 @@ export async function AppShell({
         { href: "/student/assignments", label: "专项练习" },
         { href: "/student/review", label: "错题本" },
         { href: "/student/leaderboard", label: "天梯榜" },
+        { href: "/student/rewards", label: "我的奖励" },
         { href: "/student/feedback", label: "问题反馈" },
       ];
   const shellNav = supplementalItems.reduce(
@@ -63,6 +65,7 @@ export async function AppShell({
       items.some((navItem) => navItem.href === item.href) ? items : [...items, item],
     nav,
   );
+  shellNav.push({ href: `/${user.role}/announcements`, label: user.role === "admin" ? "公告管理" : "公告" });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-app-shell-root>
@@ -124,6 +127,7 @@ export async function AppShell({
       <main className="app-stage mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6 md:py-9">
         {children}
       </main>
+      {!locked && user.role !== "admin" ? <AnnouncementNotifier key={user.id} /> : null}
     </div>
   );
 }

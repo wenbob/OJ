@@ -212,7 +212,7 @@ function CurrentBattleCard({
             <span>
               {progress.isMaxTier
                 ? "继续刷新天梯积分"
-                : `再完成 ${progress.acceptedProblemsToNextTier} 道唯一 AC`}
+                : `还差 ${progress.pointsToNextTier} 积分晋级`}
             </span>
           </div>
         </div>

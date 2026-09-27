@@ -32,6 +32,7 @@ import {
 } from "@/lib/requestLimits";
 import { getJudgeDefaultSettings } from "@/lib/settings";
 import { sanitizeSubmissionForStudent } from "@/lib/submissionVisibility";
+import { recordAcceptedRewards, rewardTransaction } from "@/lib/rewards";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -358,7 +359,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       countedForLearningAssignment,
       learningAssignmentDetached,
       submission,
-    } = await prisma.$transaction(
+      rewards,
+    } = await rewardTransaction(auth.user.id,
     async (tx) => {
       const currentAssignmentProblem =
         learningAssignmentId !== null && assignmentProblemId !== null
@@ -425,6 +427,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         counted = updated.count === 1;
       }
       return {
+        rewards: auth.user.role === "student" ? await recordAcceptedRewards(tx, { userId: auth.user.id, submissionId: createdSubmission.id,
+          status: result.status, examId, receivedAt, problem }) : { rewardId: null, doubledPoints: 0 },
         countedForLearningAssignment: counted,
         learningAssignmentDetached: detached,
         submission: createdSubmission,
@@ -450,6 +454,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     return NextResponse.json({
+      rewards,
       countedForLearningAssignment,
       learningAssignmentDetached,
       submission: sanitizeSubmissionForStudent(submission),

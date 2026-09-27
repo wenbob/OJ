@@ -203,6 +203,7 @@ export default async function StudentProblemDetailPage({
             <ObjectiveAiExplanationPanel />
             <div className="grid content-start gap-3">
               <SubmitForm
+                enableRewards
                 defaultCodeTemplate={defaultCodeTemplate}
                 fromSubmissionId={
                   Number.isInteger(fromSubmissionId) ? fromSubmissionId : undefined
@@ -222,6 +223,7 @@ export default async function StudentProblemDetailPage({
         ) : (
         <aside className="grid content-start gap-4 xl:self-start">
           <SubmitForm
+            enableRewards
             aiCooldownSeconds={aiCooldownSeconds ?? undefined}
             aiEnabled={
               problemType === "programming" &&

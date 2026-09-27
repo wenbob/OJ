@@ -26,6 +26,92 @@ model User {
   generatedObjectiveAiExplanations ObjectiveAiExplanation[]  @relation("ObjectiveAiExplanationGenerator")
   feedback                         Feedback[]
   feedbackReplies                  FeedbackReply[]
+  rewardDraws                      RewardDraw[]
+  rewardChallenges                 RewardChallenge[]
+  pointRewards                     PointReward[]
+  publishedAnnouncements           Announcement[]
+  announcementReads                AnnouncementRead[]
+}
+
+model Announcement {
+  id                Int                @id @default(autoincrement())
+  title             String
+  body              String
+  publishedAt       DateTime           @default(now())
+  withdrawnAt       DateTime?
+  publisherId       Int?
+  publisherName     String
+  requestId         String             @unique
+  publisher         User?              @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+  reads             AnnouncementRead[]
+
+  @@index([withdrawnAt, publishedAt, id])
+}
+
+model AnnouncementRead {
+  announcementId Int
+  userId         Int
+  readAt         DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, userId])
+  @@index([userId])
+}
+
+model RewardDraw {
+  id                 Int               @id @default(autoincrement())
+  userId             Int
+  sourceProblemId    Int
+  sourceSubmissionId Int               @unique
+  problemTitle       String
+  problemType        String
+  category           String
+  minPoints          Int
+  maxPoints          Int
+  amount             Int?
+  createdAt          DateTime          @default(now())
+  drawnAt            DateTime?
+  offerExpiresAt     DateTime?
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenges         RewardChallenge[]
+  ledger             PointReward[]
+
+  @@unique([userId, sourceProblemId])
+  @@index([userId, createdAt, id])
+}
+
+model RewardChallenge {
+  id                    Int        @id @default(autoincrement())
+  userId                Int
+  rewardId              Int
+  targetProblemId       Int
+  targetTitle           String
+  status                String     @default("active")
+  acceptedAt            DateTime   @default(now())
+  expiresAt             DateTime
+  completedAt           DateTime?
+  completedSubmissionId Int?
+  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reward                RewardDraw @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  // The migration also enforces one active challenge per user with a partial unique index.
+  @@index([userId, targetProblemId, status])
+  @@index([rewardId, id])
+}
+
+model PointReward {
+  id        Int        @id @default(autoincrement())
+  userId    Int
+  rewardId  Int
+  kind      String
+  amount    Int
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reward    RewardDraw @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  @@unique([rewardId, kind])
+  @@index([userId])
 }
 
 model Feedback {

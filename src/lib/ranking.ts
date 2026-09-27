@@ -38,6 +38,8 @@ export type StudentRankingEntry = {
   customTitle: string | null;
   displayTitle: string;
   points: number;
+  basePoints: number;
+  rewardPoints: number;
   rank: number;
   tierTitle: string;
   userId: number;
@@ -162,9 +164,11 @@ export function getRankTierProgress(points: number): RankTierProgress {
 export function buildStudentRankings({
   submissions,
   users,
+  rewardPointsByUser = new Map<number, number>(),
 }: {
   submissions: RankingSubmissionInput[];
   users: RankingUserInput[];
+  rewardPointsByUser?: Map<number, number>;
 }) {
   const acceptedProblemIdsByUser = new Map<number, Set<number>>();
   const acceptedSubmissionCountByUser = new Map<number, number>();
@@ -188,7 +192,9 @@ export function buildStudentRankings({
       const acCount = acceptedProblemIdsByUser.get(user.id)?.size ?? 0;
       const acceptedSubmissionCount =
         acceptedSubmissionCountByUser.get(user.id) ?? 0;
-      const points = acCount * RANK_POINT_PER_UNIQUE_ACCEPTED;
+      const basePoints = acCount * RANK_POINT_PER_UNIQUE_ACCEPTED;
+      const rewardPoints = rewardPointsByUser.get(user.id) ?? 0;
+      const points = basePoints + rewardPoints;
       const tierTitle = getRankTierTitle(points);
       const customTitle = normalizeCustomTitle(
         user.studentProfile?.customTitle ?? null,
@@ -200,6 +206,8 @@ export function buildStudentRankings({
         customTitle,
         displayTitle: customTitle ?? tierTitle,
         points,
+        basePoints,
+        rewardPoints,
         rank: 0,
         tierTitle,
         userId: user.id,
@@ -217,9 +225,11 @@ export function buildStudentRankings({
 export function buildStudentRankingSummary({
   submissions,
   user,
+  rewardPoints = 0,
 }: {
   submissions: RankingSubmissionInput[];
   user: RankingUserInput;
+  rewardPoints?: number;
 }): StudentRankingSummary | null {
   if (user.role !== "student") return null;
 
@@ -235,7 +245,8 @@ export function buildStudentRankingSummary({
   }
 
   const acCount = acceptedProblemIds.size;
-  const points = acCount * RANK_POINT_PER_UNIQUE_ACCEPTED;
+  const basePoints = acCount * RANK_POINT_PER_UNIQUE_ACCEPTED;
+  const points = basePoints + rewardPoints;
   const tierTitle = getRankTierTitle(points);
   const customTitle = normalizeCustomTitle(user.studentProfile?.customTitle ?? null);
 
@@ -245,6 +256,8 @@ export function buildStudentRankingSummary({
     customTitle,
     displayTitle: customTitle ?? tierTitle,
     points,
+    basePoints,
+    rewardPoints,
     tierTitle,
     userId: user.id,
     username: user.username,
@@ -255,13 +268,16 @@ function buildStudentRankingSummaryFromCounts({
   acceptedSubmissionCount,
   acCount,
   user,
+  rewardPoints,
 }: {
   acceptedSubmissionCount: number;
   acCount: number;
   user: RankingUserInput;
+  rewardPoints: number;
 }): StudentRankingSummary | null {
   if (user.role !== "student") return null;
-  const points = acCount * RANK_POINT_PER_UNIQUE_ACCEPTED;
+  const basePoints = acCount * RANK_POINT_PER_UNIQUE_ACCEPTED;
+  const points = basePoints + rewardPoints;
   const tierTitle = getRankTierTitle(points);
   const customTitle = normalizeCustomTitle(
     user.studentProfile?.customTitle ?? null,
@@ -272,6 +288,8 @@ function buildStudentRankingSummaryFromCounts({
     customTitle,
     displayTitle: customTitle ?? tierTitle,
     points,
+    basePoints,
+    rewardPoints,
     tierTitle,
     userId: user.id,
     username: user.username,
@@ -286,7 +304,7 @@ export async function getStudentRankingSummariesForUsers(
   const userIds = students.map((user) => user.id);
   if (userIds.length === 0) return [];
 
-  const [acceptedCounts, acceptedProblems] = await Promise.all([
+  const [acceptedCounts, acceptedProblems, rewardSums] = await Promise.all([
     db.submission.groupBy({
       by: ["userId"],
       where: { status: "Accepted", userId: { in: userIds } },
@@ -297,7 +315,9 @@ export async function getStudentRankingSummariesForUsers(
       where: { status: "Accepted", userId: { in: userIds } },
       _count: { _all: true },
     }),
+    db.pointReward.groupBy({ by: ["userId"], where: { userId: { in: userIds } }, _sum: { amount: true } }),
   ]);
+  const rewardPointsByUser = new Map(rewardSums.map((row) => [row.userId, row._sum.amount ?? 0]));
   const acceptedCountByUser = new Map(
     acceptedCounts.map((row) => [row.userId, row._count._all]),
   );
@@ -313,6 +333,7 @@ export async function getStudentRankingSummariesForUsers(
     const summary = buildStudentRankingSummaryFromCounts({
       acceptedSubmissionCount: acceptedCountByUser.get(user.id) ?? 0,
       acCount: uniqueAcceptedByUser.get(user.id) ?? 0,
+      rewardPoints: rewardPointsByUser.get(user.id) ?? 0,
       user,
     });
     return summary ? [summary] : [];

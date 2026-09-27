@@ -22,11 +22,13 @@
 | --- | --- |
 | 日常做题 | 编程题与选择判断题、Monaco 编辑器、本地草稿、题面公式与表格、提交记录、错题本和天梯 |
 | 编程评测 | C++17、公开样例与自定义输入试运行、正式提交、Docker 资源隔离、按账号公平调度 |
+| 积分奖励 | “我的奖励”独立菜单管理抽奖、挑战和历史；日常/专项新题首次通过抽奖，管理员设定范围；抽奖后 24 小时内接受挑战，接受后另有 24 小时完成，奖励计入天梯 |
 | 正式考试 | 同题型组卷、发布快照、倒计时、交卷与计分、防误后退、有审计的误交卷恢复 |
 | AI 辅导 | 理解题目、下一步提示、代码检查、自由追问，以及独立授权的选择判断解析 |
 | 教师跟进 | 编程学情、持续卡题与最近失败、推荐练习、批量作业、每名学生的个性化题单 |
 | 后台管理 | Markdown 导入、题目分类与排序、软下架、用户权限、AI 配置、站点标题图标和备案页脚 |
 | 问题反馈 | 学生与老师提交文字和截图、查看自己的反馈；管理员统一处理和回复 |
+| 全站公告 | 管理员发布文字通知；学生和老师普通页面弹窗确认、账号级已读同步、历史公告回看，考试期间暂停提醒 |
 
 | 角色 | 可以做什么 | 主要边界 | 操作手册 |
 | --- | --- | --- | --- |
@@ -225,7 +227,9 @@ AI_CUSTOM_API_KEY=
 | `LearningInsightSnapshot` | 按学生与周期缓存的学情摘要 |
 | `AiConversation` / `AiConversationTurn` | 学生可见 AI 对话、幂等标识与调用统计 |
 | `ObjectiveAiExplanation` | 跨角色共享的逐小题解析缓存 |
-| `SystemSetting` | 站点、AI、Judge 默认值和备案配置 |
+| `SystemSetting` | 站点、AI、Judge 默认值、抽奖范围及备案配置 |
+| `RewardDraw` / `RewardChallenge` / `PointReward` | 首次通过机会、抽奖后 24 小时接受期限、接受后独立 24 小时挑战与幂等奖励流水；天梯积分为基础分加奖励分 |
+| `Announcement` / `AnnouncementRead` | 公告发布、撤下、发布人快照与账号级已读记录；已发布正文不直接修改 |
 | `Feedback` / `FeedbackAttachment` / `FeedbackReply` | 反馈原文、私有截图与管理员回复；身份快照独立于账号生命周期 |
 
 修改数据库结构时，须同步 Prisma schema、migration 与本地初始化 SQL。
@@ -248,6 +252,7 @@ AI_CUSTOM_API_KEY=
 | 提交与 AI 审阅 | `/api/admin/submissions/*`、`/api/admin/exam-submissions/*`、`/api/admin/ai-usage/*` |
 | 设置与模型发现 | `GET /api/admin/settings`、`PUT /api/admin/settings`、`POST /api/admin/ai-provider/models` |
 | 问题反馈 | `/api/feedback`、`/api/feedback/[id]`、私有附件子接口；仅提交人和管理员可读 |
+| 全站公告 | `/api/announcements` 及其 `/pending`、`/[id]`、`/[id]/read` 子接口；管理员通过 `/api/admin/announcements` 发布及其 `/[id]/withdraw` 子接口撤下 |
 | 反馈管理 | `/api/admin/feedback` 及状态、回复子接口；严格仅限管理员，老师不可访问 |
 
 管理 API 的 `/admin/` 路径不代表老师一律不可访问；服务端按具体操作校验角色与资源归属。普通学生题目/提交接口不返回客观题标准答案，授权的客观题 AI 解析使用单独入口。

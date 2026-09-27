@@ -16,6 +16,13 @@ int main() {
 async function main() {
   assertDestructiveDbOperationAllowed();
 
+  await prisma.announcementRead.deleteMany();
+  await prisma.announcement.deleteMany();
+
+  await prisma.pointReward.deleteMany();
+  await prisma.rewardChallenge.deleteMany();
+  await prisma.rewardDraw.deleteMany();
+
   await prisma.feedbackReply.deleteMany();
   await prisma.feedbackAttachment.deleteMany();
   await prisma.feedback.deleteMany();
@@ -30,6 +37,9 @@ async function main() {
 
   await prisma.systemSetting.createMany({
     data: [
+      { key: "rewardsEnabled", value: "true" },
+      { key: "rewardMinPoints", value: "1" },
+      { key: "rewardMaxPoints", value: "10" },
       { key: "siteName", value: "C++ OJ" },
       { key: "siteSubtitle", value: "在线练习平台" },
       { key: "browserTitle", value: "" },

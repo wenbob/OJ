@@ -83,7 +83,7 @@
   <text x="1228" y="623" class="label">基于提交事实更新 / 统计</text>
   <text x="1228" y="657" class="small">考试：ExamRecord 计分与结果</text>
   <text x="1228" y="686" class="small">专项：Accepted 更新完成进度</text>
-  <text x="1228" y="715" class="small">天梯：按唯一 Accepted 题数聚合</text>
+  <text x="1228" y="715" class="small">天梯：唯一 AC × 10 + 奖励流水</text>
   <text x="1228" y="772" class="tiny">考试计分依据发布时的题目与分值快照</text>
   <text x="1228" y="798" class="tiny">数据库随生产备份保存在 /www/backups</text>
 
@@ -97,7 +97,7 @@
   <rect x="550" y="917" width="437" height="37" rx="10" fill="#dce7f0"/>
   <text x="566" y="943" class="label">读历史与排行</text>
   <text x="554" y="987" class="small">提交详情按角色查询；学生视图经过服务端脱敏</text>
-  <text x="554" y="1017" class="small">天梯积分实时从有效 Accepted 提交聚合</text>
+  <text x="554" y="1017" class="small">天梯实时汇总基础分、抽奖与翻倍奖励</text>
 
   <rect x="1058" y="898" width="497" height="153" rx="19" class="card"/>
   <rect x="1077" y="917" width="459" height="37" rx="10" fill="#f6dfd1"/>

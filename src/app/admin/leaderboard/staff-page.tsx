@@ -25,7 +25,7 @@ export async function StaffLeaderboardPage({ role }: { role: StaffRole }) {
               </p>
               <h1 className="mt-2 text-3xl font-black">天梯管理台</h1>
               <p className="mt-2 text-sm font-semibold text-[#e5ded0]">
-                实时读取历史提交计算，不写积分缓存表。
+                实时汇总首次通过题数 × 10 与抽奖、翻倍奖励，不写总积分缓存表。
               </p>
               <p className="mt-1 text-xs font-semibold text-[#c8c0b2]">
                 排名按积分、唯一 AC、AC 次数、用户名和用户 ID 依次排序。

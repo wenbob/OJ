@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { RankEmblem } from "@/components/RankEmblem";
 import { StudentAssignmentReminderModal } from "@/components/StudentAssignmentReminderModal";
+import { RewardsHomeBanner } from "@/components/RewardsPanel";
 import { requirePageUser } from "@/lib/auth";
 import { getStudentLearningReview } from "@/lib/learningReview";
 import { prisma } from "@/lib/prisma";
@@ -158,6 +159,7 @@ export default async function StudentHomePage() {
       </section>
 
       <StudentAssignmentOverview assignmentData={assignmentData} />
+      <RewardsHomeBanner />
 
       <section className="mt-7 grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
         <div>
@@ -390,7 +392,7 @@ function RankProgressPanel({
           <p className="mt-3 text-xs font-bold text-[#bdb5a7]">
             {rankProgress.isMaxTier
               ? `${currentRanking.points} 积分，继续完成唯一 AC 可提升排名。`
-              : `再完成 ${rankProgress.acceptedProblemsToNextTier} 道唯一 AC 题即可晋级。`}
+              : `距离晋级还差 ${rankProgress.pointsToNextTier} 积分，首次通过和奖励都可累积积分。`}
           </p>
         </div>
 

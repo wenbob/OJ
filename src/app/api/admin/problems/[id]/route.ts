@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cancelRewardChallengesForArchivedProblems } from "@/lib/rewards";
 import { requireApiUser } from "@/lib/auth";
 import {
   getObjectiveTotalScore,
@@ -238,6 +239,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
         data: { archivedAt: nextArchivedAt },
       });
       if (result.count === 0) throw new ProblemArchiveNotFoundError();
+      await cancelRewardChallengesForArchivedProblems(tx, [problemId], nextArchivedAt);
       return nextArchivedAt;
     });
     return NextResponse.json({ archivedAt, archivedCount: 1, ok: true });

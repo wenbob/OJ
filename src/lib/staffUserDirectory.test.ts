@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    pointReward: { groupBy: vi.fn().mockResolvedValue([]) },
     submission: { groupBy: mocks.submissionGroupBy },
     user: {
       count: mocks.userCount,

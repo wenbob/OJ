@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cancelRewardChallengesForArchivedProblems } from "@/lib/rewards";
 import { requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
@@ -79,10 +80,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const archivedAt = new Date();
       const result = await tx.problem.updateMany({
         where: { archivedAt: null, id: { in: existingIds } },
-        data: { archivedAt: new Date() },
+        data: { archivedAt },
       });
+      await cancelRewardChallengesForArchivedProblems(tx, existingIds, archivedAt);
       return result.count;
     });
 

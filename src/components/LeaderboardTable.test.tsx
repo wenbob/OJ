@@ -13,6 +13,8 @@ function ranking(
     customTitle: null,
     displayTitle: "黄金精英",
     points: (20 - rank) * 10,
+    basePoints: (20 - rank) * 10,
+    rewardPoints: 0,
     rank,
     tierTitle: "黄金精英",
     userId: rank,

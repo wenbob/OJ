@@ -64,6 +64,13 @@ export async function prepareE2eDatabase() {
     datasources: { db: { url: e2eDatabaseUrl } },
   });
   try {
+    await prisma.user.create({ data: { id: 7, username: "e2e-offer-student", role: "student", passwordHash: await hash("e2e-offer-password", 10) } });
+    await prisma.user.create({ data: { id: 6, username: "e2e-announcement-student", role: "student", passwordHash: await hash("e2e-announcement-password", 10) } });
+    await prisma.user.create({ data: { id: 5, username: "e2e-reward-student", role: "student", passwordHash: await hash("e2e-reward-password", 10) } });
+    for (const id of [110, 111, 112, 114, 115, 116]) {
+      await prisma.problem.create({ data: { id, title: `E2E 奖励题 ${id}`, description: "奖励回归题", category: id >= 114 ? "接受期限回归" : id === 112 ? "公告回归" : "奖励回归", difficulty: "入门", inputDescription: "", outputDescription: "", sampleInput: "", sampleOutput: "", problemType: "objective",
+        objectiveItems: JSON.stringify([{ kind: "choice", stem: "请选择 A", answer: "A", score: 10, options: [{ label: "A", text: "正确" }, { label: "B", text: "错误" }] }]) } });
+    }
     const settings = [
       { key: "siteName", value: "OJ E2E" },
       { key: "siteSubtitle", value: "隔离浏览器回归环境" },

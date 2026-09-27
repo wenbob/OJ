@@ -9,6 +9,11 @@ import {
 import { prisma } from "@/lib/prisma";
 import { POST } from "./route";
 
+vi.mock("@/lib/rewards", () => ({
+  recordAcceptedRewards: vi.fn(async () => ({ rewardId: null, doubledPoints: 0 })),
+  rewardTransaction: (_userId: number, task: never) => prisma.$transaction(task),
+}));
+
 const mocks = vi.hoisted(() => ({
   createSubmission: vi.fn(),
   enqueue: vi.fn(),

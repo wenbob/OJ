@@ -17,6 +17,7 @@ import {
   useTransition,
 } from "react";
 import { createPortal } from "react-dom";
+import { useAutomaticOverlay } from "@/lib/automaticOverlay";
 import {
   getNextAssignmentReminderAt,
   getStudentAssignmentReminderStorageKey,
@@ -68,10 +69,11 @@ export function StudentAssignmentReminderModal({
           acknowledgements,
           nowMs,
         );
-  const visible =
+  const requested =
     nowMs !== null &&
     !isRefreshing &&
     unacknowledgedAssignments.length > 0;
+  const visible = useAutomaticOverlay(requested, 80);
   const nextReminderAt =
     nowMs === null
       ? null
@@ -89,7 +91,7 @@ export function StudentAssignmentReminderModal({
   useEffect(() => {
     if (
       nowMs === null ||
-      visible ||
+      requested ||
       isRefreshing ||
       nextReminderAt === null
     ) {
@@ -109,7 +111,7 @@ export function StudentAssignmentReminderModal({
     nowMs,
     router,
     startRefreshTransition,
-    visible,
+    requested,
   ]);
 
   useEffect(() => {
