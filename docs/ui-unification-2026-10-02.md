@@ -19,6 +19,23 @@
 
 题目行的未通过悬浮色为 `rgba(79,111,136,0.12)`，通过状态为淡绿色；触屏不依赖悬浮。取消了非题目普通表格行的通用位移动效，避免使不可点击条目看起来可以进入。
 
+## 组件与维护入口
+
+| 用途 | 源码入口 | 约定 |
+| --- | --- | --- |
+| 三端日常题库 | [ProblemListTable](../src/components/ProblemListTable.tsx) | 页面传入题目、统计、通过状态和角色路径；宽表格在容器内滚动 |
+| 题目主体链接 | [ProblemEntryLink](../src/components/ProblemEntryLink.tsx)、[NavigationLink](../src/components/NavigationLink.tsx) | 有独立控件的行或卡片使用展开链接；只有单一入口的专项条目使用原生整块链接 |
+| 分类与周期筛选 | [FilterChip](../src/components/FilterChip.tsx) | URL 跳转用 `FilterLink` / `aria-current`；页面内筛选用 `FilterButton` / `aria-pressed` |
+| 标题和图标 | [PageHeading](../src/components/PageHeading.tsx)、[UiIcon](../src/components/UiIcon.tsx) | 普通标题 24px、主视觉 32px、区块 20px、题目段落 18px，字重 700；图标按语义选择 |
+| 标签 | [UiBadge](../src/components/UiBadge.tsx) | 原文字与状态含义保留，按语义选颜色，圆角 6px |
+| 题目段落和样例 | [ProblemContentSection](../src/components/ProblemContentSection.tsx)、[ProblemSamples](../src/components/ProblemSamples.tsx) | 复用题面渲染与样例复制，按页面标题层级传入 h2 或 h3 |
+| 空状态 | [AcademyEmptyState](../src/components/AcademyEmptyState.tsx) | 学生页复用插画，后台使用 `compact` 图标版；插画记录见 [素材说明](ui-assets.md) |
+| 共用样式与交互层级 | [globals.css](../src/app/globals.css) | 卡片 12px，按钮 / 输入 / 筛选 7px；长文本换行、焦点、触屏和减少动态效果统一维护 |
+
+扩大点击区域时，外层行或卡片使用 `.problem-entry`，主入口使用 `ProblemEntryLink` 的 `.problem-entry-link::after` 覆盖主体；其余链接、按钮和表单控件处于更高层，继续执行各自操作。保留原生链接语义，不嵌套链接，不使用整行 `onClick` 替代导航。链接等待超过 100ms 后显示加载反馈，减少动态效果设置继续生效。
+
+题目完成或通过状态与当前选中状态分别由 `data-accepted`、`data-active` 表达；专项题单的绿色表示本次任务题已完成，不据此改变日常题库的历史通过统计。权限、查询、计数及任务进度仍在原页面或服务端处理。
+
 ## 按功能保留的差异
 
 - 老师与管理员共用后台展示，但鉴权、考试归属和可见账号范围保持原规则。

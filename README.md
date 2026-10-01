@@ -21,6 +21,7 @@
 | 场景 | 已实现的能力 |
 | --- | --- |
 | 日常做题 | 编程题与选择判断题、Monaco 编辑器、本地草稿、题面公式与表格、提交记录、错题本和天梯 |
+| 共用界面 | 三端沿用纸色、钢蓝和黏土橙；分类、标题图标、标签与空状态统一，练习题目主体及空白区域可直接进入，提交记录与管理按钮保留独立操作 |
 | 编程评测 | C++17、公开样例与自定义输入试运行、正式提交、Docker 资源隔离、按账号公平调度 |
 | 积分奖励 | “我的奖励”独立菜单管理抽奖、挑战和历史；日常/专项新题首次通过抽奖，管理员设定范围；抽奖后 24 小时内接受挑战，接受后另有 24 小时完成，奖励计入天梯 |
 | 正式考试 | 同题型组卷、发布快照、倒计时、交卷与计分、防误后退、有审计的误交卷恢复 |
@@ -202,6 +203,7 @@ AI_CUSTOM_API_KEY=
 | 关注点 | 入口 |
 | --- | --- |
 | 页面、布局、API | [`src/app/`](src/app/) |
+| 三端共用 UI 与题目入口 | [`PageHeading.tsx`](src/components/PageHeading.tsx)、[`ProblemEntryLink.tsx`](src/components/ProblemEntryLink.tsx)、[组件、交互与验证清单](docs/ui-unification-2026-10-02.md) |
 | Monaco 编辑器 | [`CodeEditor.tsx`](src/components/CodeEditor.tsx) |
 | 题面渲染与导入 | [`ProblemRichText.tsx`](src/components/ProblemRichText.tsx)、[`markdownParser.ts`](src/lib/markdownParser.ts) |
 | 登录与权限 | [`auth.ts`](src/lib/auth.ts)、[`src/app/api/auth/`](src/app/api/auth/) |
@@ -320,6 +322,7 @@ E2E 的 Windows 配置使用已安装的 Google Chrome；macOS / Linux 首次运
 | 管理员如何导入题目、配置权限和 AI | [管理员使用说明](docs/admin-guide.md) |
 | 如何部署、备份、回滚和排查异常 | [线上部署与维护手册](docs/deploy.md) |
 | 如何提交和处理私有问题反馈 | [问题反馈功能说明](docs/feedback.md) |
+| 三端 UI、题目点击及对比截图 | [三端 UI 统一说明](docs/ui-unification-2026-10-02.md) |
 | 修改代码必须遵守哪些边界 | [`AGENTS.md`](AGENTS.md) |
 | 历史变更有哪些验收证据 | [`docs/`](docs/) 中的 `ops-review-*.md`；仅作历史记录，不替代当前操作手册 |
 

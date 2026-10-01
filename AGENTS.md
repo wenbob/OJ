@@ -113,6 +113,9 @@ Next.js App Router + Prisma + SQLite 的 C++ 在线 OJ。生产目录 `/www/oj`�
 
 ## 共享界面约束
 
+- 三端常规页面复用 `PageHeading`、`UiIcon`、`FilterLink` / `FilterButton`、`UiBadge`、`ProblemContentSection` 和 `AcademyEmptyState`；日常题库共用 `ProblemListTable`。展示组件不接管角色鉴权、查询或统计，组件入口与尺寸规范见 [三端 UI 统一说明](docs/ui-unification-2026-10-02.md)。
+- 日常题库、错题本、专项题单和后台考试练习的题目主体使用原生链接扩大点击区域，保留 Enter、Ctrl 点击、新标签页与角色/复盘/任务上下文；有独立控件时使用 `ProblemEntryLink` 与 `.problem-entry`，禁止嵌套链接或用整行 `onClick` 劫持提交记录、复选、拖拽、编辑等操作。
+- 题目未通过悬浮采用淡钢蓝，通过采用淡绿色，当前选中状态单独表达；保留键盘焦点、触屏可用入口和减少动态效果支持。宽表格仅在自己的容器内滚动，长标题不得撑宽页面。
 - 浏览器标题/图标仅由 `BrowserIdentity.tsx` 同步系统设置；图标须为服务端校验、≤256KB 的 PNG/ICO Data URL。
 - 备案页脚仅由根布局的 `SiteComplianceFooter` 读取系统设置；ICP 可单独显示，公安备案号与经校验的 PNG 图标必须成对，官方查询链接由服务端生成，禁止配置任意 URL 或 HTML。
 - `AppShell` 仅在 `layout`；学生考试走 `(exam)` 锁定布局且 URL 不变。`cache()` 只请求内去重，禁跨请求缓存权限或状态。
