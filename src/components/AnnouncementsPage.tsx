@@ -1,8 +1,10 @@
 "use client";
 
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Megaphone } from "lucide-react";
+
 import type { AnnouncementItem, AnnouncementList } from "@/lib/announcementShared";
 import { notifyAnnouncementsUpdated } from "./AnnouncementNotifier";
 
@@ -50,14 +52,14 @@ export function AnnouncementsPage({ role }: { role: "student" | "teacher" | "adm
     finally { active.current = false; setBusyId(null); }
   }
   return <div className="space-y-6">
-    <header><p className="arena-kicker">Announcements</p><h1 className="mt-2 flex items-center gap-2 text-3xl font-black"><Megaphone />{admin ? "公告管理" : "公告"}</h1>
+    <header><p className="arena-kicker">Announcements</p><PageHeading kind="announcement" className="mt-2 flex items-center gap-2">{admin ? "公告管理" : "公告"}</PageHeading>
       <p className="mt-3 text-sm text-steel">{admin ? "发布给所有学生和老师，确认一次后不再弹出。首页公告文字不受影响。" : "平台发布的通知保留在这里，已确认的公告也可随时回看。"}</p></header>
     {admin && <AnnouncementPublisher published={() => { setPage(1); if (page === 1) void reload(); }} />}
     <section className="surface p-5">
       <h2 className="text-xl font-black">历史公告</h2>
       {error && <p role="alert" className="mt-3 text-red-700">{error} <button className="underline" onClick={() => void reload()}>重试</button></p>}
       {!data && !error && <p className="py-5 text-steel">正在读取公告…</p>}
-      {data?.items.length === 0 && <p className="py-8 text-center text-steel">暂时没有公告</p>}
+      {data?.items.length === 0 && <AcademyEmptyState compact icon="announcement" title="暂时没有公告" description={admin ? "发布后的公告会展示在这里。" : "有效公告会展示在这里。"} />}
       <div className="mt-4 divide-y divide-ink-950/10">
         {data?.items.map((item) => <article className="min-w-0 py-4" key={item.id}>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -113,11 +115,11 @@ function AnnouncementPublisher({ published }: { published: () => void }) {
       key.current ||= crypto.randomUUID(); setPreview(true);
     }}>
       <label className="block text-sm font-bold">公告标题
-        <input className="mt-2 w-full border border-ink-950/20 bg-white p-3 font-normal" maxLength={100} required value={title} disabled={preview || pending}
+        <input className="field mt-2 font-normal" maxLength={100} required value={title} disabled={preview || pending}
           onChange={(event) => { setTitle(event.target.value); key.current = ""; }} />
       </label>
       <label className="block text-sm font-bold">公告正文
-        <textarea className="mt-2 min-h-48 w-full border border-ink-950/20 bg-white p-3 font-normal leading-7" maxLength={5000} required value={body} disabled={preview || pending}
+        <textarea className="field mt-2 min-h-48 font-normal leading-7" maxLength={5000} required value={body} disabled={preview || pending}
           onChange={(event) => { setBody(event.target.value); key.current = ""; }} />
       </label>
       <p className="text-xs text-steel">标题最多 100 字，正文最多 5000 字，支持换行。发布后不可直接修改，可撤下后单独发布新公告。</p>
@@ -166,7 +168,7 @@ export function AnnouncementDetailPage({ role, id }: { role: "student" | "teache
     {error && <p role="alert" className="mt-4 text-red-700">{error} <button className="underline" onClick={() => void reload()}>重试</button></p>}
     {!item && !error && <p className="py-8 text-steel">正在读取公告…</p>}
     {item && <>
-      <h1 className="my-4 break-words text-2xl font-black">{item.title}</h1><DateLabel item={item} />
+      <PageHeading kind="announcement" className="my-4 break-words">{item.title}</PageHeading><DateLabel item={item} />
       <p className="my-6 whitespace-pre-wrap break-words leading-8">{item.body}</p>
       {item.read ? <p className="text-sm text-steel">已确认阅读</p> : <button className="btn btn-primary" disabled={pending} onClick={() => void acknowledge()}>{pending ? "正在确认…" : "我知道了"}</button>}
     </>}

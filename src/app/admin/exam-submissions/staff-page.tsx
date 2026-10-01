@@ -1,4 +1,6 @@
 // Shared server page for administrator and teacher shells.
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { CopyCodeButton } from "@/components/CopyCodeButton";
 import { Pagination } from "@/components/Pagination";
@@ -78,10 +80,10 @@ export async function StaffExamSubmissionsPage({
       <section className="surface p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+            <p className="arena-kicker">
               Exam Submissions
             </p>
-            <h1 className="mt-2 text-2xl font-black">模拟考试提交记录</h1>
+            <PageHeading kind="submission" className="mt-2">模拟考试提交记录</PageHeading>
           </div>
           <Link className="btn btn-secondary" href={`${basePath}/submissions`}>
             查看日常提交
@@ -245,7 +247,7 @@ export async function StaffExamSubmissionsPage({
                     className="px-5 py-12 text-center text-sm font-semibold text-ink-600"
                     colSpan={10}
                   >
-                    没有符合条件的考试提交。
+                    <AcademyEmptyState compact icon="exam" title="没有符合条件的考试提交" description="可以调整考试、用户或日期，查看其他提交。" />
                   </td>
                 </tr>
               ) : null}

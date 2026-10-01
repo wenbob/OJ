@@ -1,5 +1,7 @@
 "use client";
 
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import {
   ArrowDown,
@@ -861,10 +863,10 @@ export function ProblemManager({
       <section className="surface overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-ink-950/10 p-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+            <p className="arena-kicker">
               Problem Admin
             </p>
-            <h1 className="mt-2 text-2xl font-black">题目管理</h1>
+            <PageHeading kind="problem" className="mt-2">题目管理</PageHeading>
             <p className="mt-2 text-sm font-semibold text-ink-600">
               当前 {problems.length} 道题
             </p>
@@ -1229,7 +1231,7 @@ export function ProblemManager({
                     className="px-5 py-12 text-center text-sm font-semibold text-ink-600"
                     colSpan={9}
                   >
-                    当前分类下还没有题目。
+                    <AcademyEmptyState compact icon="problem" title="当前分类下还没有题目" description="可以调整分类和题型，或使用已有入口新建、导入题目。" />
                   </td>
                 </tr>
               ) : null}

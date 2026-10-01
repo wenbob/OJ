@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Save, Trash2, X } from "lucide-react";
-import type { DragEvent, FormEvent, ReactNode } from "react";
+import type { DragEvent, FormEvent } from "react";
 import {
   validateObjectiveItems,
   type ObjectiveItem,
@@ -542,29 +542,7 @@ export function ProblemEditorForm({
   );
 }
 
-export function CategoryButton({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={`border px-3 py-2 text-sm font-black ${
-        active
-          ? "border-ink-950 bg-ink-950 text-white"
-          : "border-ink-950/10 bg-white/65 text-ink-800 hover:border-steel hover:text-steel"
-      }`}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
-  );
-}
+export { FilterButton as CategoryButton } from "@/components/FilterChip";
 
 function Input({
   label,

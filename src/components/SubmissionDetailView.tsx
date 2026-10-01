@@ -1,3 +1,4 @@
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { Code2, FileText } from "lucide-react";
 import {
@@ -65,10 +66,10 @@ export function SubmissionDetailView({
       <section className="surface p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+            <p className="arena-kicker">
               Submission #{submission.id}
             </p>
-            <h1 className="mt-2 text-3xl font-black">提交详情</h1>
+            <PageHeading kind="submission" className="mt-2">提交详情</PageHeading>
           </div>
           <StatusBadge status={submission.status} />
         </div>

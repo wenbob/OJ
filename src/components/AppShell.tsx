@@ -71,7 +71,7 @@ export async function AppShell({
     <div className="flex min-h-0 flex-1 flex-col" data-app-shell-root>
       {user.role === "student" ? <SessionPresenceGuard /> : null}
       <header className="arena-shell-header" data-app-shell-header>
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
+        <div className="shell-header-top mx-auto max-w-7xl px-4 py-4 md:px-6">
           {locked ? (
             <div
               className="flex items-center gap-3"
@@ -81,14 +81,14 @@ export async function AppShell({
             </div>
           ) : (
             <Link
-              className="group flex items-center gap-3"
+              className="group flex min-w-0 items-center gap-3"
               href={roleHome(user.role)}
             >
               <BrandIdentity siteName={siteName} title={title} />
             </Link>
           )}
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="shell-account flex items-center gap-2">
             {locked ? (
               <span className="border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-black text-amber-900">
                 考试进行中
@@ -101,16 +101,16 @@ export async function AppShell({
                   tierTitle={currentRanking.tierTitle}
                 />
                 <span className="min-w-0">
-                  <span className="block max-w-56 truncate text-sm font-black text-ink-950">
+                  <span className="shell-user-name block truncate text-sm font-semibold text-ink-950" title={`${user.username} · ${currentRanking.displayTitle}`}>
                     {user.username} · {currentRanking.displayTitle}
                   </span>
-                  <span className="data-number block text-xs font-bold text-steel">
+                  <span className="data-number block text-xs font-medium text-steel">
                     {currentRanking.tierTitle} · {currentRanking.points} 分
                   </span>
                 </span>
               </span>
             ) : (
-              <span className="identity-chip px-3 py-2 text-sm font-bold text-ink-800">
+              <span className="identity-chip shell-user-name truncate px-3 py-2 text-sm font-semibold text-ink-800" title={user.username}>
                 {user.username} ·{" "}
                 {user.role === "admin"
                   ? "管理员"
@@ -138,11 +138,11 @@ function BrandIdentity({ siteName, title }: { siteName: string; title: string })
       <span className="arena-brand-mark">
         <Code2 size={20} />
       </span>
-      <span>
-        <span className="block text-xs font-black uppercase tracking-[0.2em] text-clay">
+      <span className="min-w-0">
+        <span className="shell-site-name block truncate text-xs font-semibold tracking-[0.12em] text-clay" title={siteName}>
           {siteName}
         </span>
-        <span className="block text-xl font-black tracking-tight text-ink-950">
+        <span className="block whitespace-nowrap text-lg font-bold tracking-tight text-ink-950">
           {title}
         </span>
       </span>

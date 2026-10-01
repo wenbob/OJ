@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Gift, Sparkles, X } from "lucide-react";
+import { ArrowRight, BadgeCheck, Gift, LoaderCircle, Sparkles, X } from "lucide-react";
+import { AcademyIllustration } from "@/components/AcademyIllustration";
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { PageHeading } from "@/components/PageHeading";
 import { useAutomaticOverlay } from "@/lib/automaticOverlay";
 import type { RewardChallengeView, RewardsResponse, RewardSubmissionUpdate, RewardView } from "@/lib/rewardShared";
 
@@ -83,18 +86,22 @@ function RewardCard({ reward, blocked, changed, serverOffset }: { reward: Reward
   }
   const challenge = reward.challenge;
   return <article className="min-w-0 rounded-xl border border-ink-950/10 bg-white p-4">
+    <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-steel">
+      {reward.amount === null ? <AcademyIllustration className="academy-illustration-sm" kind="reward" /> : <BadgeCheck aria-hidden="true" className="text-emerald-700" size={23} />}
+      <span>{reward.amount === null ? "新题首次通过 · 奖励待领取" : "已领取的通过奖励"}</span>
+    </div>
     <p className="break-words font-bold">{reward.problemTitle}</p>
     <p className="mt-1 text-xs text-steel">{new Date(reward.createdAt).toLocaleString("zh-CN")}</p>
     {reward.amount === null ? <>
       <p className="my-4 text-sm">首次通过奖励：随机 <strong>{reward.minPoints}～{reward.maxPoints}</strong> 积分</p>
-      <button className="btn btn-primary" disabled={pending || blocked} onClick={() => void act("draw")}>{pending ? "抽奖中…" : "开始抽奖"}</button>
+      <button className="btn btn-primary" disabled={pending || blocked} onClick={() => void act("draw")}>{pending ? <LoaderCircle aria-hidden="true" className="animate-spin" size={16} /> : <Gift aria-hidden="true" size={16} />}{pending ? "抽奖中…" : "开始抽奖"}</button>
     </> : <>
-      <p className="my-3 text-3xl font-black text-clay">+{reward.amount}<span className="ml-2 text-sm text-steel">积分已计入天梯</span></p>
+      <p className="reward-points-reveal my-3 text-3xl font-bold text-clay">+{reward.amount}<span className="ml-2 text-sm font-medium text-steel">积分已计入天梯</span></p>
       {!challenge || challenge.status === "cancelled" ? <>
         {offerExpired ? <p className="text-sm font-bold text-steel">翻倍机会已过期，原奖励积分保留</p> : <>
           <p className="mb-3 text-sm leading-6 text-steel">{challenge?.status === "cancelled" ? "原挑战题已下架，从下架时起重新给予 24 小时接受机会。" : "抽奖后 24 小时内可接受翻倍挑战。"}接受一道同类型、同分类的随机新题后，另有 24 小时完成，通过再得 {reward.amount} 分。</p>
           <p className="mb-3 text-sm font-bold text-clay">接受挑战剩余时间：{formatRemaining(offerSeconds)}</p>
-          <button className="btn btn-primary" disabled={pending || blocked} onClick={() => void act("challenge")}>{pending ? "正在选题…" : "接受翻倍挑战"}</button>
+          <button className="btn btn-primary" disabled={pending || blocked} onClick={() => void act("challenge")}>{pending ? <LoaderCircle aria-hidden="true" className="animate-spin" size={16} /> : <Sparkles aria-hidden="true" size={16} />}{pending ? "正在选题…" : "接受翻倍挑战"}</button>
         </>}
       </> : challenge.status === "active" ? <RewardChallengeCard challenge={challenge} serverOffset={serverOffset} />
         : <p className="text-sm font-bold text-steel">{challenge.status === "completed" ? `翻倍成功，已额外获得 ${reward.amount} 分` : "挑战已超时，原奖励积分保留"}</p>}
@@ -107,7 +114,7 @@ export function RewardsPanel({ rewardId }: { rewardId?: number }) {
   const [page, setPage] = useState(1);
   const { data, error, reload, serverOffset } = useRewards(rewardId ? `?rewardId=${rewardId}` : `?page=${page}`);
   return <section id="my-rewards" className={rewardId ? "" : "surface my-6 p-5"}>
-    {!rewardId && <h2 className="flex items-center gap-2 text-xl font-black"><Gift size={22} />我的奖励</h2>}
+    {!rewardId && <div className="flex min-w-0 items-center justify-between gap-4"><div className="min-w-0"><p className="arena-kicker">Practice Rewards</p><PageHeading kind="reward" className="mt-2">我的奖励</PageHeading></div><AcademyIllustration eager className="academy-illustration-heading" kind="reward" /></div>}
     {error && <p className="my-3 text-red-700" role="alert">{error} <button className="underline" onClick={() => void reload()}>重试</button></p>}
     {!data && !error && <p className="py-4 text-sm text-steel">正在读取奖励…</p>}
     {data && <>
@@ -117,7 +124,7 @@ export function RewardsPanel({ rewardId }: { rewardId?: number }) {
       <div className={rewardId ? "grid gap-3" : "grid gap-3 md:grid-cols-2"}>
         {data.rewards.map((reward) => <RewardCard key={reward.id} reward={reward} blocked={data.blockedByExam} changed={() => void reload()} serverOffset={serverOffset} />)}
       </div>
-      {!data.rewards.length && <p className="py-4 text-sm text-steel">首次通过一道新的日常练习题，即可获得抽奖机会。</p>}
+      {!data.rewards.length && <AcademyEmptyState kind="reward" title="第一份奖励，等你来解锁" description="首次通过一道新的日常练习题，即可获得抽奖机会。" href={data.blockedByExam ? undefined : "/student/problems"} action="去挑战一道新题" />}
       {!rewardId && data.totalPages > 1 && <div className="mt-4 flex items-center justify-center gap-4">
         <button className="btn btn-secondary" disabled={data.page <= 1} onClick={() => setPage(data.page - 1)}>上一页</button>
         <span>{data.page} / {data.totalPages}</span>
@@ -181,6 +188,6 @@ export function RewardsHomeBanner() {
   if (!data || data.blockedByExam || (!data.currentChallenge && !data.pendingDrawCount)) return null;
   return <section className="surface mb-6 p-4">
     {data.currentChallenge && <RewardChallengeCard challenge={data.currentChallenge} serverOffset={serverOffset} />}
-    <Link className="mt-2 inline-block text-sm font-bold text-clay underline" href="/student/rewards">我的奖励{data.pendingDrawCount ? ` · ${data.pendingDrawCount} 次抽奖待领取` : " · 查看记录"}</Link>
+    <Link className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-clay" href="/student/rewards"><Gift aria-hidden="true" size={17} />我的奖励{data.pendingDrawCount ? ` · ${data.pendingDrawCount} 次抽奖待领取` : " · 查看记录"}<ArrowRight aria-hidden="true" size={16} /></Link>
   </section>;
 }

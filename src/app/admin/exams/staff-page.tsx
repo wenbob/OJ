@@ -1,4 +1,5 @@
 // Shared server page for administrator and teacher shells.
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { prisma } from "@/lib/prisma";
@@ -32,12 +33,12 @@ export async function StaffExamsPage({ role }: { role: StaffRole }) {
       <section className="surface overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-950/10 p-5">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+            <p className="arena-kicker">
               {role === "admin" ? "Exam Admin" : "My Exams"}
             </p>
-            <h1 className="mt-2 text-2xl font-black">
+            <PageHeading kind="exam" className="mt-2">
               {role === "admin" ? "模拟考试管理" : "我的考试"}
-            </h1>
+            </PageHeading>
           </div>
           <Link className="btn btn-primary" href={`${basePath}/exams/new`}>
             <Plus size={16} />

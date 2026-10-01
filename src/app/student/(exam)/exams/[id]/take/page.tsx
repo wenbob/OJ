@@ -1,3 +1,7 @@
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { PageHeading } from "@/components/PageHeading";
+import { UiBadge } from "@/components/UiBadge";
+import { ProblemContentSection as ProblemSection } from "@/components/ProblemContentSection";
 import { notFound, redirect } from "next/navigation";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ExamCountdown } from "@/components/ExamCountdown";
@@ -5,7 +9,7 @@ import { ExamExitGuard } from "@/components/ExamExitGuard";
 import { ExamSubmitButton } from "@/components/ExamSubmitButton";
 import { NavigationLink } from "@/components/NavigationLink";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
-import { ProblemRichText } from "@/components/ProblemRichText";
+
 import { ProblemSamples } from "@/components/ProblemSamples";
 import { ProblemSubmitForm } from "@/components/ProblemSubmitForm";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
@@ -156,10 +160,10 @@ export default async function StudentExamTakePage({
       <ExamExitGuard examId={exam.id} />
       <section className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+          <p className="arena-kicker">
             Taking Exam
           </p>
-          <h1 className="mt-2 text-2xl font-black">{exam.title}</h1>
+          <PageHeading kind="exam" className="mt-2">{exam.title}</PageHeading>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <ProblemTypeBadge type={exam.examType} />
             <p className="text-sm font-semibold text-ink-600">
@@ -233,15 +237,11 @@ export default async function StudentExamTakePage({
 
       {selectedProblem ? (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,58fr)_minmax(420px,42fr)]">
-          <article className="surface p-6">
+          <article className="surface min-w-0 p-5 md:p-6">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-3xl font-black">{selectedProblem.title}</h2>
-              <span className="border border-ink-950/10 bg-white/65 px-2.5 py-1 text-xs font-bold text-ink-700">
-                {selectedProblem.difficulty}
-              </span>
-              <span className="border border-ink-950/10 bg-white/65 px-2.5 py-1 text-xs font-bold text-ink-700">
-                {selectedProblem.category || "未分类"}
-              </span>
+              <PageHeading as="h2" kind="problem">{selectedProblem.title}</PageHeading>
+              <UiBadge tone="neutral">{selectedProblem.difficulty}</UiBadge>
+              <UiBadge tone="neutral">{selectedProblem.category || "未分类"}</UiBadge>
               <ProblemTypeBadge type={selectedProblemType} />
               <CopyProblemButton
                 category={selectedProblem.category}
@@ -256,7 +256,7 @@ export default async function StudentExamTakePage({
                 objectiveItems={objectiveItems}
               />
             </div>
-            <ProblemSection
+            <ProblemSection headingLevel={3}
               title="题目描述"
               value={selectedProblem.description}
             />
@@ -264,16 +264,16 @@ export default async function StudentExamTakePage({
               <ObjectiveProblemContent items={objectiveItems} />
             ) : (
               <>
-                <ProblemSection
+                <ProblemSection headingLevel={3}
                   title="输入格式"
                   value={selectedProblem.inputDescription}
                 />
-                <ProblemSection
+                <ProblemSection headingLevel={3}
                   title="输出格式"
                   value={selectedProblem.outputDescription}
                 />
-                <ProblemSamples samples={samples} />
-                <ProblemSection
+                <ProblemSamples headingLevel={3} samples={samples} />
+                <ProblemSection headingLevel={3}
                   title="数据范围"
                   value={selectedProblem.dataRange || "暂无"}
                 />
@@ -281,7 +281,7 @@ export default async function StudentExamTakePage({
             )}
           </article>
 
-          <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:self-start">
+          <aside className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4 xl:sticky xl:top-6 xl:self-start">
             {selectedLatest ? (
               <section className="surface p-5">
                 <h2 className="text-lg font-black">本题最近一次考试提交</h2>
@@ -334,22 +334,9 @@ export default async function StudentExamTakePage({
         </div>
       ) : (
         <section className="surface p-10 text-center text-sm font-semibold text-ink-600">
-          该考试暂未添加题目。
+          <AcademyEmptyState compact icon="exam" title="该考试暂未添加题目" description="当前没有可显示的考试题目。" />
         </section>
       )}
     </>
-  );
-}
-
-function ProblemSection({ title, value }: { title: string; value: string }) {
-  return (
-    <section className="mt-8">
-      <h3 className="text-xl font-black">{title}</h3>
-      <ProblemRichText
-        className="mt-3 leading-7 text-ink-800"
-        codeClassName="text-sm"
-        value={value}
-      />
-    </section>
   );
 }

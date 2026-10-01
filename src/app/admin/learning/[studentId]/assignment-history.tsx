@@ -1,5 +1,6 @@
 "use client";
 
+import { UiBadge } from "@/components/UiBadge";
 import {
   Archive,
   ArrowDown,
@@ -317,15 +318,15 @@ export function AssignmentHistory({
                                   {problem.title}
                                 </b>
                                 {problem.completed ? (
-                                  <span className="inline-flex items-center gap-1 border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-800">
+                                  <UiBadge className="inline-flex items-center gap-1 border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-800">
                                     <CheckCircle2 size={12} />
                                     已完成
-                                  </span>
+                                  </UiBadge>
                                 ) : null}
                                 {!problem.assignmentProblemId ? (
-                                  <span className="border border-steel/20 bg-[#eef6fb] px-2 py-1 text-[10px] font-black text-steel">
+                                  <UiBadge className="border border-steel/20 bg-[#eef6fb] px-2 py-1 text-[10px] font-black text-steel">
                                     新加入
-                                  </span>
+                                  </UiBadge>
                                 ) : null}
                               </span>
                               <span className="mt-1 block text-[11px] font-bold text-ink-600">
@@ -416,7 +417,7 @@ export function AssignmentHistory({
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-black text-ink-950">{item.title}</h3>
-                      <span
+                      <UiBadge
                         className={`border px-2 py-1 text-[11px] font-black ${
                           item.status === "archived"
                             ? "border-ink-950/10 bg-stone-100 text-ink-600"
@@ -430,7 +431,7 @@ export function AssignmentHistory({
                           : item.completedCount === item.problemCount
                             ? "已完成"
                             : "进行中"}
-                      </span>
+                      </UiBadge>
                     </div>
                     <p className="mt-1 text-xs font-bold text-ink-600">
                       进度 {item.completedCount}/{item.problemCount} ·{" "}
@@ -448,9 +449,9 @@ export function AssignmentHistory({
                     ) : null}
                   </div>
                   {!item.canManage ? (
-                    <span className="border border-ink-950/10 bg-stone-100 px-3 py-2 text-xs font-black text-ink-600">
+                    <UiBadge className="border border-ink-950/10 bg-stone-100 px-3 py-2 text-xs font-black text-ink-600">
                       仅查看
-                    </span>
+                    </UiBadge>
                   ) : item.status === "active" ? (
                     <div className="flex gap-2">
                       <button

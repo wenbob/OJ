@@ -1,5 +1,6 @@
 "use client";
 
+import { UiBadge } from "@/components/UiBadge";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ImagePlus, RotateCcw, Save } from "lucide-react";
@@ -251,7 +252,7 @@ export function SettingsForm({
   }
 
   return (
-    <form className="grid gap-6" onSubmit={submit}>
+    <form className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6" onSubmit={submit}>
       <section className="surface p-5">
         <h2 className="text-xl font-black">首次通过抽奖</h2>
         <p className="mt-2 text-sm text-steel">日常与专项首次通过可抽奖；修改仅影响新机会，已获得的奖励与挑战继续有效。</p>
@@ -355,9 +356,9 @@ export function SettingsForm({
               保存后显示在全站页脚。公安备案尚未通过时保持对应两项为空；审核通过后填入备案号并上传平台提供的官方图标即可生效。
             </p>
           </div>
-          <span className="border border-steel/20 bg-steel/10 px-3 py-1.5 text-xs font-black text-steel">
+          <UiBadge className="border border-steel/20 bg-steel/10 px-3 py-1.5 text-xs font-black text-steel">
             固定官方查询链接
-          </span>
+          </UiBadge>
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -398,7 +399,7 @@ export function SettingsForm({
               <RotateCcw size={16} />清除图标
             </button>
             {settings.publicSecurityRecordIcon ? (
-              <span className="inline-flex items-center gap-2 border border-ink-950/10 bg-paper-50 px-3 py-2 text-xs font-bold text-ink-600">
+              <UiBadge className="inline-flex items-center gap-2 border border-ink-950/10 bg-paper-50 px-3 py-2 text-xs font-bold text-ink-600">
                 <Image
                   alt="公安备案图标预览"
                   className="h-5 w-5 object-contain"
@@ -408,7 +409,7 @@ export function SettingsForm({
                   width={20}
                 />
                 已选择官方图标
-              </span>
+              </UiBadge>
             ) : null}
           </div>
           <p className="mt-2 text-xs font-semibold text-ink-500">

@@ -1,8 +1,9 @@
 "use client";
 
+import { FilterButton as CategoryButton } from "@/components/FilterChip";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+
 import { useMemo, useState } from "react";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import type { ProblemType } from "@/lib/objectiveProblem";
@@ -565,29 +566,5 @@ export function ExamEditClient({
         </div>
       </section>
     </div>
-  );
-}
-
-function CategoryButton({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={`border px-3 py-2 text-sm font-black ${
-        active
-          ? "border-ink-950 bg-ink-950 text-white"
-          : "border-ink-950/10 bg-white/65 text-ink-700 hover:bg-white"
-      }`}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
   );
 }

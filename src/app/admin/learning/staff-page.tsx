@@ -1,5 +1,8 @@
 // Shared server page for administrator and teacher shells.
-import Link from "next/link";
+import { FilterLink } from "@/components/FilterChip";
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { PageHeading } from "@/components/PageHeading";
+
 import { BookOpenCheck, Clock3, Users } from "lucide-react";
 import { isLearningWindow, type LearningWindow } from "@/lib/learningAnalytics";
 import { getTeacherLearningDashboard } from "@/lib/teacherLearning";
@@ -33,7 +36,7 @@ export async function StaffLearningPage({
         <div className="grid bg-ink-950 text-linen lg:grid-cols-[1fr_auto]">
           <div className="p-6 md:p-8">
             <p className="arena-kicker text-[#d7a062]">Learning Command</p>
-            <h1 className="mt-2 text-3xl font-black">教师学情看板</h1>
+            <PageHeading kind="learning" size="hero" className="mt-2">教师学情看板</PageHeading>
             <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#d7d0c2]">
               用日常和考试中的编程提交识别真实困难，再从现有题库组织专项练习。
             </p>
@@ -56,9 +59,7 @@ export async function StaffLearningPage({
           </div>
         </div>
         {dashboard.rows.length === 0 ? (
-          <div className="p-8 text-center text-sm font-semibold text-ink-600">
-            暂无学生账号。
-          </div>
+          <AcademyEmptyState compact icon="learning" title="暂无学生账号" description="有学生账号后，这里会展示提交与任务的学习情况。" />
         ) : (
           <StudentLearningDirectory
             basePath={basePath}
@@ -97,15 +98,15 @@ function WindowTabs({
 }) {
   return (
     <div className="flex items-center border-t border-white/10 p-5 lg:border-l lg:border-t-0">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {(["7d", "30d", "all"] as const).map((value) => (
-          <Link
-            className={`btn ${current === value ? "border-[#d6a44a] bg-[#d6a44a] text-ink-950" : "border-white/15 bg-white/5 text-linen"}`}
+          <FilterLink
+            active={current === value} pendingLabel="正在加载学情"
             href={`${basePath}/learning?window=${value}`}
             key={value}
           >
             {value === "all" ? "全部" : value === "7d" ? "近 7 天" : "近 30 天"}
-          </Link>
+          </FilterLink>
         ))}
       </div>
     </div>

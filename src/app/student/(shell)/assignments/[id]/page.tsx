@@ -1,3 +1,4 @@
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Circle, Clock3 } from "lucide-react";
@@ -35,7 +36,7 @@ export default async function StudentAssignmentDetailPage({ params }: PageProps)
         <div className="grid bg-ink-950 text-linen lg:grid-cols-[1fr_300px]">
           <div className="p-6 md:p-8">
             <p className="arena-kicker text-[#d7a062]">Teacher Assignment</p>
-            <h1 className="mt-2 text-3xl font-black">{assignment.title}</h1>
+            <PageHeading kind="assignment" size="hero" className="mt-2">{assignment.title}</PageHeading>
             <p className="mt-4 whitespace-pre-wrap text-sm font-semibold leading-6 text-[#d7d0c2]">
               {assignment.note || "老师暂未填写额外说明，按顺序完成下面的题目即可。"}
             </p>
@@ -92,7 +93,7 @@ export default async function StudentAssignmentDetailPage({ params }: PageProps)
               </>
             );
             return href ? (
-              <Link className="arena-link-card flex items-center gap-4 p-5" href={href} key={item.id}>
+              <Link className="problem-entry problem-entry-native flex items-center gap-4 p-5" data-accepted={completed} href={href} key={item.id}>
                 {content}
               </Link>
             ) : (

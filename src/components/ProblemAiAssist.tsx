@@ -408,7 +408,7 @@ export function ProblemAiAssist({
       <div className="mt-4 flex gap-2">
         <textarea
           aria-label="向 AI 询问当前题目"
-          className="field min-h-20 flex-1 resize-y text-sm leading-6"
+          className="field min-h-20 min-w-0 flex-1 resize-y text-sm leading-6"
           disabled={pending}
           maxLength={AI_CHAT_MAX_QUESTION_CHARS}
           onChange={(event) => setQuestion(event.target.value)}

@@ -1,5 +1,8 @@
+import { UiBadge } from "@/components/UiBadge";
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { ChevronRight, Timer } from "lucide-react";
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import { StartExamButton } from "@/components/StartExamButton";
 import { requirePageUser } from "@/lib/auth";
@@ -24,22 +27,22 @@ export default async function StudentExamsPage() {
   return (
     <>
       <section className="surface p-5">
-        <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+        <p className="arena-kicker">
           Mock Exam
         </p>
-        <h1 className="mt-2 text-2xl font-black">模拟考试</h1>
+        <PageHeading kind="exam" className="mt-2 flex items-center gap-2">模拟考试</PageHeading>
       </section>
 
       <section className="mt-6 grid gap-4">
         {exams.map((exam) => (
-          <div className="surface p-5" key={exam.id}>
+          <div className="surface academy-exam-card p-5" key={exam.id}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-xl font-black">{exam.title}</h2>
-                  <span className="border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
+                  <h2 className="break-words text-xl font-bold">{exam.title}</h2>
+                  <UiBadge className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
                     可参加
-                  </span>
+                  </UiBadge>
                   <ProblemTypeBadge type={exam.examType} />
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-ink-600">
@@ -71,8 +74,8 @@ export default async function StudentExamsPage() {
           </div>
         ))}
         {exams.length === 0 ? (
-          <div className="surface p-10 text-center text-sm font-semibold text-ink-600">
-            暂无已发布考试。
+          <div className="surface">
+            <AcademyEmptyState kind="exam" title="暂无已发布考试" description="等待老师安排新的挑战，先通过日常训练保持手感。" href="/student/problems" action="继续日常刷题" />
           </div>
         ) : null}
       </section>

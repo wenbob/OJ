@@ -1,4 +1,7 @@
 // Shared server page for administrator and teacher shells.
+import { FilterLink } from "@/components/FilterChip";
+import { UiBadge } from "@/components/UiBadge";
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, Clock3, Target } from "lucide-react";
@@ -77,11 +80,11 @@ export async function StaffStudentLearningPage({
         <Link className="inline-flex items-center gap-2 text-sm font-black text-steel" href={`${basePath}/learning?window=${window}`}>
           <ArrowLeft size={16} /> 返回学情看板
         </Link>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {(["7d", "30d", "all"] as const).map((value) => (
-            <Link className={`btn ${window === value ? "btn-primary" : "btn-secondary"}`} href={`${basePath}/learning/${studentId}?window=${value}`} key={value}>
+            <FilterLink active={window === value} pendingLabel="正在加载学情" href={`${basePath}/learning/${studentId}?window=${value}`} key={value}>
               {value === "all" ? "全部" : value === "7d" ? "近 7 天" : "近 30 天"}
-            </Link>
+            </FilterLink>
           ))}
         </div>
       </div>
@@ -90,14 +93,14 @@ export async function StaffStudentLearningPage({
         <div className="grid bg-ink-950 text-linen lg:grid-cols-[1fr_auto]">
           <div className="p-6 md:p-8">
             <p className="arena-kicker text-[#d7a062]">Student Diagnosis</p>
-            <h1 className="mt-2 text-3xl font-black">{detail.student.username} 的学情</h1>
+            <PageHeading kind="learning" className="mt-2">{detail.student.username} 的学情</PageHeading>
             <div className="mt-4 flex flex-wrap gap-2">
               {!detail.analytics.hasLearningData ? (
                 <IssueTag label="尚未形成学情" />
               ) : detail.analytics.issueLabels.length ? (
                 detail.analytics.issueLabels.map((label) => <IssueTag key={label} label={label} />)
               ) : (
-                <span className="border border-emerald-300/30 bg-emerald-300/10 px-3 py-1.5 text-xs font-black text-emerald-200">训练状态稳定</span>
+                <UiBadge className="border border-emerald-300/30 bg-emerald-300/10 px-3 py-1.5 text-xs font-black text-emerald-200">训练状态稳定</UiBadge>
               )}
             </div>
           </div>
@@ -242,7 +245,7 @@ function HeroStat({ label, value }: { label: string; value: number }) {
 }
 
 function IssueTag({ label }: { label: string }) {
-  return <span className="border border-amber-300/30 bg-amber-300/10 px-3 py-1.5 text-xs font-black text-amber-200">{label}</span>;
+  return <UiBadge className="border border-amber-300/30 bg-amber-300/10 px-3 py-1.5 text-xs font-black text-amber-200">{label}</UiBadge>;
 }
 
 function formatDate(value: Date) {

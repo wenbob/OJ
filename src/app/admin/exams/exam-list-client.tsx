@@ -1,5 +1,7 @@
 "use client";
 
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { UiBadge } from "@/components/UiBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -80,7 +82,7 @@ export function ExamListClient({
                 <td className="px-5 py-4">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <p className="font-black">{exam.title}</p>
-                    <span
+                    <UiBadge
                       className="inline-flex max-w-48 border border-clay/25 bg-clay/10 px-2 py-1 text-[10px] font-black text-clay"
                       title={
                         exam.createdBy
@@ -91,7 +93,7 @@ export function ExamListClient({
                       <span className="truncate">
                         出卷人：{exam.createdBy?.username ?? "未记录"}
                       </span>
-                    </span>
+                    </UiBadge>
                   </div>
                   <p className="mt-1 line-clamp-2 text-sm font-semibold text-ink-600">
                     {exam.description || "暂无说明"}
@@ -188,7 +190,7 @@ export function ExamListClient({
                   className="px-5 py-12 text-center text-sm font-semibold text-ink-600"
                   colSpan={7}
                 >
-                  暂无考试，先新建一个模拟考试。
+                  <AcademyEmptyState compact icon="exam" title="暂无考试" description="先创建一场考试，再添加同一题型的题目。" href={`${basePath}/exams/new`} action="新建考试" />
                 </td>
               </tr>
             ) : null}

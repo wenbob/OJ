@@ -1,6 +1,8 @@
 // Shared server page for administrator and teacher shells.
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
-import { ArrowRight, ClipboardList, Layers3, UsersRound } from "lucide-react";
+import { ArrowRight, Layers3, UsersRound } from "lucide-react";
 import { getAssignmentProgress } from "@/lib/learningAssignments";
 import { prisma } from "@/lib/prisma";
 import { getOrderedProblemCategories } from "@/lib/problemOrdering";
@@ -82,7 +84,7 @@ export async function StaffAssignmentsPage({ role }: { role: StaffRole }) {
         <div className="grid bg-ink-950 text-linen lg:grid-cols-[1fr_auto]">
           <div className="p-6 md:p-8">
             <p className="arena-kicker text-[#d7a062]">Homework Operations</p>
-            <h1 className="mt-2 text-3xl font-black">作业发布</h1>
+            <PageHeading kind="assignment" size="hero" className="mt-2">作业发布</PageHeading>
             <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#d7d0c2]">
               一次选择多名学生，共用基础题单，并在发布前完成每个人的个性化调整。
             </p>
@@ -155,10 +157,7 @@ export async function StaffAssignmentsPage({ role }: { role: StaffRole }) {
             })}
           </div>
         ) : (
-          <div className="p-8 text-center">
-            <ClipboardList className="mx-auto text-steel" size={28} />
-            <p className="mt-3 text-sm font-semibold text-ink-600">暂无发布记录。</p>
-          </div>
+          <AcademyEmptyState compact icon="assignment" title="暂无发布记录" description="完成作业发布后，可以在这里查看每名学生的任务进度。" />
         )}
       </section>
     </>

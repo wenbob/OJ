@@ -1,5 +1,6 @@
 "use client";
 
+import { UiBadge } from "@/components/UiBadge";
 import { RefreshCw, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import type {
@@ -205,7 +206,7 @@ export function AiProviderProfileEditor({
   }
 
   return (
-    <section className="border border-steel/20 bg-steel/5 p-4">
+    <section className="min-w-0 rounded-xl border border-steel/20 bg-steel/5 p-4">
       <div>
         <p className="text-xs font-black uppercase tracking-[0.12em] text-steel">
           {profile === "programming" ? "Programming AI" : "Objective AI"}
@@ -487,9 +488,9 @@ export function CooldownRow({
             onChange={(value) => update(objectiveKey, value)}
           />
         ) : (
-          <span className="inline-flex border border-ink-950/10 bg-paper-100 px-3 py-2 text-xs font-black text-ink-500">
+          <UiBadge className="inline-flex border border-ink-950/10 bg-paper-100 px-3 py-2 text-xs font-black text-ink-500">
             不开放
-          </span>
+          </UiBadge>
         )}
       </td>
     </tr>
@@ -506,7 +507,7 @@ function CooldownInput({
   value: string;
 }) {
   return (
-    <label className="inline-flex items-center gap-2 font-bold text-ink-800">
+    <label className="relative inline-flex items-center gap-2 font-bold text-ink-800">
       <span className="sr-only">{label}</span>
       <input
         className="field w-28"

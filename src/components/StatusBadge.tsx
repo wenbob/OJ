@@ -1,11 +1,12 @@
 import { statusClassName } from "@/lib/status";
+import { UiBadge } from "@/components/UiBadge";
 
 export function StatusBadge({ status }: { status: string }) {
   return (
-    <span
-      className={`inline-flex min-w-[7.75rem] items-center justify-center border px-2.5 py-1 text-xs font-bold ${statusClassName(status)}`}
+    <UiBadge
+      className={`min-w-[7.75rem] ${statusClassName(status)}`}
     >
       {status}
-    </span>
+    </UiBadge>
   );
 }

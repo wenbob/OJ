@@ -1,5 +1,7 @@
 "use client";
 
+import { UiBadge } from "@/components/UiBadge";
+import { PageHeading } from "@/components/PageHeading";
 import { Check, FileText, FileUp, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, useState } from "react";
@@ -275,7 +277,7 @@ export function ImportClient() {
       <section className="surface p-5">
         <div className="flex flex-col gap-3 border-b border-ink-950/10 pb-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-black">Markdown 导入题目</h1>
+            <PageHeading kind="import" className="">Markdown 导入题目</PageHeading>
             <p className="mt-1 text-sm font-semibold text-ink-600">
               一次最多选择 20 个文档；每道题会按自己的题型、难度和分类生成标签，默认值只在缺少字段时兜底。
             </p>
@@ -423,7 +425,7 @@ export function ImportClient() {
             </p>
             <div className="flex flex-wrap gap-2">
               {documentResults.map((document) => (
-                <span
+                <UiBadge
                   className={`border px-2 py-1 text-xs font-black ${
                     document.errors.length > 0
                       ? "border-rose-200 bg-rose-50 text-rose-700"
@@ -432,7 +434,7 @@ export function ImportClient() {
                   key={`${document.index}-${document.name}`}
                 >
                   {document.name} · {document.problemCount} 题
-                </span>
+                </UiBadge>
               ))}
             </div>
             {preview.map((problem, problemIndex) => (
@@ -517,9 +519,9 @@ function PreviewBlock({ title, value }: { title: string; value: string }) {
 
 function PreviewTag({ value }: { value: string }) {
   return (
-    <span className="border border-clay/20 bg-clay/10 px-2 py-1 text-xs font-black text-clay">
+    <UiBadge className="border border-clay/20 bg-clay/10 px-2 py-1 text-xs font-black text-clay">
       {value}
-    </span>
+    </UiBadge>
   );
 }
 

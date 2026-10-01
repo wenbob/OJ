@@ -1,3 +1,4 @@
+import { PageHeading } from "@/components/PageHeading";
 import { Sparkles, Trophy } from "lucide-react";
 import { LeaderboardTable } from "@/components/LeaderboardTable";
 import { requirePageUser } from "@/lib/auth";
@@ -22,7 +23,7 @@ export default async function StudentLeaderboardPage() {
               <p className="arena-kicker text-[#d7a062]">
                 Arena Ladder
               </p>
-              <h1 className="mt-2 text-3xl font-black md:text-4xl">天梯竞技场</h1>
+              <PageHeading kind="leaderboard" size="hero" className="mt-2">天梯竞技场</PageHeading>
               <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#e5ded0]">
                 总积分 = 首次通过题数 × 10 + 抽奖奖励 + 翻倍奖励。
               </p>

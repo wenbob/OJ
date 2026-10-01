@@ -1,4 +1,5 @@
 // Shared server page for administrator and teacher shells.
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import {
   Activity,
@@ -62,7 +63,7 @@ export async function StaffHomePage({ role }: { role: StaffRole }) {
 
   return (
     <>
-      <section className="mb-6 flex items-start gap-3 border border-clay/25 bg-[#fffaf1] p-4 text-sm font-semibold leading-6 text-ink-700">
+      <section className="academy-notice">
         <Megaphone aria-hidden="true" className="mt-0.5 flex-none text-clay" size={18} />
         <span>{settings.adminNotice}</span>
       </section>
@@ -73,9 +74,9 @@ export async function StaffHomePage({ role }: { role: StaffRole }) {
           <div className="relative flex flex-wrap items-end justify-between gap-6">
             <div>
               <p className="arena-kicker text-[#d7a062]">Academy Command</p>
-              <h1 className="mt-3 text-3xl font-black md:text-4xl">教学竞技控制台</h1>
+              <PageHeading kind="home" size="hero" className="mt-3">教学竞技控制台</PageHeading>
               <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#d7d0c2]">
-                从这里维护题库、发布考试、管理学生，并查看全站训练进度。
+                {role === "admin" ? "维护题库、发布考试、管理账号，掌握平台训练进度。" : "发布我的考试、安排专项练习，跟进学生的训练进度。"}
               </p>
             </div>
             {role === "admin" ? (
@@ -134,7 +135,7 @@ export async function StaffHomePage({ role }: { role: StaffRole }) {
             count={userCount}
             href={`${basePath}/users`}
             icon={<Users size={23} />}
-            label={role === "admin" ? "用户与头衔管理" : "学生与头衔管理"}
+            label={role === "admin" ? "用户与头衔管理" : "学生管理"}
             text={
               role === "admin"
                 ? "维护学生、老师和管理员账号，设置学生自定义头衔"
@@ -248,12 +249,12 @@ function AdminEntry({
   return (
     <Link className={`arena-link-card surface block p-6 ${className}`} href={href}>
       <div className="flex items-start justify-between gap-4">
-        <span className="text-steel">{icon}</span>
-        <span className="data-number text-3xl font-black text-ink-950">{count}</span>
+        <span aria-hidden="true" className="academy-staff-entry-icon">{icon}</span>
+        <span className="data-number text-2xl font-bold text-ink-950">{count}</span>
       </div>
-      <h3 className="mt-8 text-xl font-black text-ink-950">{label}</h3>
-      <p className="mt-2 max-w-lg text-sm font-semibold leading-6 text-ink-600">{text}</p>
-      <span className="mt-5 inline-flex items-center gap-2 text-sm font-black text-clay">
+      <h3 className="mt-5 text-lg font-bold text-ink-950">{label}</h3>
+      <p className="mt-2 max-w-lg text-sm leading-6 text-ink-600">{text}</p>
+      <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-clay">
         进入管理
         <ArrowRight size={15} />
       </span>

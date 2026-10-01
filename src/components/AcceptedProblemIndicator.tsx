@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { ProblemType } from "@/lib/objectiveProblem";
+import { CheckCircle2 } from "lucide-react";
+import { UiBadge } from "@/components/UiBadge";
 
 export function AcceptedProblemIndicator({
   detailHrefBase = "/admin/submissions",
@@ -17,12 +19,13 @@ export function AcceptedProblemIndicator({
 
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
-      <span className="border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-xs font-black text-emerald-800">
+      <UiBadge tone="success">
+        <CheckCircle2 aria-hidden="true" size={12} />
         已通过
-      </span>
+      </UiBadge>
       <Link
         aria-label={`${actionLabel}：${problemTitle}`}
-        className="border border-emerald-300 bg-white/80 px-2 py-0.5 text-xs font-black text-emerald-800 hover:border-emerald-500 hover:bg-emerald-50"
+        className="arena-badge arena-badge-action border-emerald-300 bg-white/80 text-emerald-800"
         href={`${detailHrefBase}/${submissionId}`}
       >
         {actionLabel}

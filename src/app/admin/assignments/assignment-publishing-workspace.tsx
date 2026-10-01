@@ -1,5 +1,6 @@
 "use client";
 
+import { UiBadge } from "@/components/UiBadge";
 import {
   AlertTriangle,
   ArrowDown,
@@ -352,9 +353,9 @@ export function AssignmentPublishingWorkspace({
               先确定公共题，再为个别学生增删题目。任一题单冲突时整批不会发布。
             </p>
           </div>
-          <span className="border border-clay/25 bg-[#fff7e8] px-3 py-2 text-xs font-black text-clay">
+          <UiBadge className="border border-clay/25 bg-[#fff7e8] px-3 py-2 text-xs font-black text-clay">
             已选 {selectedStudentIds.length}/100 名学生
-          </span>
+          </UiBadge>
         </div>
       </div>
 

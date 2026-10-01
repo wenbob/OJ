@@ -1,3 +1,5 @@
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { CopyCodeButton } from "@/components/CopyCodeButton";
 import { Pagination } from "@/components/Pagination";
@@ -38,10 +40,10 @@ export default async function StudentSubmissionsPage({ searchParams }: PageProps
       <section className="surface overflow-hidden">
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-ink-950/10 p-5">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+            <p className="arena-kicker">
               Daily Submissions
             </p>
-            <h1 className="mt-2 text-2xl font-black">日常刷题提交记录</h1>
+            <PageHeading kind="submission" className="mt-2">日常刷题提交记录</PageHeading>
           </div>
           <Link className="btn btn-secondary" href="/student/exam-submissions">
             查看考试提交
@@ -109,7 +111,7 @@ export default async function StudentSubmissionsPage({ searchParams }: PageProps
                     className="px-5 py-12 text-center text-sm font-semibold text-ink-600"
                     colSpan={6}
                   >
-                    还没有日常刷题提交。
+                    <AcademyEmptyState kind="practice" title="还没有日常刷题提交" description="完成一次提交后，可以在这里查看结果和继续修改。" href="/student/problems" action="去日常刷题" />
                   </td>
                 </tr>
               ) : null}

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>三端 UI 统一 · 对比截图</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;background:#f7f3ea;color:#161713;font:15px/1.7 "Microsoft YaHei UI",sans-serif}main{max-width:1480px;margin:auto;padding:32px 24px}h1{font-size:28px;margin:0;font-weight:700}h2{font-size:20px;margin:28px 0 12px}.note{color:#676a5d;margin:8px 0 20px}.gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}figure{margin:0;min-width:0;overflow:hidden;background:#fffdf7;border:1px solid #16171324;border-radius:12px}figcaption{padding:12px 16px;font-weight:600;border-bottom:1px solid #16171318}img{display:block;width:100%;height:auto}a{color:#4f6f88}.mobile img{max-width:320px;margin:auto}.gallery a{display:block}.gallery a:focus-visible{outline:3px solid #4f6f88;outline-offset:-3px}@media(max-width:800px){.gallery{grid-template-columns:1fr}main{padding:24px 16px}}
+</style>
+<main>
+  <h1>三端 UI 统一 · 本地验证截图</h1>
+  <p class="note">共用分类、题目列表、标题和标签。截图来自隔离测试环境，包含用于检验换行的长标题。点击图片可查看原图。</p>
+  <h2>日常题库 · 桌面 1280px</h2>
+  <div class="gallery">
+    <figure><figcaption>学生端 · 日常刷题</figcaption><a href="student-practice-desktop.png"><img src="student-practice-desktop.png" alt="学生端日常题库" loading="lazy"></a></figure>
+    <figure><figcaption>老师端 · 题目练习</figcaption><a href="teacher-practice-desktop.png"><img src="teacher-practice-desktop.png" alt="老师端日常题库" loading="lazy"></a></figure>
+    <figure><figcaption>管理员端 · 题目练习</figcaption><a href="admin-practice-desktop.png"><img src="admin-practice-desktop.png" alt="管理员端日常题库" loading="lazy"></a></figure>
+  </div>
+  <h2>日常题库 · 手机 320px</h2>
+  <div class="gallery mobile">
+    <figure><figcaption>学生端</figcaption><a href="student-practice-mobile.png"><img src="student-practice-mobile.png" alt="学生端手机题库" loading="lazy"></a></figure>
+    <figure><figcaption>老师端</figcaption><a href="teacher-practice-mobile.png"><img src="teacher-practice-mobile.png" alt="老师端手机题库" loading="lazy"></a></figure>
+    <figure><figcaption>管理员端</figcaption><a href="admin-practice-mobile.png"><img src="admin-practice-mobile.png" alt="管理员端手机题库" loading="lazy"></a></figure>
+  </div>
+  <h2>题目详情 · 长标题与共用段落图标</h2>
+  <div class="gallery">
+    <figure><figcaption>学生端</figcaption><a href="student-problem-detail.png"><img src="student-problem-detail.png" alt="学生端题目详情" loading="lazy"></a></figure>
+    <figure><figcaption>老师端</figcaption><a href="teacher-problem-detail.png"><img src="teacher-problem-detail.png" alt="老师端题目详情" loading="lazy"></a></figure>
+    <figure><figcaption>管理员端</figcaption><a href="admin-problem-detail.png"><img src="admin-problem-detail.png" alt="管理员端题目详情" loading="lazy"></a></figure>
+  </div>
+  <h2>其他题目入口 · 保留原上下文和独立操作</h2>
+  <div class="gallery">
+    <figure><figcaption>学生错题本</figcaption><a href="student-review.png"><img src="student-review.png" alt="学生错题本" loading="lazy"></a></figure>
+    <figure><figcaption>老师考试练习</figcaption><a href="teacher-exam-practice.png"><img src="teacher-exam-practice.png" alt="老师后台考试练习" loading="lazy"></a></figure>
+    <figure><figcaption>管理员考试练习</figcaption><a href="admin-exam-practice.png"><img src="admin-exam-practice.png" alt="管理员后台考试练习" loading="lazy"></a></figure>
+  </div>
+  <h2>后台设置 · 手机 320px</h2>
+  <div class="gallery mobile">
+    <figure><figcaption>管理员设置 · 表格在自身容器内滚动</figcaption><a href="admin-settings-mobile.png"><img src="admin-settings-mobile.png" alt="管理员手机设置页" loading="lazy"></a></figure>
+  </div>
+</main>
+</html>

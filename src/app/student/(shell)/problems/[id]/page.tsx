@@ -1,12 +1,16 @@
+import { PageHeading } from "@/components/PageHeading";
+import { UiBadge } from "@/components/UiBadge";
+import { ProblemContentSection as ProblemSection } from "@/components/ProblemContentSection";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
 import {
   ObjectiveAiExplanationPanel,
   ObjectiveAiExplanationProvider,
 } from "@/components/StaffObjectiveAiExplanation";
-import { ProblemRichText } from "@/components/ProblemRichText";
+
 import { ProblemSamples } from "@/components/ProblemSamples";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import { requirePageUser } from "@/lib/auth";
@@ -133,6 +137,7 @@ export default async function StudentProblemDetailPage({
 
   return (
     <>
+      <Link className="academy-text-link mb-4" href="/student/problems"><ArrowLeft aria-hidden="true" size={15} />返回日常刷题</Link>
       {assignment ? (
         <section className="mb-5 flex flex-wrap items-center justify-between gap-3 border border-steel/30 bg-[#eef6fb] px-4 py-3">
           <div>
@@ -159,15 +164,11 @@ export default async function StudentProblemDetailPage({
         requestPath={`/api/problems/${problem.id}/objective-explanation`}
       >
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(520px,44%)]">
-        <article className="surface p-6">
+        <article className="surface min-w-0 p-5 md:p-6">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-black">{problem.title}</h1>
-            <span className="border border-ink-950/10 bg-white/65 px-2.5 py-1 text-xs font-bold text-ink-700">
-              {problem.difficulty}
-            </span>
-            <span className="border border-ink-950/10 bg-white/65 px-2.5 py-1 text-xs font-bold text-ink-700">
-              {problem.category}
-            </span>
+            <PageHeading kind="problem" className="break-words">{problem.title}</PageHeading>
+            <UiBadge tone="neutral">{problem.difficulty}</UiBadge>
+            <UiBadge tone="neutral">{problem.category}</UiBadge>
             <ProblemTypeBadge type={problemType} />
             <CopyProblemButton
               category={problem.category}
@@ -199,9 +200,9 @@ export default async function StudentProblemDetailPage({
         </article>
 
         {objectiveAiDisplay.showPanel ? (
-          <aside className="grid content-start gap-4 xl:self-start">
+          <aside className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4 xl:self-start">
             <ObjectiveAiExplanationPanel />
-            <div className="grid content-start gap-3">
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3">
               <SubmitForm
                 enableRewards
                 defaultCodeTemplate={defaultCodeTemplate}
@@ -221,7 +222,7 @@ export default async function StudentProblemDetailPage({
             </div>
           </aside>
         ) : (
-        <aside className="grid content-start gap-4 xl:self-start">
+        <aside className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4 xl:self-start">
           <SubmitForm
             enableRewards
             aiCooldownSeconds={aiCooldownSeconds ?? undefined}
@@ -249,18 +250,5 @@ export default async function StudentProblemDetailPage({
       </div>
       </ObjectiveAiExplanationProvider>
     </>
-  );
-}
-
-function ProblemSection({ title, value }: { title: string; value: string }) {
-  return (
-    <section className="mt-8">
-      <h2 className="text-xl font-black">{title}</h2>
-      <ProblemRichText
-        className="mt-3 leading-7 text-ink-800"
-        codeClassName="text-sm"
-        value={value}
-      />
-    </section>
   );
 }

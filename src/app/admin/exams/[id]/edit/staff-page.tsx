@@ -1,4 +1,5 @@
 // Shared server page for administrator and teacher shells.
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { normalizeProblemType } from "@/lib/objectiveProblem";
@@ -77,10 +78,10 @@ export async function StaffEditExamPage({
     <>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+          <p className="arena-kicker">
             Edit Exam
           </p>
-          <h1 className="mt-2 text-2xl font-black">编辑模拟考试</h1>
+          <PageHeading kind="exam" className="mt-2">编辑模拟考试</PageHeading>
         </div>
         <Link className="btn btn-secondary" href={`${basePath}/exams`}>
           返回考试管理

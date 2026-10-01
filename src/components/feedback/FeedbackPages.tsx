@@ -1,3 +1,6 @@
+import { UiBadge } from "@/components/UiBadge";
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { PageHeading } from "@/components/PageHeading";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { NavigationLink } from "@/components/NavigationLink";
@@ -13,12 +16,12 @@ import { formatDate } from "@/lib/format";
 export type FeedbackSearchParams = Record<string, string | string[] | undefined>;
 
 function Status({ status }: { status: string }) {
-  return <span className={`shrink-0 border px-2 py-1 text-xs font-bold ${status === "resolved" ? "border-emerald-700/20 bg-emerald-50 text-emerald-800" : "border-amber-700/20 bg-amber-50 text-amber-900"}`}>{feedbackStatusLabel(status)}</span>;
+  return <UiBadge className={`shrink-0 border px-2 py-1 text-xs font-bold ${status === "resolved" ? "border-emerald-700/20 bg-emerald-50 text-emerald-800" : "border-amber-700/20 bg-amber-50 text-amber-900"}`}>{feedbackStatusLabel(status)}</UiBadge>;
 }
 
 function FeedbackUnavailable({ basePath, message }: { basePath: string; message: string }) {
   return <section className="surface space-y-4 p-6">
-    <h1 className="text-2xl font-black">问题反馈</h1>
+    <PageHeading kind="feedback" className="">问题反馈</PageHeading>
     <p role="alert" className="text-sm text-red-700">{message}</p>
     <NavigationLink href={basePath} className="btn btn-secondary">返回反馈列表</NavigationLink>
   </section>;
@@ -42,7 +45,7 @@ export async function FeedbackListPage({ role, searchParams }: { role: Role; sea
   }
   return <div className="space-y-6">
     <div>
-      <h1 className="text-2xl font-black text-ink-950 md:text-3xl">问题反馈</h1>
+      <PageHeading kind="feedback" className="text-ink-950">问题反馈</PageHeading>
       <p className="mt-2 text-sm leading-6 text-ink-600">{isAdmin ? "查看学生和老师遇到的问题，回复并跟进处理结果。" : "遇到系统问题？在这里告诉管理员，也可以查看处理进展。"}</p>
     </div>
     <div className={isAdmin ? "" : "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]"}>
@@ -84,7 +87,7 @@ export async function FeedbackListPage({ role, searchParams }: { role: Role; sea
               </span>
             </NavigationLink>
           </li>)}
-        </ul> : <p className="p-7 text-sm leading-7 text-ink-600">{isAdmin ? "当前条件下没有反馈。可以切换状态或调整搜索条件。" : "还没有提交反馈。提交后，你可以在这里查看原文和管理员回复。"}</p>}
+        </ul> : <AcademyEmptyState compact icon="feedback" title={isAdmin ? "当前条件下没有反馈" : "还没有提交反馈"} description={isAdmin ? "可以切换状态或调整搜索条件。" : "提交后，可以在这里查看原文和管理员回复。"} />}
         <Pagination basePath={basePath} searchParams={search} {...result.pagination} />
       </section>
     </div>
@@ -107,7 +110,7 @@ export async function FeedbackDetailPage({ role, params }: { role: Role; params:
       <div className="flex flex-wrap items-center gap-3 text-sm text-ink-600">
         <span>反馈 #{feedback.id}</span><Status status={feedback.status} />
       </div>
-      <h1 className="mt-4 break-words text-2xl font-black leading-snug [overflow-wrap:anywhere]">{feedback.title}</h1>
+      <PageHeading kind="feedback" className="mt-4 break-words [overflow-wrap:anywhere]">{feedback.title}</PageHeading>
       <p className="mt-3 break-all text-sm text-ink-600">{feedback.authorUsername} · {feedback.authorRole === "teacher" ? "老师" : "学生"} · {formatDate(feedback.createdAt)}</p>
       <div className="mt-6 whitespace-pre-wrap break-words border-t border-ink-950/10 pt-5 leading-8 [overflow-wrap:anywhere]">{feedback.content}</div>
       {feedback.attachments.length > 0 && <section className="mt-6" aria-labelledby="feedback-images-title">
@@ -131,7 +134,7 @@ export async function FeedbackDetailPage({ role, params }: { role: Role; params:
           <p className="break-all text-sm font-bold text-steel">管理员 {reply.administratorUsername}<span className="ml-3 font-normal text-ink-600">{formatDate(reply.createdAt)}</span></p>
           <p className="mt-3 whitespace-pre-wrap break-words leading-8 [overflow-wrap:anywhere]">{reply.content}</p>
         </li>)}
-      </ol> : <p className="mt-4 text-sm leading-6 text-ink-600">暂无回复。{role !== "admin" ? "管理员回复后会显示在这里。" : "可在下方填写处理结果。"}</p>}
+      </ol> : <AcademyEmptyState compact icon="feedback" title="暂无回复" description={role !== "admin" ? "管理员回复后会显示在这里。" : "可在下方填写处理结果。"} />}
     </section>
     {role === "admin" && <FeedbackAdminActions id={feedback.id} status={feedback.status} />}
   </div>;

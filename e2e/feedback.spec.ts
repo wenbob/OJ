@@ -15,7 +15,10 @@ async function checkMenu(page: Page) {
   const labels = await page.getByRole("navigation", { name: "主导航" }).getByRole("link").allTextContents();
   const index = labels.findIndex((label) => label.trim() === "天梯榜");
   expect(index).toBeGreaterThanOrEqual(0);
-  expect(labels[index + 1].trim()).toBe("问题反馈");
+  const followingItems = new URL(page.url()).pathname.startsWith("/student")
+    ? ["我的奖励", "问题反馈"]
+    : ["问题反馈"];
+  expect(labels.slice(index + 1, index + 1 + followingItems.length).map((label) => label.trim())).toEqual(followingItems);
   await page.getByRole("link", { name: "问题反馈", exact: true }).click();
   await expect(page.getByRole("heading", { name: "问题反馈", exact: true })).toBeVisible();
 }

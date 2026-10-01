@@ -1,4 +1,5 @@
 // Shared server page for administrator and teacher shells.
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import {
   getStaffBasePath,
@@ -15,10 +16,10 @@ export async function StaffNewExamPage({ role }: { role: StaffRole }) {
     <>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+          <p className="arena-kicker">
             New Exam
           </p>
-          <h1 className="mt-2 text-2xl font-black">新建模拟考试</h1>
+          <PageHeading kind="exam" className="mt-2">新建模拟考试</PageHeading>
         </div>
         <Link className="btn btn-secondary" href={`${basePath}/exams`}>
           返回考试管理

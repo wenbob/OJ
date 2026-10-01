@@ -1,4 +1,8 @@
 // Shared server page for administrator and teacher shells.
+import { UiBadge } from "@/components/UiBadge";
+import { FilterLink } from "@/components/FilterChip";
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import {
   Activity,
@@ -36,7 +40,7 @@ export async function StaffAiUsagePage({
         <div className="grid bg-ink-950 text-linen lg:grid-cols-[1fr_auto]">
           <div className="p-6 md:p-8">
             <p className="arena-kicker text-[#d7a062]">AI Learning Audit</p>
-            <h1 className="mt-2 text-3xl font-black">AI 使用与对话</h1>
+            <PageHeading kind="ai" className="mt-2">AI 使用与对话</PageHeading>
             <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#d7d0c2]">
               查看学生何时使用 AI、实际调用量与问答内容。系统只保存学生可见问答，不保存代码和模型内部推理。
             </p>
@@ -84,7 +88,7 @@ export async function StaffAiUsagePage({
           <p className="mt-2 text-xs font-bold text-ink-600">未使用 AI 的学生也会保留在列表中。</p>
         </div>
         {dashboard.rows.length === 0 ? (
-          <div className="p-10 text-center text-sm font-semibold text-ink-600">没有符合筛选条件的学生。</div>
+          <AcademyEmptyState compact icon="ai" title="没有符合筛选条件的学生" description="可以调整搜索条件或统计周期。" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-left text-sm">
@@ -134,12 +138,12 @@ function FilterPanel({ filters }: { filters: ReturnType<typeof readAiUsageFilter
 }
 
 function WindowTabs({ basePath, filters }: { basePath: string; filters: ReturnType<typeof readAiUsageFilters> }) {
-  return <div className="flex items-center border-t border-white/10 p-5 lg:border-l lg:border-t-0"><div className="flex flex-wrap gap-2">{(["today", "7d", "30d", "all", "custom"] as const).map((value) => <Link className={`btn ${filters.window === value ? "border-[#d6a44a] bg-[#d6a44a] text-ink-950" : "border-white/15 bg-white/5 text-linen"}`} href={`${basePath}/ai-usage?window=${value}`} key={value}>{value === "today" ? "今天" : value === "7d" ? "近 7 天" : value === "30d" ? "近 30 天" : value === "all" ? "全部" : "自定义"}</Link>)}</div></div>;
+  return <div className="flex items-center border-t border-white/10 p-5 lg:border-l lg:border-t-0"><div className="flex flex-wrap gap-2">{(["today", "7d", "30d", "all", "custom"] as const).map((value) => <FilterLink active={filters.window === value} pendingLabel="正在加载 AI 使用记录" href={`${basePath}/ai-usage?window=${value}`} key={value}>{value === "today" ? "今天" : value === "7d" ? "近 7 天" : value === "30d" ? "近 30 天" : value === "all" ? "全部" : "自定义"}</FilterLink>)}</div></div>;
 }
 
 function OverviewStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) { return <div className="border-b border-ink-950/10 p-4 sm:border-r xl:border-b-0"><div className="flex items-center gap-2 text-steel">{icon}<span className="text-[11px] font-black text-ink-600">{label}</span></div><p className="data-number mt-2 text-2xl font-black text-ink-950">{value}</p></div>; }
 function Field({ children, label }: { children: React.ReactNode; label: string }) { return <label className="grid gap-2 text-xs font-black text-ink-700">{label}{children}</label>; }
-function StatusPill({ good, label }: { good: boolean; label: string }) { return <span className={`inline-flex border px-2 py-1 text-[11px] font-black ${good ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-ink-950/10 bg-stone-100 text-ink-600"}`}>{label}</span>; }
+function StatusPill({ good, label }: { good: boolean; label: string }) { return <UiBadge className={`inline-flex border px-2 py-1 text-[11px] font-black ${good ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-ink-950/10 bg-stone-100 text-ink-600"}`}>{label}</UiBadge>; }
 function formatTokens(value: number | null) { return value === null ? "未返回" : new Intl.NumberFormat("zh-CN").format(value); }
 function formatDateTime(value: Date) { return new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(value); }
 function toUrlSearchParams(values: Record<string, string | string[] | undefined>) { const params = new URLSearchParams(); for (const [key, value] of Object.entries(values)) { const first = Array.isArray(value) ? value[0] : value; if (first) params.set(key, first); } return params; }

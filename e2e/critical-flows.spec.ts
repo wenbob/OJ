@@ -106,6 +106,22 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     await teacherContext.close();
   });
 
+  await test.step("daily problem editor fits desktop and narrow mobile screens", async () => {
+    const viewport = page.viewportSize();
+    await page.goto("/student/problems/101");
+    await expect(page.getByRole("textbox", { name: "Editor content", exact: true })).toBeVisible();
+    try {
+      for (const width of [320, 1280, 1440]) {
+        await page.setViewportSize({ width, height: 844 });
+        await expect.poll(() => page.evaluate(() =>
+          document.documentElement.scrollWidth <= window.innerWidth,
+        )).toBe(true);
+      }
+    } finally {
+      if (viewport) await page.setViewportSize(viewport);
+    }
+  });
+
   await test.step("hidden programming tests stay redacted", async () => {
     await page.goto("/student/submissions/501");
     await page.locator("details summary").click();

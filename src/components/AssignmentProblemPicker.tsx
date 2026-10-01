@@ -1,5 +1,7 @@
 "use client";
 
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { FilterButton as CategoryButton } from "@/components/FilterChip";
 import { Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -155,35 +157,8 @@ export function AssignmentProblemPicker({
           })}
         </div>
       ) : hasSearched && !searching ? (
-        <p className="mt-2 border border-ink-950/10 bg-white/60 px-3 py-4 text-center text-sm font-semibold text-ink-500">
-          当前筛选条件下没有可显示的编程题。
-        </p>
+        <AcademyEmptyState compact icon="practice" title="当前筛选条件下没有可显示的编程题" description="可以切换分类或调整题目名称。" />
       ) : null}
     </div>
-  );
-}
-
-function CategoryButton({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      aria-pressed={active}
-      className={`border px-3 py-2 text-xs font-black ${
-        active
-          ? "border-ink-950 bg-ink-950 text-white"
-          : "border-ink-950/10 bg-white/65 text-ink-700 hover:border-steel hover:text-steel"
-      }`}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
   );
 }

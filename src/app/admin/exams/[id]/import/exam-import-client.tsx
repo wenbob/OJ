@@ -1,5 +1,6 @@
 "use client";
 
+import { PageHeading } from "@/components/PageHeading";
 import { Check, FileUp, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, useState } from "react";
@@ -153,7 +154,7 @@ export function ExamImportClient({
       <section className="surface p-5">
         <div className="flex flex-col gap-3 border-b border-ink-950/10 pb-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-black">Markdown 导入题目到考试</h1>
+            <PageHeading kind="import" className="">Markdown 导入题目到考试</PageHeading>
             <p className="mt-1 text-sm font-semibold text-ink-600">
               当前是{examType === "objective" ? "选择判断" : "编程"}考试，只能导入同类型题目。导入后题目也会进入日常题库。
             </p>

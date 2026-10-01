@@ -1,3 +1,5 @@
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { CopyCodeButton } from "@/components/CopyCodeButton";
 import { Pagination } from "@/components/Pagination";
@@ -51,10 +53,10 @@ export default async function StudentExamSubmissionsPage({
       <section className="surface overflow-hidden">
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-ink-950/10 p-5">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+            <p className="arena-kicker">
               Exam Submissions
             </p>
-            <h1 className="mt-2 text-2xl font-black">模拟考试提交记录</h1>
+            <PageHeading kind="submission" className="mt-2">模拟考试提交记录</PageHeading>
           </div>
           <Link className="btn btn-secondary" href="/student/submissions">
             查看日常提交
@@ -143,7 +145,7 @@ export default async function StudentExamSubmissionsPage({
                     className="px-5 py-12 text-center text-sm font-semibold text-ink-600"
                     colSpan={8}
                   >
-                    还没有模拟考试提交。
+                    <AcademyEmptyState kind="exam" title="还没有模拟考试提交" description="参加考试并提交后，可以在这里查看历史记录。" href="/student/exams" action="查看模拟考试" />
                   </td>
                 </tr>
               ) : null}

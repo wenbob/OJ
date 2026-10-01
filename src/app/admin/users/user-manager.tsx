@@ -1,5 +1,7 @@
 "use client";
 
+import { UiBadge } from "@/components/UiBadge";
+import { PageHeading } from "@/components/PageHeading";
 import {
   Eye,
   EyeOff,
@@ -438,9 +440,9 @@ export function UserManager({
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
       <section className="surface overflow-hidden">
         <div className="border-b border-ink-950/10 p-5">
-          <h1 className="text-2xl font-black">
+          <PageHeading kind="users" className="">
             {viewerRole === "admin" ? "用户管理" : "学生管理"}
-          </h1>
+          </PageHeading>
           <div
             className={`mt-4 border px-3 py-2 text-sm font-bold ${
               studentObjectiveAiGloballyEnabled
@@ -551,7 +553,7 @@ export function UserManager({
                   </td>
                   <td className="px-5 py-4 text-sm font-bold">
                     {user.role === "student" ? (
-                      <span
+                      <UiBadge
                         className={`inline-flex border px-2 py-1 text-xs font-black ${
                           user.aiAccessEnabled
                             ? "border-moss/30 bg-moss/10 text-moss"
@@ -559,14 +561,14 @@ export function UserManager({
                         }`}
                       >
                         {user.aiAccessEnabled ? "已开通" : "未开通"}
-                      </span>
+                      </UiBadge>
                     ) : (
                       "-"
                     )}
                   </td>
                   <td className="px-5 py-4 text-sm font-bold">
                     {user.role === "student" ? (
-                      <span
+                      <UiBadge
                         className={`inline-flex border px-2 py-1 text-xs font-black ${
                           user.objectiveAiAccessEnabled
                             ? "border-moss/30 bg-moss/10 text-moss"
@@ -574,7 +576,7 @@ export function UserManager({
                         }`}
                       >
                         {user.objectiveAiAccessEnabled ? "已开通" : "未开通"}
-                      </span>
+                      </UiBadge>
                     ) : (
                       "-"
                     )}

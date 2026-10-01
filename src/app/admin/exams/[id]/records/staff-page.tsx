@@ -1,4 +1,5 @@
 // Shared server page for administrator and teacher shells.
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pagination } from "@/components/Pagination";
@@ -149,10 +150,10 @@ export async function StaffExamRecordsPage({
       <section className="surface p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+            <p className="arena-kicker">
               Exam Records
             </p>
-            <h1 className="mt-2 text-2xl font-black">{exam.title}：考试记录</h1>
+            <PageHeading kind="exam" className="mt-2">{exam.title}：考试记录</PageHeading>
             <p className="mt-2 text-sm font-semibold text-ink-600">
               当前 {totalRecords} 条记录，考试题目 {exam._count.problems} 道。
             </p>

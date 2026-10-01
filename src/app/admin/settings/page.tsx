@@ -1,3 +1,4 @@
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { requirePageUser } from "@/lib/auth";
 import {
@@ -30,10 +31,10 @@ export default async function AdminSettingsPage() {
     <>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+          <p className="arena-kicker">
             System Settings
           </p>
-          <h1 className="mt-2 text-2xl font-black">系统设置</h1>
+          <PageHeading kind="settings" className="mt-2">系统设置</PageHeading>
           <p className="mt-2 text-sm font-semibold text-ink-600">
             配置平台、评测默认值，以及服务端 AI 密钥、模型和思考模式。
           </p>

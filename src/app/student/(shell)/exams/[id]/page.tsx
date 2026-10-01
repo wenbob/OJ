@@ -1,3 +1,4 @@
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight, Timer } from "lucide-react";
@@ -50,10 +51,10 @@ export default async function StudentExamDetailPage({ params }: PageProps) {
       <section className="surface p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+            <p className="arena-kicker">
               Mock Exam
             </p>
-            <h1 className="mt-2 text-3xl font-black">{exam.title}</h1>
+            <PageHeading kind="exam" className="mt-2">{exam.title}</PageHeading>
             <div className="mt-3">
               <ProblemTypeBadge type={exam.examType} />
             </div>

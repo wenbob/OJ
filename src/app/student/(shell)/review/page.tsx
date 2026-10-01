@@ -1,15 +1,12 @@
+import { PageHeading } from "@/components/PageHeading";
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
+import { UiBadge } from "@/components/UiBadge";
+import { ProblemEntryLink } from "@/components/ProblemEntryLink";
+import { FilterLink } from "@/components/FilterChip";
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import {
-  ArrowRight,
-  BookOpenCheck,
-  BrainCircuit,
-  CheckCircle2,
-  RotateCcw,
-  Target,
-  TriangleAlert,
-} from "lucide-react";
-import { NavigationLink } from "@/components/NavigationLink";
+import { ArrowRight, BookOpenCheck, CheckCircle2, RotateCcw, Target, TriangleAlert } from "lucide-react";
+
 import { Pagination } from "@/components/Pagination";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -81,9 +78,9 @@ export default async function StudentReviewPage({ searchParams }: PageProps) {
             <div className="relative">
               <p className="arena-kicker">Learning Review</p>
               <div className="arena-rule mt-3" />
-              <h1 className="mt-5 text-3xl font-black tracking-tight text-ink-950 md:text-4xl">
+              <PageHeading kind="review" size="hero" className="mt-5 tracking-tight text-ink-950">
                 错题本与薄弱知识点
-              </h1>
+              </PageHeading>
               <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-ink-600 md:text-base">
                 系统会合并日常刷题和模拟考试的历史提交。只要一道题曾经出错，就会进入错题本；后续通过后会自动标记为“已攻克”。
               </p>
@@ -185,18 +182,24 @@ export default async function StudentReviewPage({ searchParams }: PageProps) {
 
           <div className="mt-5 flex flex-wrap gap-2">
             <FilterLink
+              pendingLabel="正在筛选错题"
+              scroll={false}
               active={selectedStatus === "all"}
               href={reviewHref({ category: selectedCategory, status: "all" })}
             >
               全部错题
             </FilterLink>
             <FilterLink
+              pendingLabel="正在筛选错题"
+              scroll={false}
               active={selectedStatus === "pending"}
               href={reviewHref({ category: selectedCategory, status: "pending" })}
             >
               待攻克
             </FilterLink>
             <FilterLink
+              pendingLabel="正在筛选错题"
+              scroll={false}
               active={selectedStatus === "conquered"}
               href={reviewHref({ category: selectedCategory, status: "conquered" })}
             >
@@ -207,6 +210,8 @@ export default async function StudentReviewPage({ searchParams }: PageProps) {
           {categories.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-2">
               <FilterLink
+                pendingLabel="正在筛选错题"
+                scroll={false}
                 active={!selectedCategory}
                 href={reviewHref({ status: selectedStatus })}
               >
@@ -214,6 +219,8 @@ export default async function StudentReviewPage({ searchParams }: PageProps) {
               </FilterLink>
               {categories.map((category) => (
                 <FilterLink
+                  pendingLabel="正在筛选错题"
+                  scroll={false}
                   active={selectedCategory === category}
                   href={reviewHref({ category, status: selectedStatus })}
                   key={category}
@@ -232,14 +239,14 @@ export default async function StudentReviewPage({ searchParams }: PageProps) {
                 ? `/student/problems/${entry.problemId}?fromSubmission=${entry.resumeSubmissionId}`
                 : `/student/problems/${entry.problemId}`;
               return (
-                <article className="flex flex-col border border-ink-950/10 bg-white/65 p-4" key={entry.problemId}>
+                <article className="problem-entry flex min-w-0 flex-col rounded-xl border border-ink-950/10 p-4" data-accepted={entry.status === "conquered"} key={entry.problemId}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <ReviewStatus status={entry.status} />
                         <ProblemTypeBadge type={entry.problemType} />
                       </div>
-                      <h3 className="mt-2 text-lg font-black text-ink-950">{entry.title}</h3>
+                      <h3 className="mt-2 break-words text-lg font-bold text-ink-950" id={`review-problem-title-${entry.problemId}`}>{entry.title}</h3>
                       <p className="mt-0.5 text-xs font-bold text-ink-600">
                         {entry.category} · {entry.difficulty}
                       </p>
@@ -265,10 +272,10 @@ export default async function StudentReviewPage({ searchParams }: PageProps) {
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Link className="btn btn-primary min-h-0 px-3 py-2 text-xs" href={continueHref}>
+                    <ProblemEntryLink aria-describedby={`review-problem-title-${entry.problemId}`} className="btn btn-primary min-h-0 px-3 py-2 text-xs" href={continueHref}>
                       <RotateCcw size={16} />
                       {entry.resumeSubmissionId ? "加载最近代码继续" : "重新挑战"}
-                    </Link>
+                    </ProblemEntryLink>
                     <Link
                       className="btn btn-secondary min-h-0 px-3 py-2 text-xs"
                       href={`/student/submissions/${entry.latestSubmissionId}`}
@@ -281,20 +288,13 @@ export default async function StudentReviewPage({ searchParams }: PageProps) {
             })}
           </div>
         ) : (
-          <div className="flex flex-col items-center px-6 py-14 text-center">
-            <BrainCircuit className="text-steel" size={38} />
-            <h3 className="mt-4 text-xl font-black text-ink-950">
-              {review.entries.length === 0 ? "暂时没有错题" : "该筛选下没有题目"}
-            </h3>
-            <p className="mt-2 max-w-xl text-sm font-semibold leading-6 text-ink-600">
-              {review.entries.length === 0
-                ? "首次就 Accepted 的题不会进入错题本。继续挑战新题，遇到问题时再回来集中复盘。"
-                : "可以切换状态或分类，查看其他错题。"}
-            </p>
-            <Link className="btn btn-primary mt-5" href="/student/problems">
-              去挑战新题
-            </Link>
-          </div>
+          <AcademyEmptyState
+            kind="practice"
+            title={review.entries.length === 0 ? "暂时没有错题" : "该筛选下没有题目"}
+            description={review.entries.length === 0 ? "首次就 Accepted 的题不会进入错题本。继续挑战新题，遇到问题时再回来集中复盘。" : "可以切换状态或分类，查看其他错题。"}
+            href="/student/problems"
+            action="去挑战新题"
+          />
         )}
 
         <Pagination
@@ -321,39 +321,8 @@ function ReviewStat({ label, value }: { label: string; value: number }) {
 
 function ReviewStatus({ status }: { status: LearningReviewStatus }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1 border px-2 py-1 text-xs font-black ${
-        status === "pending"
-          ? "border-clay/30 bg-clay/10 text-clay"
-          : "border-moss/30 bg-moss/10 text-moss"
-      }`}
-    >
+    <UiBadge tone={status === "pending" ? "accent" : "success"}>
       {status === "pending" ? "待攻克" : "已攻克"}
-    </span>
-  );
-}
-
-function FilterLink({
-  active,
-  children,
-  href,
-}: {
-  active: boolean;
-  children: React.ReactNode;
-  href: string;
-}) {
-  return (
-    <NavigationLink
-      className={`border px-3 py-2 text-sm font-black ${
-        active
-          ? "border-ink-950 bg-ink-950 text-white"
-          : "border-ink-950/10 bg-white/65 text-ink-800 hover:border-steel hover:text-steel"
-      }`}
-      href={href}
-      pendingLabel="正在筛选错题"
-      scroll={false}
-    >
-      {children}
-    </NavigationLink>
+    </UiBadge>
   );
 }

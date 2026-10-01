@@ -1,3 +1,4 @@
+import { PageHeading } from "@/components/PageHeading";
 import { redirect } from "next/navigation";
 import { getCurrentUser, roleHome } from "@/lib/auth";
 import { getPublicSettings } from "@/lib/settings";
@@ -29,9 +30,9 @@ export default async function LoginPage({
               <Code2 size={21} />
             </span>
             <p className="arena-kicker mt-8 text-[#d7a062]">{settings.siteName}</p>
-            <h1 className="mt-4 max-w-xl text-4xl font-black leading-tight tracking-tight md:text-5xl lg:text-6xl">
+            <PageHeading kind="auth" size="hero" className="mt-4 max-w-xl tracking-tight">
               {settings.siteSubtitle}
-            </h1>
+            </PageHeading>
             <p className="mt-5 max-w-lg text-sm font-semibold leading-6 text-[#d7d0c2]">
               从一道题开始训练，在每一次独立思考和 Accepted 中积累真正的进步。
             </p>
@@ -45,7 +46,7 @@ export default async function LoginPage({
         <div className="flex flex-col justify-center p-7 md:p-10 lg:p-14">
           <p className="arena-kicker">Welcome Back</p>
           <div className="arena-rule mt-3" />
-          <h2 className="mt-6 text-3xl font-black text-ink-950">登录竞技学院</h2>
+          <PageHeading as="h2" kind="auth" size="hero" className="mt-6 text-ink-950">登录竞技学院</PageHeading>
           <LoginForm reason={reason} />
         </div>
       </section>

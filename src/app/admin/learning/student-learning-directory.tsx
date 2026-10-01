@@ -1,5 +1,6 @@
 "use client";
 
+import { UiBadge } from "@/components/UiBadge";
 import Link from "next/link";
 import { ArrowRight, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -245,9 +246,9 @@ function Tag({
         ? "border-amber-200 bg-amber-50 text-amber-800"
         : "border-ink-950/10 bg-stone-100 text-ink-600";
   return (
-    <span className={`border px-2 py-1 text-[11px] font-black ${style}`}>
+    <UiBadge className={`border px-2 py-1 text-[11px] font-black ${style}`}>
       {label}
-    </span>
+    </UiBadge>
   );
 }
 

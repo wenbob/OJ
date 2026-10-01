@@ -1,5 +1,7 @@
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { Archive, ArrowRight, CheckCircle2, Target } from "lucide-react";
+import { AcademyEmptyState } from "@/components/AcademyEmptyState";
 import { requirePageUser } from "@/lib/auth";
 import { getAssignmentProgress } from "@/lib/learningAssignments";
 import { prisma } from "@/lib/prisma";
@@ -29,7 +31,7 @@ export default async function StudentAssignmentsPage() {
         <div className="grid bg-ink-950 text-linen md:grid-cols-[1fr_auto]">
           <div className="p-6 md:p-8">
             <p className="arena-kicker text-[#d7a062]">Focused Training</p>
-            <h1 className="mt-2 text-3xl font-black">专项练习</h1>
+            <PageHeading kind="assignment" size="hero" className="mt-2">专项练习</PageHeading>
             <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#d7d0c2]">
               老师根据你的薄弱点挑选了练习。只有从这里进入题目并重新通过，才会计入任务进度。
             </p>
@@ -42,12 +44,8 @@ export default async function StudentAssignmentsPage() {
       </section>
 
       {rows.length === 0 ? (
-        <section className="surface mt-6 p-8 text-center">
-          <Target className="mx-auto text-steel" size={34} />
-          <h2 className="mt-4 text-xl font-black">暂时没有专项练习</h2>
-          <p className="mt-2 text-sm font-semibold text-ink-600">
-            继续完成日常刷题，老师会根据你的训练情况安排更有针对性的练习。
-          </p>
+        <section className="surface mt-6">
+          <AcademyEmptyState kind="assignment" title="暂时没有专项练习" description="继续完成日常刷题，老师会根据你的训练情况安排更有针对性的练习。" href="/student/problems" action="先去日常刷题" />
         </section>
       ) : (
         <div className="mt-7 grid gap-8">
@@ -91,7 +89,7 @@ function AssignmentGroup({
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-black text-ink-950">{assignment.title}</h3>
+                <h3 className="break-words text-lg font-bold text-ink-950">{assignment.title}</h3>
                 <p className="mt-1 text-xs font-bold text-ink-600">
                   {assignment.dueAt ? `截止 ${formatDate(assignment.dueAt)}` : "不限截止日期"}
                 </p>
@@ -100,9 +98,9 @@ function AssignmentGroup({
                 {assignment.progress.percent}%
               </span>
             </div>
-            <div className="mt-4 h-2 overflow-hidden bg-ink-950/10">
+            <div aria-label={`${assignment.title}完成进度`} aria-valuemax={assignment.progress.problemCount} aria-valuemin={0} aria-valuenow={assignment.progress.completedCount} className="mt-4 h-2 overflow-hidden rounded-full bg-ink-950/10" role="progressbar">
               <div
-                className="h-full bg-steel"
+                className={`h-full rounded-full ${assignment.progress.completed ? "bg-emerald-600" : "bg-steel"}`}
                 style={{ width: `${assignment.progress.percent}%` }}
               />
             </div>

@@ -1,9 +1,12 @@
 // Shared server page for administrator and teacher shells.
+import { PageHeading } from "@/components/PageHeading";
+import { UiBadge } from "@/components/UiBadge";
+import { ProblemContentSection as ProblemSection } from "@/components/ProblemContentSection";
 import { notFound } from "next/navigation";
 import { AcceptedProblemIndicator } from "@/components/AcceptedProblemIndicator";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
-import { ProblemRichText } from "@/components/ProblemRichText";
+
 import { ProblemSamples } from "@/components/ProblemSamples";
 import { ProblemSubmitForm } from "@/components/ProblemSubmitForm";
 import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
@@ -118,15 +121,11 @@ export async function StaffPracticeProblemPage({
           problemId={problem.id}
         >
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
-          <article className="surface p-6">
+          <article className="surface min-w-0 p-5 md:p-6">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-black">{problem.title}</h1>
-              <span className="border border-ink-950/10 bg-white/65 px-2.5 py-1 text-xs font-bold text-ink-700">
-                {problem.difficulty}
-              </span>
-              <span className="border border-ink-950/10 bg-white/65 px-2.5 py-1 text-xs font-bold text-ink-700">
-                {problem.category}
-              </span>
+              <PageHeading kind="problem">{problem.title}</PageHeading>
+              <UiBadge tone="neutral">{problem.difficulty}</UiBadge>
+              <UiBadge tone="neutral">{problem.category}</UiBadge>
               <ProblemTypeBadge type={problemType} />
               {latestAcceptedSubmissionId ? (
                 <AcceptedProblemIndicator
@@ -172,7 +171,7 @@ export async function StaffPracticeProblemPage({
           </article>
 
           {objectiveAiEnabled ? (
-            <aside className="grid content-start gap-4 xl:self-start">
+            <aside className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4 xl:self-start">
               <ObjectiveAiExplanationPanel />
               <div className="grid content-start gap-3">
                 {latestSubmission ? (
@@ -196,7 +195,7 @@ export async function StaffPracticeProblemPage({
               </div>
             </aside>
           ) : (
-            <aside className="grid content-start gap-4 xl:sticky xl:top-6 xl:self-start">
+            <aside className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4 xl:sticky xl:top-6 xl:self-start">
               {latestSubmission ? (
                 <section className="surface p-5">
                   <h2 className="text-lg font-black">最近一次提交</h2>
@@ -246,17 +245,4 @@ export async function StaffPracticeProblemPage({
 
 export default function AdminPracticeProblemPage(props: PageProps) {
   return <StaffPracticeProblemPage {...props} role="admin" />;
-}
-
-function ProblemSection({ title, value }: { title: string; value: string }) {
-  return (
-    <section className="mt-8">
-      <h2 className="text-xl font-black">{title}</h2>
-      <ProblemRichText
-        className="mt-3 leading-7 text-ink-800"
-        codeClassName="text-sm"
-        value={value}
-      />
-    </section>
-  );
 }

@@ -1,4 +1,5 @@
 // Shared server page for administrator and teacher shells.
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { Trophy } from "lucide-react";
 import { LeaderboardTable } from "@/components/LeaderboardTable";
@@ -23,7 +24,7 @@ export async function StaffLeaderboardPage({ role }: { role: StaffRole }) {
               <p className="arena-kicker text-[#d7a062]">
                 {role === "admin" ? "Ladder Admin" : "Ladder Teacher"}
               </p>
-              <h1 className="mt-2 text-3xl font-black">天梯管理台</h1>
+              <PageHeading kind="leaderboard" size="hero" className="mt-2">天梯管理台</PageHeading>
               <p className="mt-2 text-sm font-semibold text-[#e5ded0]">
                 实时汇总首次通过题数 × 10 与抽奖、翻倍奖励，不写总积分缓存表。
               </p>

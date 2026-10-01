@@ -1,3 +1,4 @@
+import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePageUser } from "@/lib/auth";
@@ -25,12 +26,12 @@ export default async function AdminExamImportPage({ params }: PageProps) {
     <>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-sm font-black uppercase tracking-[0.16em] text-clay">
+          <p className="arena-kicker">
             Import To Exam
           </p>
-          <h1 className="mt-2 text-2xl font-black">
+          <PageHeading kind="import" className="mt-2">
             导入题目到「{exam.title}」
-          </h1>
+          </PageHeading>
         </div>
         <Link className="btn btn-secondary" href={`/admin/exams/${exam.id}/edit`}>
           返回考试编辑

@@ -1,3 +1,4 @@
+import { UiBadge } from "@/components/UiBadge";
 import type { CSSProperties } from "react";
 import { Award, BookOpenCheck, Crown, Medal, Target, Trophy, Users } from "lucide-react";
 import { RankEmblem } from "@/components/RankEmblem";
@@ -252,7 +253,7 @@ function MobileRankingCards({
                 <div className="flex items-center gap-2">
                   <h3 className="truncate font-black text-ink-950">{entry.username}</h3>
                   {isCurrentUser ? (
-                    <span className="border border-steel/25 bg-steel/10 px-2 py-0.5 text-xs font-black text-steel">我</span>
+                    <UiBadge className="border border-steel/25 bg-steel/10 px-2 py-0.5 text-xs font-black text-steel">我</UiBadge>
                   ) : null}
                 </div>
                 <p className="mt-1 truncate text-sm font-black text-clay">{entry.displayTitle}</p>
@@ -318,7 +319,7 @@ function DesktopRankingTable({
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="max-w-52 truncate font-black">{entry.username}</span>
                     {isCurrentUser ? (
-                      <span className="border border-steel/25 bg-steel/10 px-2 py-0.5 text-xs font-black text-steel">我</span>
+                      <UiBadge className="border border-steel/25 bg-steel/10 px-2 py-0.5 text-xs font-black text-steel">我</UiBadge>
                     ) : null}
                   </div>
                 </td>
@@ -336,9 +337,9 @@ function DesktopRankingTable({
                 <td className="data-number px-5 py-4 text-sm font-bold text-ink-700">{entry.acceptedSubmissionCount}</td>
                 {showAdminColumns ? (
                   <td className="px-5 py-4">
-                    <span className="border border-ink-950/10 bg-white/70 px-2 py-1 text-xs font-bold text-ink-700">
+                    <UiBadge className="border border-ink-950/10 bg-white/70 px-2 py-1 text-xs font-bold text-ink-700">
                       {entry.customTitle ? "管理员自定义" : "自动段位"}
-                    </span>
+                    </UiBadge>
                   </td>
                 ) : null}
               </tr>
