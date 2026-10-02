@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { StudentRankingEntry } from "@/lib/ranking";
 import { LeaderboardTable } from "./LeaderboardTable";
+import { DEFAULT_RANK_TIERS } from "@/lib/ladderShared";
 
 function ranking(
   rank: number,
@@ -25,7 +26,7 @@ function ranking(
 
 describe("LeaderboardTable", () => {
   it("空榜单说明首次唯一 AC 的上榜规则", () => {
-    const html = renderToStaticMarkup(<LeaderboardTable rankings={[]} />);
+    const html = renderToStaticMarkup(<LeaderboardTable rankings={[]} tiers={DEFAULT_RANK_TIERS} />);
 
     expect(html).toContain("天梯正在等待第一位挑战者");
     expect(html).toContain("首次通过一道新题可获得 10 积分");
@@ -34,7 +35,7 @@ describe("LeaderboardTable", () => {
 
   it("不足三人时只渲染已有领奖台席位", () => {
     const html = renderToStaticMarkup(
-      <LeaderboardTable rankings={[ranking(1), ranking(2)]} />,
+      <LeaderboardTable rankings={[ranking(1), ranking(2)]} tiers={DEFAULT_RANK_TIERS} />,
     );
 
     expect(html).toContain("天梯前三名");
@@ -47,6 +48,7 @@ describe("LeaderboardTable", () => {
   it("学生视图分别展示与前一名、第一名的积分差", () => {
     const html = renderToStaticMarkup(
       <LeaderboardTable
+        tiers={DEFAULT_RANK_TIERS}
         currentUserId={3}
         rankings={[
           ranking(1, { points: 200 }),
@@ -65,6 +67,7 @@ describe("LeaderboardTable", () => {
   it("与第一名积分相同时不显示还差 0 分", () => {
     const html = renderToStaticMarkup(
       <LeaderboardTable
+        tiers={DEFAULT_RANK_TIERS}
         currentUserId={2}
         rankings={[
           ranking(1, { points: 200 }),
@@ -80,6 +83,7 @@ describe("LeaderboardTable", () => {
   it("第四名以后同时提供移动卡片与桌面表格，并保留管理员头衔来源", () => {
     const html = renderToStaticMarkup(
       <LeaderboardTable
+        tiers={DEFAULT_RANK_TIERS}
         rankings={[
           ranking(1),
           ranking(2),

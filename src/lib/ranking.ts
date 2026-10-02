@@ -1,21 +1,14 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
+import { getLadderSettings, getLadderSettingsForRender } from "./ladderSettings";
+import { DEFAULT_RANK_TIERS, getRankTierTitle, RANK_POINT_PER_UNIQUE_ACCEPTED, type RankTier } from "./ladderShared";
+export { getRankTierProgress, getRankTierTitle, RANK_POINT_PER_UNIQUE_ACCEPTED } from "./ladderShared";
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
 
-export const RANK_POINT_PER_UNIQUE_ACCEPTED = 10;
 export const CUSTOM_TITLE_MAX_LENGTH = 20;
 
-export const rankTiers = [
-  { minPoints: 0, title: "青铜学徒" },
-  { minPoints: 65, title: "白银新秀" },
-  { minPoints: 130, title: "黄金精英" },
-  { minPoints: 260, title: "铂金高手" },
-  { minPoints: 455, title: "钻石强者" },
-  { minPoints: 715, title: "星耀大师" },
-  { minPoints: 1040, title: "最强王者" },
-  { minPoints: 1560, title: "荣耀王者" },
-] as const;
+export const rankTiers = DEFAULT_RANK_TIERS;
 
 export type RankingUserInput = {
   id: number;
@@ -96,79 +89,18 @@ export function validateCustomTitle(value: string | null) {
   return null;
 }
 
-export function getRankTierTitle(points: number) {
-  let current: string = rankTiers[0].title;
-  for (const tier of rankTiers) {
-    if (points >= tier.minPoints) {
-      current = tier.title;
-    } else {
-      break;
-    }
-  }
-  return current;
-}
-
-export function getRankTierProgress(points: number): RankTierProgress {
-  const safePoints = Math.max(0, points);
-  let currentTierIndex = 0;
-
-  for (const [index, tier] of rankTiers.entries()) {
-    if (safePoints >= tier.minPoints) {
-      currentTierIndex = index;
-    } else {
-      break;
-    }
-  }
-
-  const currentTier = rankTiers[currentTierIndex];
-  const nextTier = rankTiers[currentTierIndex + 1] ?? null;
-
-  if (!nextTier) {
-    return {
-      acceptedProblemsToNextTier: 0,
-      currentTierMinPoints: currentTier.minPoints,
-      currentTierTitle: currentTier.title,
-      isMaxTier: true,
-      nextTierMinPoints: null,
-      nextTierTitle: null,
-      pointsForCurrentTier: 0,
-      pointsIntoTier: Math.max(0, safePoints - currentTier.minPoints),
-      pointsToNextTier: 0,
-      progressPercent: 100,
-    };
-  }
-
-  const pointsForCurrentTier = nextTier.minPoints - currentTier.minPoints;
-  const pointsIntoTier = Math.min(
-    pointsForCurrentTier,
-    Math.max(0, safePoints - currentTier.minPoints),
-  );
-  const pointsToNextTier = Math.max(0, nextTier.minPoints - safePoints);
-
-  return {
-    acceptedProblemsToNextTier: Math.ceil(
-      pointsToNextTier / RANK_POINT_PER_UNIQUE_ACCEPTED,
-    ),
-    currentTierMinPoints: currentTier.minPoints,
-    currentTierTitle: currentTier.title,
-    isMaxTier: false,
-    nextTierMinPoints: nextTier.minPoints,
-    nextTierTitle: nextTier.title,
-    pointsForCurrentTier,
-    pointsIntoTier,
-    pointsToNextTier,
-    progressPercent: Math.round((pointsIntoTier / pointsForCurrentTier) * 100),
-  };
-}
-
 export function buildStudentRankings({
   submissions,
   users,
   rewardPointsByUser = new Map<number, number>(),
+  adjustmentPointsByUser = new Map<number, number>(),
+  tiers = DEFAULT_RANK_TIERS,
 }: {
   submissions: RankingSubmissionInput[];
   users: RankingUserInput[];
   rewardPointsByUser?: Map<number, number>;
+  adjustmentPointsByUser?: Map<number, number>;
+  tiers?: readonly RankTier[];
 }) {
   const acceptedProblemIdsByUser = new Map<number, Set<number>>();
   const acceptedSubmissionCountByUser = new Map<number, number>();
@@ -194,8 +126,8 @@ export function buildStudentRankings({
         acceptedSubmissionCountByUser.get(user.id) ?? 0;
       const basePoints = acCount * RANK_POINT_PER_UNIQUE_ACCEPTED;
       const rewardPoints = rewardPointsByUser.get(user.id) ?? 0;
-      const points = basePoints + rewardPoints;
-      const tierTitle = getRankTierTitle(points);
+      const points = basePoints + rewardPoints + (adjustmentPointsByUser.get(user.id) ?? 0);
+      const tierTitle = getRankTierTitle(points, tiers);
       const customTitle = normalizeCustomTitle(
         user.studentProfile?.customTitle ?? null,
       );
@@ -226,10 +158,14 @@ export function buildStudentRankingSummary({
   submissions,
   user,
   rewardPoints = 0,
+  adjustmentPoints = 0,
+  tiers = DEFAULT_RANK_TIERS,
 }: {
   submissions: RankingSubmissionInput[];
   user: RankingUserInput;
   rewardPoints?: number;
+  adjustmentPoints?: number;
+  tiers?: readonly RankTier[];
 }): StudentRankingSummary | null {
   if (user.role !== "student") return null;
 
@@ -246,8 +182,8 @@ export function buildStudentRankingSummary({
 
   const acCount = acceptedProblemIds.size;
   const basePoints = acCount * RANK_POINT_PER_UNIQUE_ACCEPTED;
-  const points = basePoints + rewardPoints;
-  const tierTitle = getRankTierTitle(points);
+  const points = basePoints + rewardPoints + adjustmentPoints;
+  const tierTitle = getRankTierTitle(points, tiers);
   const customTitle = normalizeCustomTitle(user.studentProfile?.customTitle ?? null);
 
   return {
@@ -269,16 +205,20 @@ function buildStudentRankingSummaryFromCounts({
   acCount,
   user,
   rewardPoints,
+  adjustmentPoints,
+  tiers,
 }: {
   acceptedSubmissionCount: number;
   acCount: number;
   user: RankingUserInput;
   rewardPoints: number;
+  adjustmentPoints: number;
+  tiers: readonly RankTier[];
 }): StudentRankingSummary | null {
   if (user.role !== "student") return null;
   const basePoints = acCount * RANK_POINT_PER_UNIQUE_ACCEPTED;
-  const points = basePoints + rewardPoints;
-  const tierTitle = getRankTierTitle(points);
+  const points = basePoints + rewardPoints + adjustmentPoints;
+  const tierTitle = getRankTierTitle(points, tiers);
   const customTitle = normalizeCustomTitle(
     user.studentProfile?.customTitle ?? null,
   );
@@ -299,12 +239,13 @@ function buildStudentRankingSummaryFromCounts({
 export async function getStudentRankingSummariesForUsers(
   users: RankingUserInput[],
   db: DbClient = prisma,
+  tiers?: readonly RankTier[],
 ) {
   const students = users.filter((user) => user.role === "student");
   const userIds = students.map((user) => user.id);
   if (userIds.length === 0) return [];
 
-  const [acceptedCounts, acceptedProblems, rewardSums] = await Promise.all([
+  const [acceptedCounts, acceptedProblems, rewardSums, adjustmentSums, settings] = await Promise.all([
     db.submission.groupBy({
       by: ["userId"],
       where: { status: "Accepted", userId: { in: userIds } },
@@ -316,8 +257,11 @@ export async function getStudentRankingSummariesForUsers(
       _count: { _all: true },
     }),
     db.pointReward.groupBy({ by: ["userId"], where: { userId: { in: userIds } }, _sum: { amount: true } }),
+    db.studentPointAdjustment.groupBy({ by: ["studentId"], where: { studentId: { in: userIds } }, _sum: { amount: true } }),
+    tiers ? Promise.resolve({ tiers }) : db === prisma ? getLadderSettingsForRender() : getLadderSettings(db),
   ]);
   const rewardPointsByUser = new Map(rewardSums.map((row) => [row.userId, row._sum.amount ?? 0]));
+  const adjustmentPointsByUser = new Map(adjustmentSums.map((row) => [row.studentId, row._sum.amount ?? 0]));
   const acceptedCountByUser = new Map(
     acceptedCounts.map((row) => [row.userId, row._count._all]),
   );
@@ -334,13 +278,15 @@ export async function getStudentRankingSummariesForUsers(
       acceptedSubmissionCount: acceptedCountByUser.get(user.id) ?? 0,
       acCount: uniqueAcceptedByUser.get(user.id) ?? 0,
       rewardPoints: rewardPointsByUser.get(user.id) ?? 0,
+      adjustmentPoints: adjustmentPointsByUser.get(user.id) ?? 0,
+      tiers: settings.tiers,
       user,
     });
     return summary ? [summary] : [];
   });
 }
 
-export async function getStudentRankings(db: DbClient = prisma) {
+export async function getStudentRankings(db: DbClient = prisma, tiers?: readonly RankTier[]) {
   const users = await db.user.findMany({
     where: { role: "student" },
     select: {
@@ -350,13 +296,14 @@ export async function getStudentRankings(db: DbClient = prisma) {
       studentProfile: { select: { customTitle: true } },
     },
   });
-  const summaries = await getStudentRankingSummariesForUsers(users, db);
+  const summaries = await getStudentRankingSummariesForUsers(users, db, tiers);
   return assignStudentRanks(summaries);
 }
 
 export async function getStudentRankingSummaryForUser(
   userId: number,
   db: DbClient = prisma,
+  tiers?: readonly RankTier[],
 ) {
   const user = await db.user.findUnique({
     where: { id: userId },
@@ -369,7 +316,7 @@ export async function getStudentRankingSummaryForUser(
   });
   if (!user) return null;
 
-  const summaries = await getStudentRankingSummariesForUsers([user], db);
+  const summaries = await getStudentRankingSummariesForUsers([user], db, tiers);
   return summaries[0] ?? null;
 }
 

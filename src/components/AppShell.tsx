@@ -98,6 +98,7 @@ export async function AppShell({
               <span className="identity-chip flex items-center gap-3 px-3 py-2">
                 <RankEmblem
                   className="rank-emblem-sm"
+                  eager
                   tierTitle={currentRanking.tierTitle}
                 />
                 <span className="min-w-0">

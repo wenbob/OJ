@@ -155,6 +155,8 @@ describe("student rankings", () => {
       ]);
     const db = {
       pointReward: { groupBy: vi.fn().mockResolvedValue([]) },
+      studentPointAdjustment: { groupBy: vi.fn().mockResolvedValue([]) },
+      systemSetting: { findUnique: vi.fn().mockResolvedValue(null) },
       submission: { groupBy },
       user: { findMany },
     };

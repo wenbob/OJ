@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>积分与段位管理 · 本地验收截图</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;background:#f6f3ea;color:#20221d;font-family:system-ui,"Microsoft YaHei",sans-serif}main{max-width:1500px;margin:auto;padding:28px 20px}h1{font-size:24px;margin:0 0 12px}p{color:#526d7e;font-size:14px;line-height:1.7}nav{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}button,a{border:1px solid #d9d6ce;border-radius:7px;padding:10px 14px;background:#fffdf8;color:inherit;font:inherit;font-size:14px;cursor:pointer}button[aria-pressed=true]{background:#526d7e;color:white;border-color:#526d7e}button:focus-visible,a:focus-visible{outline:3px solid #c7744a;outline-offset:3px}a{display:inline-block;text-decoration:none}figure{margin:24px 0;display:flex;flex-direction:column;align-items:center;gap:12px}img{display:block;max-width:100%;height:auto;border:1px solid #d9d6ce;border-radius:12px;box-shadow:0 8px 28px #20221d0c}figcaption{font-size:13px;color:#526d7e}footer{margin-top:24px;font-size:13px;color:#526d7e}
+</style>
+<main>
+  <h1>积分与段位管理 · 验收截图</h1>
+  <p>以下为隔离测试数据库中的实际页面截图，包含长用户名、调分表单、段位门槛和私有调分记录。选择页面与视口宽度查看。</p>
+  <nav aria-label="选择管理页" id="pages"><button data-page="students" aria-pressed="true">学生积分</button><button data-page="tiers" aria-pressed="false">段位门槛</button><button data-page="records" aria-pressed="false">调分记录</button></nav>
+  <nav aria-label="选择视口宽度" id="widths"><button data-width="320" aria-pressed="false">320px</button><button data-width="768" aria-pressed="false">768px</button><button data-width="1280" aria-pressed="false">1280px</button><button data-width="1440" aria-pressed="true">1440px</button></nav>
+  <figure><img id="preview" src="students-1440.png" alt="学生积分，1440px 视口截图"><figcaption id="caption" aria-live="polite">学生积分 · 1440px</figcaption></figure>
+  <a id="original" href="students-1440.png" target="_blank" rel="noopener">打开原图</a>
+  <footer>本地验收截图 · 2026-10-02 · 未操作真实学生积分</footer>
+</main>
+<script>
+  let page='students',width='1440';
+  const titles={students:'学生积分',tiers:'段位门槛',records:'调分记录'};
+  function render(){const file=`${page}-${width}.png`;document.querySelector('#preview').src=file;document.querySelector('#preview').alt=`${titles[page]}，${width}px 视口截图`;document.querySelector('#caption').textContent=`${titles[page]} · ${width}px`;document.querySelector('#original').href=file;document.querySelectorAll('[data-page]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.page===page)));document.querySelectorAll('[data-width]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.width===width)));}
+  document.querySelector('#pages').addEventListener('click',event=>{const button=event.target.closest('[data-page]');if(button){page=button.dataset.page;render();}});
+  document.querySelector('#widths').addEventListener('click',event=>{const button=event.target.closest('[data-width]');if(button){width=button.dataset.width;render();}});
+</script>
+</html>

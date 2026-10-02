@@ -31,6 +31,33 @@ model User {
   pointRewards                     PointReward[]
   publishedAnnouncements           Announcement[]
   announcementReads                AnnouncementRead[]
+  pointAdjustments                 StudentPointAdjustment[] @relation("PointAdjustmentStudent")
+  createdPointAdjustments          StudentPointAdjustment[] @relation("PointAdjustmentAdministrator")
+}
+
+model StudentPointAdjustment {
+  id                    Int      @id @default(autoincrement())
+  studentId             Int?
+  studentIdSnapshot     Int
+  studentUsername       String
+  administratorId       Int?
+  administratorIdSnapshot Int
+  administratorUsername String
+  mode                  String
+  inputPoints           Int
+  amount                Int
+  beforePoints          Int
+  afterPoints           Int
+  reason                String
+  requestId             String   @unique
+  createdAt             DateTime @default(now())
+  student               User?    @relation("PointAdjustmentStudent", fields: [studentId], references: [id], onDelete: SetNull)
+  administrator         User?    @relation("PointAdjustmentAdministrator", fields: [administratorId], references: [id], onDelete: SetNull)
+
+  @@index([studentId])
+  @@index([createdAt, id])
+  @@index([studentIdSnapshot, createdAt, id])
+  @@index([mode, createdAt, id])
 }
 
 model Announcement {

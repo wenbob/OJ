@@ -229,8 +229,9 @@ AI_CUSTOM_API_KEY=
 | `LearningInsightSnapshot` | 按学生与周期缓存的学情摘要 |
 | `AiConversation` / `AiConversationTurn` | 学生可见 AI 对话、幂等标识与调用统计 |
 | `ObjectiveAiExplanation` | 跨角色共享的逐小题解析缓存 |
-| `SystemSetting` | 站点、AI、Judge 默认值、抽奖范围及备案配置 |
-| `RewardDraw` / `RewardChallenge` / `PointReward` | 首次通过机会、抽奖后 24 小时接受期限、接受后独立 24 小时挑战与幂等奖励流水；天梯积分为基础分加奖励分 |
+| `SystemSetting` | 站点、AI、Judge 默认值、抽奖范围、独立段位门槛配置及备案配置 |
+| `RewardDraw` / `RewardChallenge` / `PointReward` | 首次通过机会、抽奖后 24 小时接受期限、接受后独立 24 小时挑战与幂等奖励流水 |
+| `StudentPointAdjustment` | 管理员加分、扣分、设定总分的追加流水、理由、身份快照及幂等请求标识；总分实时汇总做题积分、奖励积分和调分 |
 | `Announcement` / `AnnouncementRead` | 公告发布、撤下、发布人快照与账号级已读记录；已发布正文不直接修改 |
 | `Feedback` / `FeedbackAttachment` / `FeedbackReply` | 反馈原文、私有截图与管理员回复；身份快照独立于账号生命周期 |
 

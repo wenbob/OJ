@@ -2,10 +2,14 @@ import { UiBadge } from "@/components/UiBadge";
 import type { CSSProperties } from "react";
 import { Award, BookOpenCheck, Crown, Medal, Target, Trophy, Users } from "lucide-react";
 import { RankEmblem } from "@/components/RankEmblem";
+import { LocateRankingButton } from "@/components/LocateRankingButton";
+import { NavigationLink } from "@/components/NavigationLink";
+import { PageHeading } from "@/components/PageHeading";
 import {
   getRankTierProgress,
   type StudentRankingEntry,
 } from "@/lib/ranking";
+import type { RankTier } from "@/lib/ladderShared";
 
 type ProgressStyle = CSSProperties & { "--progress": number };
 type PodiumStyle = CSSProperties & { "--podium-delay": string };
@@ -14,10 +18,12 @@ export function LeaderboardTable({
   currentUserId,
   rankings,
   showAdminColumns = false,
+  tiers,
 }: {
   currentUserId?: number;
   rankings: StudentRankingEntry[];
   showAdminColumns?: boolean;
+  tiers: readonly RankTier[];
 }) {
   const currentRanking = rankings.find((entry) => entry.userId === currentUserId);
   const totalPoints = rankings.reduce((sum, entry) => sum + entry.points, 0);
@@ -30,29 +36,29 @@ export function LeaderboardTable({
   }
 
   return (
-    <div>
-      <div className="scoreboard-strip grid gap-px border-b border-ink-950/10 sm:grid-cols-3">
+    <div className="ladder-board">
+      <div className="ladder-summary">
         <SummaryStat icon={<Users size={18} />} label="上榜学生" value={rankings.length} />
         <SummaryStat icon={<Trophy size={18} />} label="累计积分" value={totalPoints} />
         <SummaryStat icon={<BookOpenCheck size={18} />} label="累计唯一 AC" value={totalUniqueAccepted} />
       </div>
 
-      <Podium rankings={topThree} />
-
       {currentRanking ? (
-        <CurrentBattleCard currentRanking={currentRanking} rankings={rankings} />
+        <CurrentBattleCard currentRanking={currentRanking} rankings={rankings} tiers={tiers} />
       ) : null}
+
+      <Podium currentUserId={currentUserId} rankings={topThree} />
 
       {remainingRankings.length > 0 ? (
         <section aria-labelledby="ranking-list-heading" className="border-t border-ink-950/10">
           <div className="flex flex-wrap items-end justify-between gap-3 bg-white/55 px-5 py-4">
             <div>
               <p className="arena-kicker">Rankings</p>
-              <h2 className="mt-1 text-xl font-black text-ink-950" id="ranking-list-heading">
+              <PageHeading as="h2" className="mt-1" id="ranking-list-heading" kind="leaderboard" size="section">
                 第四名及以后
-              </h2>
+              </PageHeading>
             </div>
-            <p className="text-xs font-bold text-ink-600">积分相同时继续比较唯一 AC、AC 次数和用户名</p>
+            <p className="max-w-lg text-xs leading-5 text-ink-600">同分时依次比较唯一 AC、AC 次数、用户名和用户 ID</p>
           </div>
           <MobileRankingCards
             currentUserId={currentUserId}
@@ -70,20 +76,21 @@ export function LeaderboardTable({
   );
 }
 
-function Podium({ rankings }: { rankings: StudentRankingEntry[] }) {
+function Podium({ currentUserId, rankings }: { currentUserId?: number; rankings: StudentRankingEntry[] }) {
   return (
-    <section aria-label="天梯前三名" className="bg-[rgba(244,239,228,0.74)] px-4 pb-8 pt-12 md:px-8 md:pt-16">
-      <div className="mx-auto grid max-w-5xl items-end gap-4 md:grid-cols-3">
+    <section aria-label="天梯前三名" className="ladder-podium">
+      <p className="ladder-podium-heading">天梯前三名 <span>每一步，都值得被看见</span></p>
+      <div className="ladder-podium-grid">
         {rankings.map((entry) => {
           const orderClass =
             entry.rank === 1
-              ? "order-1 md:order-2 md:-translate-y-5"
+              ? "podium-champion order-1 md:order-2"
               : entry.rank === 2
                 ? "order-2 md:order-1"
                 : "order-3";
           return (
             <div className={orderClass} key={entry.userId}>
-              <PodiumCard entry={entry} />
+              <PodiumCard entry={entry} isCurrentUser={entry.userId === currentUserId} />
             </div>
           );
         })}
@@ -92,41 +99,31 @@ function Podium({ rankings }: { rankings: StudentRankingEntry[] }) {
   );
 }
 
-function PodiumCard({ entry }: { entry: StudentRankingEntry }) {
+function PodiumCard({ entry, isCurrentUser }: { entry: StudentRankingEntry; isCurrentUser: boolean }) {
   const delay = entry.rank === 1 ? "80ms" : entry.rank === 2 ? "0ms" : "150ms";
   const PlaceIcon = entry.rank === 1 ? Crown : entry.rank === 2 ? Trophy : Medal;
 
   return (
     <article
-      className="podium-card p-5 text-center"
+      className="podium-card text-center"
+      data-ranking-user-id={entry.userId}
       data-place={entry.rank}
       style={{ "--podium-delay": delay } as PodiumStyle}
+      tabIndex={-1}
     >
       <span aria-hidden="true" className="podium-shine" />
       <div className="flex items-center justify-between gap-3">
         <span className="data-number text-sm font-black text-ink-600">NO. {entry.rank}</span>
         <PlaceIcon aria-hidden="true" className="text-clay" size={20} />
       </div>
-      <div className="mx-auto mt-5 flex h-16 w-16 items-center justify-center border border-ink-950/12 bg-ink-950 text-2xl font-black text-linen shadow-[6px_6px_0_rgba(182,107,65,0.2)]">
-        {getUsernameInitial(entry.username)}
-      </div>
-      <h3 className="mt-4 truncate text-xl font-black text-ink-950" title={entry.username}>
+      <RankEmblem className="rank-emblem-podium" eager tierTitle={entry.tierTitle} />
+      <h3 className="podium-username" title={entry.username}>
         {entry.username}
       </h3>
-      <p className="mt-1 truncate text-sm font-black text-clay" title={entry.displayTitle}>
-        {entry.displayTitle}
-      </p>
-      <div className="mt-4 flex items-center justify-center gap-2 border-y border-ink-950/10 py-3">
-        <RankEmblem className="rank-emblem-sm" tierTitle={entry.tierTitle} />
-        <span className="text-left">
-          <span className="block text-xs font-bold text-ink-600">自动段位</span>
-          <span className="block text-sm font-black text-ink-950">{entry.tierTitle}</span>
-        </span>
-      </div>
-      <div className="mt-4 grid grid-cols-2 gap-2 text-left">
-        <PodiumMetric label="积分" value={entry.points} />
-        <PodiumMetric label="唯一 AC" value={entry.acCount} />
-      </div>
+      <p className="podium-tier">{entry.tierTitle}{isCurrentUser ? <UiBadge className="ml-2" tone="info">我</UiBadge> : null}</p>
+      {entry.customTitle ? <p className="podium-custom-title" title={entry.customTitle}>{entry.customTitle}</p> : null}
+      <p className="podium-points"><strong className="data-number">{entry.points}</strong><span>积分</span></p>
+      <p className="podium-accepted">通过 {entry.acCount} 题</p>
     </article>
   );
 }
@@ -134,11 +131,13 @@ function PodiumCard({ entry }: { entry: StudentRankingEntry }) {
 function CurrentBattleCard({
   currentRanking,
   rankings,
+  tiers,
 }: {
   currentRanking: StudentRankingEntry;
   rankings: StudentRankingEntry[];
+  tiers: readonly RankTier[];
 }) {
-  const progress = getRankTierProgress(currentRanking.points);
+  const progress = getRankTierProgress(currentRanking.points, tiers);
   const previousRanking = currentRanking.rank > 1 ? rankings[currentRanking.rank - 2] : null;
   const firstRanking = rankings[0] ?? null;
   const pointsGap = previousRanking
@@ -150,19 +149,20 @@ function CurrentBattleCard({
   const progressScale = progress.progressPercent / 100;
 
   return (
-    <section className="border-t border-ink-950/10 bg-steel/10 px-4 py-6 md:px-8" aria-labelledby="my-battle-heading">
-      <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-[1fr_1.35fr]">
+    <section className="ladder-my-battle" aria-labelledby="my-battle-heading">
+      <div className="ladder-my-battle-grid">
         <div className="flex items-center gap-4">
-          <RankEmblem tierTitle={currentRanking.tierTitle} />
+          <RankEmblem className="rank-emblem-battle" eager tierTitle={currentRanking.tierTitle} />
           <div className="min-w-0">
             <p className="arena-kicker">My Record</p>
-            <h2 className="mt-1 truncate text-2xl font-black text-ink-950" id="my-battle-heading">
+            <PageHeading as="h2" className="mt-1" id="my-battle-heading" size="section">
               我的战绩 · 第 {currentRanking.rank} 名
-            </h2>
-            <p className="mt-1 text-sm font-bold text-ink-600">
-              {currentRanking.displayTitle} · {currentRanking.points} 积分 · 唯一 AC {currentRanking.acCount} 题
+            </PageHeading>
+            <p className="mt-1 break-words text-sm text-ink-600">
+              {currentRanking.tierTitle} · {currentRanking.points} 积分 · 通过 {currentRanking.acCount} 题
             </p>
-            <div className="mt-2 grid gap-1 text-sm font-black text-steel">
+            {currentRanking.customTitle ? <p className="mt-1 break-words text-xs text-clay">{currentRanking.customTitle}</p> : null}
+            <div className="mt-2 grid gap-1 text-xs font-semibold text-steel">
               {currentRanking.rank === 1 ? (
                 <p>你正在守擂，继续完成新题巩固第一名。</p>
               ) : (
@@ -183,14 +183,14 @@ function CurrentBattleCard({
           </div>
         </div>
 
-        <div className="border border-steel/20 bg-white/72 p-4">
+        <div className="ladder-next-target">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-ink-600">Tier Progress</p>
-              <p className="mt-1 text-lg font-black text-ink-950">
+              <p className="text-xs text-ink-600">下一个目标</p>
+              <p className="mt-1 text-lg font-bold text-ink-950">
                 {progress.isMaxTier
                   ? "已达到最高段位"
-                  : `距离 ${progress.nextTierTitle} 还差 ${progress.pointsToNextTier} 分`}
+                  : `晋级 ${progress.nextTierTitle}`}
               </p>
             </div>
             <span className="data-number text-2xl font-black text-steel">{progress.progressPercent}%</span>
@@ -200,7 +200,7 @@ function CurrentBattleCard({
             aria-valuemax={100}
             aria-valuemin={0}
             aria-valuenow={progress.progressPercent}
-            className="mt-3 h-3 overflow-hidden border border-ink-950/10 bg-linen p-[2px]"
+            className="ladder-progress-track"
             role="progressbar"
           >
             <div
@@ -208,6 +208,7 @@ function CurrentBattleCard({
               style={{ "--progress": progressScale } as ProgressStyle}
             />
           </div>
+          <div className="ladder-battle-actions"><NavigationLink className="btn btn-primary" href="/student/problems">去挑战新题</NavigationLink><LocateRankingButton userId={currentRanking.userId} /></div>
           <div className="mt-2 flex justify-between gap-3 text-xs font-bold text-ink-600">
             <span>{progress.currentTierTitle}</span>
             <span>
@@ -232,34 +233,36 @@ function MobileRankingCards({
   showAdminColumns: boolean;
 }) {
   return (
-    <div className="grid gap-3 p-4 md:hidden">
+    <div className="grid min-w-0 grid-cols-1 gap-3 p-4 md:hidden">
       {rankings.map((entry) => {
         const isCurrentUser = entry.userId === currentUserId;
         return (
           <article
-            className={`leaderboard-row border p-4 ${
+            className={`leaderboard-row min-w-0 border p-4 ${
               isCurrentUser
                 ? "border-steel/35 bg-steel/10"
                 : "border-ink-950/10 bg-white/65"
             }`}
             key={entry.userId}
+            data-ranking-user-id={entry.userId}
+            tabIndex={-1}
           >
-            <div className="flex items-start gap-3">
-              <span className="data-number flex h-10 min-w-10 items-center justify-center bg-ink-950 px-2 text-sm font-black text-linen">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="data-number ladder-row-place">
                 {entry.rank}
               </span>
               <RankEmblem className="rank-emblem-sm" tierTitle={entry.tierTitle} />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="truncate font-black text-ink-950">{entry.username}</h3>
+                <div className="flex min-w-0 items-center gap-2">
+                  <h3 className="min-w-0 flex-1 truncate font-bold text-ink-950" title={entry.username}>{entry.username}</h3>
                   {isCurrentUser ? (
-                    <UiBadge className="border border-steel/25 bg-steel/10 px-2 py-0.5 text-xs font-black text-steel">我</UiBadge>
+                    <UiBadge className="flex-none border border-steel/25 bg-steel/10 px-2 py-0.5 text-xs font-black text-steel">我</UiBadge>
                   ) : null}
                 </div>
-                <p className="mt-1 truncate text-sm font-black text-clay">{entry.displayTitle}</p>
+                {entry.customTitle ? <p className="mt-1 truncate text-xs text-clay" title={entry.customTitle}>{entry.customTitle}</p> : null}
                 <p className="mt-1 text-xs font-bold text-ink-600">{entry.tierTitle}</p>
               </div>
-              <div className="text-right">
+              <div className="ladder-mobile-points flex-none text-right">
                 <p className="data-number text-xl font-black text-ink-950">{entry.points}</p>
                 <p className="text-xs font-bold text-ink-600">积分</p>
               </div>
@@ -309,15 +312,17 @@ function DesktopRankingTable({
                   isCurrentUser ? "bg-steel/10" : "bg-white/35"
                 }`}
                 key={entry.userId}
+                data-ranking-user-id={entry.userId}
+                tabIndex={-1}
               >
                 <td className="px-5 py-4">
-                  <span className="data-number inline-flex h-9 min-w-9 items-center justify-center bg-ink-950 px-2 text-sm font-black text-linen">
+                  <span className="data-number ladder-row-place">
                     {entry.rank}
                   </span>
                 </td>
                 <td className="px-5 py-4">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="max-w-52 truncate font-black">{entry.username}</span>
+                    <span className="max-w-52 truncate font-bold" title={entry.username}>{entry.username}</span>
                     {isCurrentUser ? (
                       <UiBadge className="border border-steel/25 bg-steel/10 px-2 py-0.5 text-xs font-black text-steel">我</UiBadge>
                     ) : null}
@@ -327,7 +332,7 @@ function DesktopRankingTable({
                   <div className="flex items-center gap-3">
                     <RankEmblem className="rank-emblem-sm" tierTitle={entry.tierTitle} />
                     <div className="min-w-0">
-                      <p className="max-w-56 truncate text-sm font-black text-clay">{entry.displayTitle}</p>
+                      {entry.customTitle ? <p className="max-w-56 truncate text-sm font-semibold text-clay" title={entry.customTitle}>{entry.customTitle}</p> : null}
                       <p className="text-xs font-bold text-ink-600">{entry.tierTitle}</p>
                     </div>
                   </div>
@@ -379,25 +384,8 @@ function SummaryStat({
   value: number;
 }) {
   return (
-    <div className="flex items-center gap-3 border-white/10 px-5 py-4 sm:border-r last:border-r-0">
-      <span className="text-[#d6a44a]">{icon}</span>
-      <span>
-        <span className="block text-xs font-black uppercase tracking-[0.14em] text-[#d9d2c3]">{label}</span>
-        <span className="data-number mt-0.5 block text-2xl font-black">{value}</span>
-      </span>
+    <div className="ladder-summary-stat">
+      <span aria-hidden="true">{icon}</span><span>{label}</span><strong className="data-number">{value}</strong>
     </div>
   );
-}
-
-function PodiumMetric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="bg-linen/80 px-3 py-2">
-      <p className="text-xs font-bold text-ink-600">{label}</p>
-      <p className="data-number mt-0.5 text-xl font-black text-ink-950">{value}</p>
-    </div>
-  );
-}
-
-function getUsernameInitial(username: string) {
-  return Array.from(username.trim())[0] ?? "学";
 }

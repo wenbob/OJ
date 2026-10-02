@@ -495,11 +495,14 @@ a:focus-visible {
   flex: none;
   align-items: center;
   justify-content: center;
-  clip-path: polygon(50% 0, 91% 22%, 91% 72%, 50% 100%, 9% 72%, 9% 22%);
-  background: var(--rank-accent);
   color: #fffaf1;
-  filter: drop-shadow(0 6px 7px rgba(33, 29, 23, 0.18));
+  filter: drop-shadow(0 4px 5px rgba(33, 29, 23, 0.16));
 }
+
+.rank-emblem-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.rank-emblem-fallback { display: flex; width: 65%; height: 65%; align-items: center; justify-content: center; background: var(--rank-accent); clip-path: polygon(50% 0, 91% 22%, 91% 72%, 50% 100%, 9% 72%, 9% 22%); }
+.rank-emblem[data-image-state="loaded"] .rank-emblem-fallback { visibility: hidden; }
+.rank-emblem[data-image-state="loading"] .rank-emblem-image { visibility: hidden; }
 
 .rank-emblem[data-tier="silver"] { --rank-accent: #71808a; --rank-soft: #e4e9eb; }
 .rank-emblem[data-tier="gold"] { --rank-accent: #a97b24; --rank-soft: #f2e4bd; }
@@ -510,8 +513,186 @@ a:focus-visible {
 .rank-emblem[data-tier="glory"] { --rank-accent: #252b2f; --rank-soft: #e0ddd3; }
 
 .rank-emblem-sm {
-  height: 2.35rem;
-  width: 2.35rem;
+  height: 2.75rem;
+  width: 2.75rem;
+}
+
+.rank-emblem-home { width: 10rem; height: 10rem; }
+.rank-emblem-home-podium { width: 4.75rem; height: 4.75rem; }
+.rank-emblem-hero { width: 11rem; height: 11rem; }
+.rank-emblem-podium { width: 8rem; height: 8rem; margin: 0.4rem auto 0; }
+.rank-emblem-battle { width: 5.5rem; height: 5.5rem; }
+.rank-emblem-path { width: 4.25rem; height: 4.25rem; }
+
+/* Student home keeps the paper palette; achievement areas use steel and gold. */
+.training-home-grid { display: grid; min-width: 0; gap: 1.25rem; }
+.training-challenge { position: relative; overflow: hidden; min-width: 0; padding: 1.75rem 2rem; border: 1px solid #354e60; border-radius: 12px; background: radial-gradient(ellipse at 10% 60%, #496375 0, transparent 65%), #263e4f; color: #fffdf7; }
+.training-challenge .arena-kicker, .ladder-hero .arena-kicker { color: #edcb89; }
+.training-challenge-intro { margin-top: 0.55rem; font-size: 0.875rem; color: #d8e2e5; }
+.training-rank-identity { display: flex; align-items: center; gap: 1.1rem; margin: 0.75rem -0.75rem; }
+.training-emblem-link { flex: none; display: inline-flex; border-radius: 12px; }
+.training-emblem-link > .navigation-link-content { display: flex; }
+.training-emblem-link:focus-visible { outline-color: #f1d291; }
+.training-rank-copy { min-width: 0; flex: 1; }
+.training-rank-eyebrow { color: #c2d0d8; font-size: 0.75rem; }
+.training-rank-copy h2 { margin-top: 0.25rem; color: #f6d895; }
+.training-custom-title { margin-top: 0.2rem; font-size: 0.75rem; color: #e8ded0; overflow-wrap: anywhere; }
+.training-rank-stats { display: flex; flex-wrap: wrap; gap: 0.65rem 1.5rem; margin-top: 0.85rem; }
+.training-rank-stats > span { display: grid; gap: 0.2rem; color: #c2d0d8; font-size: 0.75rem; }
+.training-rank-stats strong { font-size: 1.5rem; font-weight: 700; color: #fffdf7; line-height: 1.25; }
+.training-tier-target { font-size: 0.875rem; color: #d8e2e5; }
+.training-tier-target strong { color: #f6d895; font-weight: 600; }
+.training-tier-track { height: 5px; margin-top: 0.7rem; overflow: hidden; border-radius: 3px; background: #536b7a; }
+.training-tier-track > span { display: block; height: 100%; border-radius: inherit; background: #f1cb79; }
+.training-challenge-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-top: 1.25rem; }
+.training-challenge-footer > span { font-size: 0.75rem; color: #c2d0d8; }
+.training-start-button { min-height: 3.25rem; min-width: 11.5rem; border-color: #eed199; background: #f1d291; color: #293c46; font-size: 1rem; box-shadow: 0 4px 16px #172c3b44; }
+.training-start-button:hover, .ladder-challenge-button:hover { background: #f8dda8; }
+.training-start-button:focus-visible, .ladder-challenge-button:focus-visible { outline-color: #fff1c9; }
+.training-home-podium { display: flex; flex-direction: column; min-width: 0; padding: 1.5rem; }
+.training-podium-caption { font-size: 0.75rem; color: #68736e; }
+.training-podium-list { display: grid; flex: 1; margin-top: 1rem; align-content: center; gap: 0.6rem; }
+.training-podium-entry { display: flex; align-items: center; min-width: 0; gap: 0.5rem; padding: 0.4rem 0.5rem; border-radius: 8px; }
+.training-podium-entry[data-place="1"] { background: #f7eedb; }
+.training-podium-place { width: 1.5rem; flex: none; color: #7f7565; font-size: 0.85rem; font-weight: 700; }
+.training-podium-entry[data-place="1"] .training-podium-place { color: #946926; }
+.training-podium-points { display: grid; text-align: right; flex: none; gap: 0.25rem; }
+.training-podium-points strong { font-size: 1.25rem; color: #293f4e; }
+.training-podium-points > span { color: #68736e; font-size: 0.7rem; }
+.training-full-ladder { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--arena-line); color: #4f6f88; font-size: 0.875rem; font-weight: 600; }
+.training-podium-empty { flex: 1; padding: 2.5rem 0; font-size: 0.875rem; line-height: 1.8; color: #68736e; }
+.training-notice { display: flex; align-items: flex-start; gap: 0.7rem; min-width: 0; margin: 1rem 0; padding: 0.6rem 0.2rem; font-size: 0.8rem; line-height: 1.7; color: #697269; }
+.training-notice > svg { flex: none; margin-top: 0.15rem; color: #b66b41; }
+.training-notice > details { flex: 1; min-width: 0; }
+.training-notice summary { display: flex; gap: 0.5rem; align-items: center; cursor: pointer; list-style: none; }
+.training-notice summary::-webkit-details-marker { display: none; }
+.training-notice summary:focus-visible { outline: 2px solid #4f6f88; outline-offset: 3px; border-radius: 3px; }
+.training-notice-preview { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.training-notice-expand, .training-notice-collapse { flex: none; color: #4f6f88; font-weight: 600; }
+.training-notice-collapse { display: none; }
+.training-notice details[open] .training-notice-expand { display: none; }
+.training-notice details[open] .training-notice-collapse { display: inline; }
+.training-notice details[open] summary > svg { transform: rotate(180deg); }
+.training-notice p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.training-notice details > p { margin-top: 0.5rem; }
+.training-assignment { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-bottom: 1.25rem; padding: 1.25rem 1.5rem; }
+.training-assignment-progress { display: grid; min-width: 9rem; gap: 0.5rem; font-size: 0.75rem; color: #68736e; }
+.training-shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 1.25rem; overflow: hidden; }
+.training-quick-link { min-width: 0; padding: 1.3rem 1.25rem; border-right: 1px solid var(--arena-line); border-bottom: 1px solid var(--arena-line); transition: background-color 150ms ease; }
+.training-quick-link:nth-child(2n) { border-right: 0; }
+.training-quick-link:nth-child(n+3) { border-bottom: 0; }
+.training-quick-link:hover { background: #eef2f0; }
+.training-quick-content { display: flex; gap: 0.8rem; align-items: center; font-size: 0.875rem; }
+.training-quick-content > svg { flex: none; color: #4f6f88; }
+.training-quick-arrow { opacity: 0.7; }
+.training-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem; padding: 1rem 0.2rem; font-size: 0.75rem; color: #4f6f88; }
+.training-footer > a > span { display: flex; align-items: center; gap: 0.4rem; }
+.training-latest { display: block; padding: 0.85rem 0.2rem; border-top: 1px solid var(--arena-line); font-size: 0.8rem; }
+.training-latest-content { display: flex; align-items: center; gap: 0.8rem; }
+.training-latest-content > svg { color: #4f6f88; flex: none; }
+
+/* Shared ladder: the same badges and podium in all three roles. */
+.ladder-hero { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 1.5rem; padding: 1.75rem 2rem; background: radial-gradient(ellipse at 90% 25%, #53637455, transparent 55%), #263e4f; color: #fffdf7; }
+.ladder-hero-copy { min-width: 0; }
+.ladder-hero .arena-heading-icon { color: #edcb89; }
+.ladder-hero-subtitle { margin-top: 0.5rem; color: #e3e8e6; font-size: 0.875rem; }
+.ladder-rule { margin-top: 0.45rem; color: #c2d0d8; font-size: 0.75rem; line-height: 1.6; }
+.ladder-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1.25rem; margin-top: 1.15rem; }
+.ladder-challenge-button { border-color: #eed199; background: #f1d291; color: #293c46; font-size: 0.875rem; }
+.ladder-secondary-link { display: inline-flex; align-items: center; gap: 0.4rem; color: #ebd39d; font-size: 0.8rem; }
+.ladder-hero-emblem { flex: none; display: grid; justify-items: center; gap: 0.1rem; margin-right: 1rem; }
+.ladder-hero-emblem > span:last-child { font-size: 0.7rem; color: #e9d29e; letter-spacing: 0.12em; }
+.ladder-summary { display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; padding: 1rem 2rem; border-bottom: 1px solid var(--arena-line); background: #f5f1e8; }
+.ladder-summary-stat { display: flex; gap: 0.5rem; align-items: center; color: #68736e; font-size: 0.75rem; }
+.ladder-summary-stat > span:first-child { color: #4f6f88; }
+.ladder-summary-stat strong { color: #293f4e; font-size: 0.95rem; }
+.ladder-my-battle { padding: 1.5rem 2rem; border-bottom: 1px solid var(--arena-line); background: #edf1ee; }
+.ladder-my-battle-grid { display: grid; gap: 1.25rem; }
+.ladder-next-target { min-width: 0; border-radius: 8px; background: #fffdf7; border: 1px solid #b7c7cd; padding: 1rem; }
+.ladder-progress-track { height: 6px; border-radius: 3px; overflow: hidden; margin-top: 0.75rem; background: #dae2df; }
+.ladder-battle-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; }
+.ladder-battle-actions .btn { font-size: 0.8rem; }
+.ranking-locate-button { background: #fffdf7; color: #4f6f88; border-color: #b7c7cd; }
+.ladder-podium { padding: 1.5rem 2rem 2rem; background: radial-gradient(ellipse at 50% 40%, #f2e2bd55, transparent 75%), #faf6ec; }
+.ladder-podium-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1rem; font-size: 1.1rem; font-weight: 700; color: #293f4e; }
+.ladder-podium-heading > span { font-size: 0.75rem; color: #7b7669; font-weight: 400; }
+.ladder-podium-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; max-width: 58rem; margin: 1.75rem auto 0; gap: 1rem; }
+.podium-champion { grid-column: span 2; }
+.ladder-podium .podium-card { border-radius: 12px; padding: 1rem 1.25rem 1.25rem; }
+.ladder-podium .podium-card[data-place="1"] { background: linear-gradient(150deg, #fff8e6, #f5ead2); border-color: #d8b574; }
+.ladder-podium .podium-card[data-place="1"] .rank-emblem-podium { width: 10rem; height: 10rem; }
+.podium-username { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.15rem; font-weight: 700; color: #293f4e; }
+.podium-tier { margin-top: 0.25rem; color: #8c692d; font-size: 0.8rem; }
+.podium-custom-title { margin-top: 0.25rem; font-size: 0.75rem; color: #8d4b2d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.podium-points { display: flex; align-items: baseline; justify-content: center; gap: 0.4rem; margin-top: 0.6rem; }
+.podium-points strong { font-size: 1.85rem; line-height: 1.2; font-weight: 700; color: #293f4e; }
+.podium-points > span, .podium-accepted { font-size: 0.7rem; color: #697269; }
+.podium-accepted { margin-top: 0.35rem; }
+.ladder-row-place { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; flex: none; border-radius: 6px; color: #4f6f88; background: #e9eeed; font-size: 0.85rem; font-weight: 700; }
+.ladder-board .leaderboard-row { border-radius: 8px; }
+[data-ranking-user-id]:focus { outline: 3px solid #a77b31; outline-offset: -3px; }
+.rank-path { padding: 1.5rem 2rem; border-top: 1px solid var(--arena-line); background: #fffdf7; }
+.rank-path-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.65rem; margin-top: 1.25rem; }
+.rank-path-step { display: flex; flex-direction: column; min-width: 0; align-items: center; padding: 0.55rem 0.2rem; border: 1px solid transparent; border-radius: 8px; }
+.rank-path-step[data-state="current"] { border-color: #cab37f; background: #fcf3df; }
+.rank-path-step[data-state="locked"] .rank-emblem { opacity: 0.52; filter: grayscale(0.65); }
+.rank-path-name { margin-top: 0.25rem; font-size: 0.75rem; font-weight: 600; color: #414a43; }
+.rank-path-threshold { margin-top: 0.25rem; font-size: 0.7rem; color: #697269; }
+.rank-path-status { height: 1rem; margin-top: 0.3rem; color: #796236; font-size: 0.65rem; }
+
+@media (min-width: 768px) {
+  .training-shortcuts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .training-quick-link:nth-child(n) { border-right: 1px solid var(--arena-line); border-bottom: 0; }
+  .training-quick-link:last-child { border-right: 0; }
+  .ladder-podium-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
+  .podium-champion { grid-column: 2; }
+  .ladder-podium .podium-card[data-place="1"] { padding-top: 1.25rem; padding-bottom: 1.5rem; }
+  .rank-path-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0.3rem; }
+}
+@media (min-width: 1024px) {
+  .training-home-grid { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); }
+  .ladder-my-battle-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; }
+}
+@media (max-width: 767px) {
+  .training-challenge { padding: 1.5rem; }
+  .training-rank-identity { gap: 0.5rem; }
+  .rank-emblem-home { height: 8.5rem; width: 8.5rem; }
+  .training-home-podium { padding: 1.25rem; }
+  .training-assignment { padding: 1.25rem; }
+  .training-assignment-progress { flex: 1; }
+  .training-quick-link { padding: 1.1rem; }
+  .training-quick-arrow { display: none; }
+  .ladder-hero { padding: 1.5rem; gap: 0.5rem; }
+  .ladder-hero-emblem { display: none; }
+  .ladder-summary { padding: 1rem 1.5rem; gap: 0.6rem 1.2rem; }
+  .ladder-my-battle, .ladder-podium, .rank-path { padding: 1.25rem; }
+  .ladder-podium .podium-card { padding: 0.85rem 0.7rem 1rem; }
+  .rank-emblem-podium { height: 6rem; width: 6rem; }
+  .rank-path-grid { gap: 0.25rem; }
+  .rank-emblem-path { height: 3.25rem; width: 3.25rem; }
+  .rank-path-name { font-size: 0.65rem; }
+}
+@media (max-width: 380px) {
+  .training-challenge { padding: 1.25rem; }
+  .training-challenge .arena-heading-hero { font-size: 1.5rem; }
+  .rank-emblem-home { width: 6.5rem; height: 6.5rem; }
+  .training-rank-stats { gap: 0.6rem; }
+  .training-rank-stats strong { font-size: 1.15rem; }
+  .training-podium-caption { display: none; }
+  .rank-emblem-home-podium { width: 3.4rem; height: 3.4rem; }
+  .training-podium-entry { padding-left: 0; padding-right: 0.25rem; gap: 0.3rem; }
+  .training-podium-place { width: 1.1rem; }
+  .training-start-button { width: 100%; }
+  .training-quick-content { gap: 0.55rem; }
+  .training-quick-link { padding: 0.85rem; }
+  .rank-emblem-battle { width: 3.25rem; height: 3.25rem; }
+  .ladder-podium .rank-emblem-podium { width: 5rem; height: 5rem; }
+  .podium-card:not([data-place="1"]) .podium-points { display: block; }
+  .podium-card:not([data-place="1"]) .podium-points strong { font-size: 1.5rem; }
+  .podium-card:not([data-place="1"]) .podium-points > span { display: block; margin-top: 0.2rem; }
+  .ladder-board .leaderboard-row { padding: 0.85rem 0.7rem; }
+  .ladder-board .leaderboard-row > div:first-child { gap: 0.5rem; }
+  .rank-path { padding: 1.25rem 0.7rem; }
 }
 
 .rank-accent-text {

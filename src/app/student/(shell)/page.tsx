@@ -1,284 +1,167 @@
+import { ArrowRight, ChevronDown, Megaphone } from "lucide-react";
+import { NavigationLink } from "@/components/NavigationLink";
 import { PageHeading } from "@/components/PageHeading";
-import Link from "next/link";
-import {
-  ArrowRight, BookOpenCheck, CheckCircle2, ClipboardList, History,
-  Megaphone, PenLine, Target, Timer, Trophy,
-} from "lucide-react";
-import { AcademyIllustration, type AcademyIllustrationKind } from "@/components/AcademyIllustration";
 import { RankEmblem } from "@/components/RankEmblem";
 import { StudentAssignmentReminderModal } from "@/components/StudentAssignmentReminderModal";
 import { RewardsHomeBanner } from "@/components/RewardsPanel";
 import { StatusBadge } from "@/components/StatusBadge";
+import { UiIcon, type UiIconKind } from "@/components/UiIcon";
 import { requirePageUser } from "@/lib/auth";
 import { getStudentLearningReview } from "@/lib/learningReview";
 import { prisma } from "@/lib/prisma";
-import {
-  findRankingByUserId, getRankTierProgress, getStudentRankings,
-  type StudentRankingEntry,
-} from "@/lib/ranking";
+import { findRankingByUserId, getRankTierProgress, getStudentRankings, type StudentRankingEntry } from "@/lib/ranking";
 import { getPublicSettings } from "@/lib/settings";
-import {
-  getAssignmentPublisherLabel, hasIncompleteAssignmentProblems,
-  type PendingAssignmentReminderItem,
-} from "@/lib/studentAssignmentReminder";
+import { getLadderSettingsForRender } from "@/lib/ladderSettings";
+import type { RankTier } from "@/lib/ladderShared";
+import { getAssignmentPublisherLabel, hasIncompleteAssignmentProblems, type PendingAssignmentReminderItem } from "@/lib/studentAssignmentReminder";
 
 const getStudentHomeAssignments = async (userId: number) => {
   const activeAssignments = await prisma.learningAssignment.findMany({
     where: { studentId: userId, status: "active" },
-    include: {
-      createdBy: { select: { role: true, username: true } },
-      problems: { select: { completedAt: true } },
-    },
+    include: { createdBy: { select: { role: true, username: true } }, problems: { select: { completedAt: true } } },
     orderBy: { createdAt: "desc" },
   });
-  const pendingAssignments = activeAssignments.filter((assignment) =>
-    hasIncompleteAssignmentProblems(assignment.problems),
-  );
-  const reminderItems: PendingAssignmentReminderItem[] = pendingAssignments.map(
-    (assignment) => ({
-      completedCount: assignment.problems.filter((problem) => problem.completedAt).length,
-      dueAt: assignment.dueAt?.toISOString() ?? null,
-      id: assignment.id,
-      problemCount: assignment.problems.length,
-      publisherLabel: getAssignmentPublisherLabel(assignment.createdBy),
-      title: assignment.title,
-      updatedAt: assignment.updatedAt.toISOString(),
-    }),
-  );
-  const recentAssignment = pendingAssignments[0] ?? activeAssignments[0] ?? null;
-  return {
-    pendingCount: pendingAssignments.length,
-    recentAssignment,
-    recentAssignmentCompleted: recentAssignment
-      ? recentAssignment.problems.filter((problem) => problem.completedAt).length : 0,
-    reminderItems,
-  };
+  const pending = activeAssignments.filter((assignment) => hasIncompleteAssignmentProblems(assignment.problems));
+  const reminderItems: PendingAssignmentReminderItem[] = pending.map((assignment) => ({
+    completedCount: assignment.problems.filter((problem) => problem.completedAt).length,
+    dueAt: assignment.dueAt?.toISOString() ?? null,
+    id: assignment.id,
+    problemCount: assignment.problems.length,
+    publisherLabel: getAssignmentPublisherLabel(assignment.createdBy),
+    title: assignment.title,
+    updatedAt: assignment.updatedAt.toISOString(),
+  }));
+  return { pendingCount: pending.length, recentAssignment: pending[0] ?? null, reminderItems };
 };
 
 export default async function StudentHomePage() {
   const user = await requirePageUser("student");
-  const [
-    problemCount, examCount, dailySubmissionCount, examSubmissionCount,
-    acceptedCount, settings, assignmentData, currentRanking, learningReview, recentSubmissions,
-  ] = await Promise.all([
+  const ladderSettings = await getLadderSettingsForRender();
+  const [problemCount, examCount, settings, assignmentData, rankings, learningReview, recentSubmissions] = await Promise.all([
     prisma.problem.count({ where: { archivedAt: null } }),
     prisma.exam.count({ where: { status: "published" } }),
-    prisma.submission.count({ where: { userId: user.id, submissionType: "practice" } }),
-    prisma.submission.count({ where: { userId: user.id, submissionType: "exam" } }),
-    prisma.submission.count({ where: { userId: user.id, status: "Accepted" } }),
     getPublicSettings(),
     getStudentHomeAssignments(user.id),
-    getStudentRankings().then((rankings) => findRankingByUserId(rankings, user.id)),
+    getStudentRankings(undefined, ladderSettings.tiers),
     getStudentLearningReview(user.id),
     prisma.submission.findMany({
       where: { userId: user.id },
-      select: {
-        id: true, status: true, submissionType: true, createdAt: true,
-        problem: { select: { title: true } },
-      },
+      select: { id: true, status: true, submissionType: true, createdAt: true, problem: { select: { title: true } } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: 3,
+      take: 1,
     }),
   ]);
-
+  const currentRanking = findRankingByUserId(rankings, user.id);
+  const latest = recentSubmissions[0];
   return (
     <>
       <StudentAssignmentReminderModal assignments={assignmentData.reminderItems} studentId={user.id} />
-      <section className="academy-welcome">
-        <div>
-          <p className="arena-kicker">Today&apos;s Mission</p>
-          <PageHeading kind="home" size="hero" className="mt-2 tracking-tight text-ink-950">今天，向前一步。</PageHeading>
-          <p className="mt-2 text-sm leading-6 text-ink-600">一道新题，一点进步。选择适合你的节奏，继续今天的训练。</p>
-        </div>
-        <span className="academy-resource-count"><Target aria-hidden="true" size={16} />{problemCount} 道题可挑战</span>
+      <section aria-label="今日挑战与天梯前三名" className="training-home-grid">
+        <StudentChallenge currentRanking={currentRanking} problemCount={problemCount} tiers={ladderSettings.tiers} />
+        <HomePodium currentUserId={user.id} rankings={rankings.slice(0, 3)} />
       </section>
-
-      <section className="academy-notice">
-        <Megaphone aria-hidden="true" className="flex-none text-clay" size={17} />
-        <span className="min-w-0 break-words">{settings.studentNotice}</span>
-      </section>
-
-      <section aria-label="今日训练与段位" className="academy-focus-grid">
-        <StudentAssignmentOverview assignmentData={assignmentData} />
-        <StudentRankProgress currentRanking={currentRanking} />
-      </section>
-
-      <section aria-label="我的训练统计" className="academy-stat-strip surface">
-        <StatItem icon={<History size={18} />} label="日常提交" value={dailySubmissionCount} />
-        <StatItem icon={<Timer size={18} />} label="考试提交" value={examSubmissionCount} />
-        <StatItem icon={<BookOpenCheck size={18} />} label="Accepted 次数" value={acceptedCount} />
-        <StatItem icon={<Trophy size={18} />} label="唯一通过题目" value={currentRanking?.acCount ?? 0} />
-      </section>
-
+      <HomeNotice text={settings.studentNotice} />
+      {assignmentData.recentAssignment ? <PendingAssignment assignmentData={assignmentData} /> : null}
       <RewardsHomeBanner />
-
-      <section className="academy-training">
-        <div className="academy-section-heading">
-          <h2 className="text-lg font-bold text-ink-950">选择今天的训练</h2>
-          <span className="text-xs text-ink-600">每一步，都在积累</span>
-        </div>
-        <div className="academy-feature-grid">
-          <HomeLink href="/student/problems" kind="practice" title="日常刷题" text="按知识分类练习，在解题中巩固基础。" meta={`${problemCount} 道题可挑战`} />
-          <HomeLink href="/student/exams" kind="exam" title="模拟考试" text="在规定时间内，检验阶段学习成果。" meta={`${examCount} 场考试已发布`} />
-          <HomeLink href="/student/assignments" kind="assignment" title="专项练习" text="跟随老师的安排，集中攻克薄弱点。" meta={assignmentData.pendingCount ? `${assignmentData.pendingCount} 份任务待完成` : "查看我的专项任务"} />
-          <HomeLink href="/student/rewards" kind="reward" title="我的奖励" text="首次通过新题，领取积分与翻倍机会。" meta="查看奖励与挑战" />
-        </div>
+      <section aria-label="更多训练入口" className="training-shortcuts surface">
+        <HomeQuickLink href="/student/exams" kind="exam" meta={`${examCount} 场已发布`} title="模拟考试" />
+        <HomeQuickLink href="/student/review" kind="review" meta={learningReview.summary.pendingProblemCount ? `${learningReview.summary.pendingProblemCount} 道待攻克` : "复盘，积累进步"} title="错题本" />
+        <HomeQuickLink href="/student/rewards" kind="reward" meta="领取新题奖励" title="我的奖励" />
+        <HomeQuickLink href="/student/submissions" kind="submission" meta="查看解题记录" title="最近提交" />
       </section>
-
-      <section className="academy-bottom-grid">
-        <div className="surface academy-review-panel">
-          <div className="academy-section-heading">
-            <h2 className="flex items-center gap-2 text-lg font-bold"><BookOpenCheck aria-hidden="true" className="text-steel" size={19} />复盘与提升</h2>
-            <Link className="academy-text-link" href="/student/review">打开错题本 <ArrowRight aria-hidden="true" size={14} /></Link>
-          </div>
-          <p className="text-sm leading-6 text-ink-600">
-            {learningReview.summary.pendingProblemCount
-              ? `还有 ${learningReview.summary.pendingProblemCount} 道错题待攻克，给熟悉的知识点一次新的尝试。`
-              : "目前没有待攻克错题，继续挑战新题，保持训练节奏。"}
-          </p>
-          <div className="academy-review-stats">
-            <span><strong>{learningReview.summary.pendingProblemCount}</strong>待攻克错题</span>
-            <span><strong>{learningReview.summary.conqueredProblemCount}</strong>已攻克错题</span>
-          </div>
-          <Link className="academy-review-link" href="/student/leaderboard">
-            <span className="flex items-center gap-2"><Trophy aria-hidden="true" className="text-clay" size={17} />天梯竞技场</span>
-            <span className="flex items-center gap-2 text-xs text-ink-600">{currentRanking ? `当前第 ${currentRanking.rank} 名` : "查看天梯排名"}<ArrowRight aria-hidden="true" size={15} /></span>
-          </Link>
-        </div>
-        <div className="surface academy-recent-panel">
-          <div className="academy-section-heading">
-            <h2 className="flex items-center gap-2 text-lg font-bold"><History aria-hidden="true" className="text-steel" size={19} />最近提交</h2>
-            <Link className="academy-text-link" href="/student/submissions">全部记录 <ArrowRight aria-hidden="true" size={14} /></Link>
-          </div>
-          {recentSubmissions.length ? (
-            <ul className="academy-recent-list">
-              {recentSubmissions.map((submission) => (
-                <li key={submission.id}>
-                  <Link className="academy-recent-link" href={`/student/submissions/${submission.id}`}>
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold" title={submission.problem.title}>{submission.problem.title}</span>
-                      <span className="mt-1 block text-xs text-ink-600">{submission.submissionType === "exam" ? "考试" : "日常"} · {formatHomeDate(submission.createdAt)}</span>
-                    </span>
-                    <StatusBadge status={submission.status} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="academy-small-empty">
-              <PenLine aria-hidden="true" className="text-steel" size={25} strokeWidth={1.5} />
-              <p className="mt-2 text-sm text-ink-600">从一道题开始，记录你的第一份解答。</p>
-              <Link className="academy-text-link mt-3" href="/student/problems">开始日常刷题 <ArrowRight aria-hidden="true" size={14} /></Link>
-            </div>
-          )}
-          <Link className="academy-text-link mt-3" href="/student/exam-submissions">查看考试提交记录 <ArrowRight aria-hidden="true" size={14} /></Link>
-        </div>
-      </section>
+      <div className="training-footer">
+        <NavigationLink href="/student/assignments"><UiIcon kind="assignment" size={15} />我的专项练习</NavigationLink>
+        <NavigationLink href="/student/exam-submissions">考试提交记录<ArrowRight aria-hidden="true" size={14} /></NavigationLink>
+      </div>
+      {latest ? (
+        <NavigationLink className="training-latest" contentAs="div" contentClassName="training-latest-content" href={`/student/submissions/${latest.id}`}>
+          <UiIcon kind="submission" size={16} />
+          <span className="min-w-0 flex-1"><span className="block truncate font-semibold" title={latest.problem.title}>{latest.problem.title}</span><span className="text-xs text-ink-600">最近一次 · {latest.submissionType === "exam" ? "考试" : "日常"} · {formatHomeDate(latest.createdAt)}</span></span>
+          <StatusBadge status={latest.status} /><ArrowRight aria-hidden="true" size={15} />
+        </NavigationLink>
+      ) : null}
     </>
   );
 }
 
-function StudentAssignmentOverview({ assignmentData }: {
-  assignmentData: Awaited<ReturnType<typeof getStudentHomeAssignments>>;
-}) {
-  const { recentAssignment, recentAssignmentCompleted, pendingCount } = assignmentData;
-  const total = recentAssignment?.problems.length ?? 0;
-  const percent = total ? Math.round(recentAssignmentCompleted / total * 100) : 0;
-  const hasPending = pendingCount > 0;
-
+function StudentChallenge({ currentRanking, problemCount, tiers }: { currentRanking: StudentRankingEntry | null; problemCount: number; tiers: readonly RankTier[] }) {
+  const progress = currentRanking ? getRankTierProgress(currentRanking.points, tiers) : null;
   return (
-    <div className="surface academy-task-card">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-semibold text-steel"><ClipboardList aria-hidden="true" size={17} />{recentAssignment ? "老师布置的专项练习" : "今日训练"}</p>
-        <span className={`academy-task-state ${recentAssignment && !hasPending ? "is-complete" : ""}`}>
-          {recentAssignment && !hasPending ? <CheckCircle2 aria-hidden="true" size={13} /> : <span className="academy-state-dot" />}
-          {hasPending ? "待完成" : recentAssignment ? "已完成" : "准备出发"}
-        </span>
+    <div className="training-challenge">
+      <div className="training-challenge-heading">
+        <p className="arena-kicker">One More Challenge</p>
+        <PageHeading className="mt-3" size="hero">今天，挑战下一段位。</PageHeading>
+        <p className="training-challenge-intro">从一道新题开始，让进步看得见。</p>
       </div>
-      <h2 className="mt-4 break-words text-xl font-bold leading-7 text-ink-950">{recentAssignment?.title ?? "从一道新题，开启今天的进步。"}</h2>
-      <p className="mt-2 line-clamp-2 break-words text-sm leading-6 text-ink-600">
-        {recentAssignment?.note || (recentAssignment ? "从专项任务进入题目并重新通过，让每一次练习都计入进度。" : "目前没有专项任务。可以先练习基础知识，也可以参加模拟考试。")}
-      </p>
-      {recentAssignment ? (
-        <div className="mt-5">
-          <div className="mb-2 flex justify-between gap-3 text-xs text-ink-600">
-            <span>训练进度 <strong className="ml-1 font-semibold text-ink-950">{recentAssignmentCompleted} / {total} 题</strong></span>
-            <span className="data-number font-semibold text-steel">{percent}%</span>
-          </div>
-          <div aria-label="专项练习完成进度" aria-valuemax={total} aria-valuemin={0} aria-valuenow={recentAssignmentCompleted} className="academy-progress-track" role="progressbar">
-            <div className="academy-progress-value" style={{ width: `${percent}%` }} />
+      <div className="training-rank-identity">
+        <NavigationLink aria-label="查看我的天梯段位与排名" className="training-emblem-link" href="/student/leaderboard">
+          <RankEmblem className="rank-emblem-home" eager tierTitle={currentRanking?.tierTitle ?? "青铜学徒"} />
+        </NavigationLink>
+        <div className="training-rank-copy">
+          <p className="training-rank-eyebrow">我的段位</p>
+          <h2>{currentRanking?.tierTitle ?? "青铜学徒"}</h2>
+          {currentRanking?.customTitle ? <p className="training-custom-title" title={currentRanking.customTitle}>{currentRanking.customTitle}</p> : null}
+          <div className="training-rank-stats">
+            <span><strong className="data-number">{currentRanking?.points ?? "—"}</strong>积分</span>
+            <span><strong className="data-number">{currentRanking ? `#${currentRanking.rank}` : "—"}</strong>排名</span>
+            <span><strong className="data-number">{currentRanking?.acCount ?? "—"}</strong>通过题数</span>
           </div>
         </div>
-      ) : null}
-      <div className="academy-task-footer">
-        <span className="text-xs leading-5 text-ink-600">{recentAssignment?.dueAt ? `截止 ${formatHomeDate(recentAssignment.dueAt)}` : hasPending ? `共 ${pendingCount} 份任务待完成` : "每道首次通过的新题，积累 10 天梯积分"}</span>
-        <Link className="btn btn-primary" href={hasPending && recentAssignment ? `/student/assignments/${recentAssignment.id}` : "/student/problems"}>
-          {hasPending ? "继续专项练习" : "开始今日刷题"}<ArrowRight aria-hidden="true" size={16} />
-        </Link>
+      </div>
+      <div className="training-tier-target">
+        <p>{progress ? progress.isMaxTier ? "已达荣耀王者，继续刷新你的战绩。" : <>距离 <strong>{progress.nextTierTitle}</strong> 还差 <strong className="data-number">{progress.pointsToNextTier}</strong> 分</> : "通过第一道新题，积累 10 天梯积分。"}</p>
+        {progress ? <div aria-label="当前段位进度" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress.progressPercent} className="training-tier-track" role="progressbar"><span style={{ width: `${progress.progressPercent}%` }} /></div> : null}
+      </div>
+      <div className="training-challenge-footer">
+        <NavigationLink className="btn training-start-button" href="/student/problems">开始刷题<ArrowRight aria-hidden="true" size={19} /></NavigationLink>
+        <span>{problemCount} 道题，等你挑战</span>
       </div>
     </div>
   );
 }
 
-function StudentRankProgress({ currentRanking }: { currentRanking: StudentRankingEntry | null }) {
-  const progress = currentRanking ? getRankTierProgress(currentRanking.points) : null;
+function HomePodium({ currentUserId, rankings }: { currentUserId: number; rankings: StudentRankingEntry[] }) {
   return (
-    <div className="academy-rank-card">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium tracking-wide text-[#c8c9b9]">我的段位</span>
-        <Link className="academy-rank-link" href="/student/leaderboard">查看排名 <ArrowRight aria-hidden="true" size={14} /></Link>
-      </div>
-      {currentRanking && progress ? (
-        <>
-          <div className="academy-rank-identity">
-            <RankEmblem tierTitle={currentRanking.tierTitle} />
-            <div className="min-w-0 flex-1">
-              <h2 className="truncate text-lg font-bold" title={currentRanking.displayTitle}>{currentRanking.displayTitle}</h2>
-              <p className="mt-1 text-xs text-[#c8c9b9]">{currentRanking.tierTitle} · 唯一 AC {currentRanking.acCount} 题</p>
-            </div>
-            <span className="data-number text-2xl font-bold text-[#f2d28c]">#{currentRanking.rank}</span>
-          </div>
-          <div className="academy-rank-points"><strong className="data-number">{currentRanking.points}</strong><span>天梯积分</span></div>
-          <div aria-label="当前段位进度" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress.progressPercent} className="academy-progress-track is-dark" role="progressbar">
-            <div className="academy-progress-value" style={{ width: `${progress.progressPercent}%` }} />
-          </div>
-          <p className="mt-2 text-xs leading-5 text-[#c8c9b9]">{progress.isMaxTier ? "已达最高段位，继续训练，保持进步。" : `距 ${progress.nextTierTitle} 还差 ${progress.pointsToNextTier} 积分`}</p>
-        </>
-      ) : (
-        <div className="py-4">
-          <Trophy aria-hidden="true" className="mb-4 text-[#f2d28c]" size={30} />
-          <h2 className="text-lg font-bold">完成第一道新题，开启天梯。</h2>
-          <p className="mt-2 text-sm leading-6 text-[#c8c9b9]">首次通过可获得 10 积分，记录每一次进步。</p>
-        </div>
-      )}
+    <div className="surface training-home-podium">
+      <div className="flex items-center justify-between gap-2"><PageHeading as="h2" kind="leaderboard" size="section">天梯前三名</PageHeading><span className="training-podium-caption">向高手看齐</span></div>
+      {rankings.length ? <ol className="training-podium-list">
+        {rankings.map((entry) => <li className="training-podium-entry" data-place={entry.rank} key={entry.userId}>
+          <span className="training-podium-place data-number">{String(entry.rank).padStart(2, "0")}</span>
+          <RankEmblem className="rank-emblem-home-podium" eager tierTitle={entry.tierTitle} />
+          <span className="min-w-0 flex-1"><span className="block truncate font-bold" title={entry.username}>{entry.username}{entry.userId === currentUserId ? " · 我" : ""}</span><span className="mt-1 block text-xs text-ink-600">{entry.tierTitle}</span></span>
+          <span className="training-podium-points"><strong className="data-number">{entry.points}</strong><span>积分</span></span>
+        </li>)}
+      </ol> : <p className="training-podium-empty">天梯等待第一位挑战者。<br />从第一道题，开启你的战绩。</p>}
+      <NavigationLink className="training-full-ladder" href="/student/leaderboard">查看完整天梯<ArrowRight aria-hidden="true" size={16} /></NavigationLink>
     </div>
   );
 }
 
-function HomeLink({ href, kind, title, text, meta }: {
-  href: string; kind: AcademyIllustrationKind; title: string; text: string; meta: string;
-}) {
-  return (
-    <Link className="academy-feature-card arena-link-card surface" href={href}>
-      <AcademyIllustration eager kind={kind} />
-      <h3 className="mt-3 text-lg font-bold text-ink-950">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-ink-600">{text}</p>
-      <span className="academy-feature-footer"><span>{meta}</span><ArrowRight aria-hidden="true" className="academy-card-arrow" size={16} /></span>
-    </Link>
-  );
+function HomeNotice({ text }: { text: string }) {
+  const value = text.trim();
+  if (!value) return null;
+  const characters = Array.from(value);
+  const expanded = characters.length > 50 || /[\r\n]/.test(value);
+  return <section aria-label="首页公告" className="training-notice"><Megaphone aria-hidden="true" size={17} />{expanded ? <details><summary><span className="training-notice-preview">{characters.slice(0, 50).join("").replace(/[\r\n]+/g, " ")}{characters.length > 50 ? "…" : ""}</span><span className="training-notice-expand">展开</span><span className="training-notice-collapse">收起</span><ChevronDown aria-hidden="true" size={14} /></summary><p>{value}</p></details> : <p>{value}</p>}</section>;
 }
 
-function StatItem({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
-  return (
-    <div className="academy-stat-item">
-      <span aria-hidden="true" className="academy-stat-icon">{icon}</span>
-      <span><span className="data-number block text-xl font-bold text-ink-950">{value}</span><span className="mt-0.5 block text-xs text-ink-600">{label}</span></span>
-    </div>
-  );
+function PendingAssignment({ assignmentData }: { assignmentData: Awaited<ReturnType<typeof getStudentHomeAssignments>> }) {
+  const assignment = assignmentData.recentAssignment;
+  if (!assignment) return null;
+  const completed = assignment.problems.filter((problem) => problem.completedAt).length;
+  const total = assignment.problems.length;
+  return <section className="surface training-assignment" aria-labelledby="home-assignment-heading">
+    <UiIcon className="text-steel" kind="assignment" size={26} />
+    <div className="min-w-0 flex-1"><p className="text-xs font-medium text-steel">老师布置的任务 · {assignmentData.pendingCount} 份待完成</p><PageHeading as="h2" className="mt-1" id="home-assignment-heading" size="section">{assignment.title}</PageHeading>{assignment.dueAt ? <p className="mt-1 text-xs text-ink-600">截止 {formatHomeDate(assignment.dueAt)}</p> : null}</div>
+    <div className="training-assignment-progress"><span>已完成 <strong className="data-number">{completed} / {total}</strong> 题</span><div aria-label="专项练习完成进度" aria-valuemax={total} aria-valuemin={0} aria-valuenow={completed} className="academy-progress-track" role="progressbar"><div className="academy-progress-value" style={{ width: `${total ? completed / total * 100 : 0}%` }} /></div></div>
+    <NavigationLink className="btn btn-primary" href={`/student/assignments/${assignment.id}`}>继续练习<ArrowRight aria-hidden="true" size={16} /></NavigationLink>
+  </section>;
+}
+
+function HomeQuickLink({ href, kind, meta, title }: { href: string; kind: UiIconKind; meta: string; title: string }) {
+  return <NavigationLink className="training-quick-link" contentAs="div" contentClassName="training-quick-content" href={href}><UiIcon kind={kind} size={23} /><span className="min-w-0 flex-1"><span className="block font-bold">{title}</span><span className="mt-1 block text-xs text-ink-600">{meta}</span></span><ArrowRight aria-hidden="true" className="training-quick-arrow" size={16} /></NavigationLink>;
 }
 
 function formatHomeDate(value: Date) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
-  }).format(value);
+  return new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(value);
 }

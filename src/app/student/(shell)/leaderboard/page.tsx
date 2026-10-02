@@ -1,8 +1,9 @@
-import { PageHeading } from "@/components/PageHeading";
-import { Sparkles, Trophy } from "lucide-react";
+import { LeaderboardHero } from "@/components/LeaderboardHero";
+import { RankTierPath } from "@/components/RankTierPath";
 import { LeaderboardTable } from "@/components/LeaderboardTable";
 import { requirePageUser } from "@/lib/auth";
 import { findRankingByUserId, getStudentRankings } from "@/lib/ranking";
+import { getLadderSettingsForRender } from "@/lib/ladderSettings";
 
 export default async function StudentLeaderboardPage() {
   const e2eDelayMs = Number(process.env.E2E_NAVIGATION_DELAY_MS);
@@ -10,41 +11,16 @@ export default async function StudentLeaderboardPage() {
     await new Promise((resolve) => setTimeout(resolve, e2eDelayMs));
   }
   const user = await requirePageUser("student");
-  const rankings = await getStudentRankings();
+  const settings = await getLadderSettingsForRender();
+  const rankings = await getStudentRankings(undefined, settings.tiers);
   const currentRanking = findRankingByUserId(rankings, user.id);
 
   return (
     <>
       <section className="surface overflow-hidden">
-        <div className="relative overflow-hidden border-b border-ink-950/10 bg-ink-950 p-5 text-linen md:p-8">
-          <div className="absolute -right-16 -top-20 h-52 w-52 rounded-full border-[28px] border-white/5" />
-          <div className="relative flex flex-wrap items-end justify-between gap-5">
-            <div>
-              <p className="arena-kicker text-[#d7a062]">
-                Arena Ladder
-              </p>
-              <PageHeading kind="leaderboard" size="hero" className="mt-2">天梯竞技场</PageHeading>
-              <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#e5ded0]">
-                总积分 = 首次通过题数 × 10 + 抽奖奖励 + 翻倍奖励。
-              </p>
-              <p className="mt-1 text-xs font-semibold text-[#c8c0b2]">
-                每题首次 Accepted 计 10 分；日常与专项新题另有一次抽奖，考试不产生抽奖。
-              </p>
-            </div>
-            {currentRanking ? (
-              <div className="border border-[#d6a44a]/40 bg-[#d6a44a]/10 px-4 py-3 text-sm font-black text-[#f2d28c]">
-                <Trophy className="mr-2 inline" size={17} />
-                <span className="data-number">#{currentRanking.rank}</span> · {currentRanking.displayTitle} · {currentRanking.points} 分
-                <span className="mt-1 block text-xs">基础 {currentRanking.basePoints} 分 + 奖励 {currentRanking.rewardPoints} 分</span>
-              </div>
-            ) : null}
-          </div>
-          <div className="relative mt-6 flex items-center gap-2 text-xs font-bold text-[#c8c0b2]">
-            <Sparkles size={15} />
-            每一道新的唯一 AC，都会推动你的段位与排名向前。
-          </div>
-        </div>
-        <LeaderboardTable currentUserId={user.id} rankings={rankings} />
+        <LeaderboardHero role="student" />
+        <LeaderboardTable currentUserId={user.id} rankings={rankings} tiers={settings.tiers} />
+        <RankTierPath currentTierTitle={currentRanking?.tierTitle} tiers={settings.tiers} />
       </section>
     </>
   );
