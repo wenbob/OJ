@@ -9,6 +9,7 @@ import type {
   RunCppStatus,
 } from "@/lib/cppRun";
 import { formatRuntime } from "@/lib/format";
+import { OutputComparison } from "@/components/OutputComparison";
 
 type RunMode = "samples" | "custom";
 
@@ -279,7 +280,7 @@ export function ProblemRunPanel({
                 const successfulSample = item.status === "matched";
                 return (
                   <div
-                    className="border border-ink-950/10 bg-stone-50 p-3"
+                    className="min-w-0 border border-ink-950/10 bg-stone-50 p-3"
                     key={item.caseIndex}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -299,12 +300,16 @@ export function ProblemRunPanel({
                       </span>
                     </div>
                     {!successfulSample ? (
-                      <div className="mt-3 grid gap-3">
+                      <div className="mt-3 grid min-w-0 gap-3">
                         <OutputBlock title="输入" value={item.input} />
-                        {item.expectedOutput !== undefined ? (
-                          <OutputBlock title="标准输出" value={item.expectedOutput} />
-                        ) : null}
-                        <OutputBlock title="程序输出" value={item.actualOutput} />
+                        {item.status === "mismatched" && item.expectedOutput !== undefined ? (
+                          <OutputComparison actual={item.actualOutput} caseIndex={item.caseIndex} expected={item.expectedOutput} />
+                        ) : (
+                          <>
+                            {item.expectedOutput !== undefined ? <OutputBlock title="标准输出" value={item.expectedOutput} /> : null}
+                            <OutputBlock title="程序输出" value={item.actualOutput} />
+                          </>
+                        )}
                       </div>
                     ) : null}
                     {item.errorMessage && item.errorMessage !== result.errorMessage ? (
@@ -330,9 +335,9 @@ export function ProblemRunPanel({
 
 function OutputBlock({ title, value }: { title: string; value: string }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-xs font-black text-ink-600">{title}</p>
-      <pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap border border-ink-950/10 bg-white p-3 font-mono text-xs text-ink-800">
+      <pre className="mt-1 max-h-36 min-w-0 overflow-auto whitespace-pre-wrap border border-ink-950/10 bg-white p-3 font-mono text-xs text-ink-800 [overflow-wrap:anywhere]">
         {value.length > 0 ? value : "（无内容）"}
       </pre>
     </div>

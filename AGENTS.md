@@ -116,6 +116,7 @@ Next.js App Router + Prisma + SQLite 的 C++ 在线 OJ。生产目录 `/www/oj`�
 ## 共享界面约束
 
 - 三端常规页面复用 `PageHeading`、`UiIcon`、`FilterLink` / `FilterButton`、`UiBadge`、`ProblemContentSection` 和 `AcademyEmptyState`；日常题库共用 `ProblemListTable`。展示组件不接管角色鉴权、查询或统计，组件入口与尺寸规范见 [三端 UI 统一说明](docs/ui-unification-2026-10-02.md)。
+- 编程反馈三端共用 `OutputComparison` 与 `ProgrammingSubmissionResult`：公开样例对比保持标准输出原样，只标红程序输出的差异，复制保留原文；提交卡片显示“通过了 / 未通过”及简短原因。详细信息沿用原提交详情与服务端权限，客观题逐题反馈保持独立；行为与验证见 [编程反馈说明](docs/programming-feedback-2026-10-07.md)。
 - 日常题库、错题本、专项题单和后台考试练习的题目主体使用原生链接扩大点击区域，保留 Enter、Ctrl 点击、新标签页与角色/复盘/任务上下文；有独立控件时使用 `ProblemEntryLink` 与 `.problem-entry`，禁止嵌套链接或用整行 `onClick` 劫持提交记录、复选、拖拽、编辑等操作。
 - 题目未通过悬浮采用淡钢蓝，通过采用淡绿色，当前选中状态单独表达；保留键盘焦点、触屏可用入口和减少动态效果支持。宽表格仅在自己的容器内滚动，长标题不得撑宽页面。
 - 浏览器标题/图标仅由 `BrowserIdentity.tsx` 同步系统设置；图标须为服务端校验、≤256KB 的 PNG/ICO Data URL。

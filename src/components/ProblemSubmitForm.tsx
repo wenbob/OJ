@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { SendHorizontal } from "lucide-react";
@@ -11,14 +10,13 @@ import { useAutomaticOverlay } from "@/lib/automaticOverlay";
 import { ObjectiveSubmissionBreakdown } from "@/components/ObjectiveSubmissionBreakdown";
 import { ProblemAiAssist } from "@/components/ProblemAiAssist";
 import { ProblemRunPanel } from "@/components/ProblemRunPanel";
+import { ProgrammingSubmissionResult } from "@/components/ProgrammingSubmissionResult";
 import { RewardAfterAccepted } from "@/components/RewardsPanel";
 import type { RewardSubmissionUpdate } from "@/lib/rewardShared";
-import { StatusBadge } from "@/components/StatusBadge";
 import {
   AC_SUCCESS_IMAGE_SRC,
   preloadAcSuccessImage,
 } from "@/lib/acSuccessImage";
-import { formatRuntime } from "@/lib/format";
 import type { ProblemType } from "@/lib/objectiveProblem";
 import {
   createObjectiveSubmissionRefreshState,
@@ -373,12 +371,6 @@ export function ProblemSubmitForm({
     }
   }
 
-  const outputCase =
-    result?.caseResults?.find((item) => item.status !== "Accepted") ??
-    result?.caseResults?.[0];
-  const hasActualOutput =
-    !outputCase?.studentDetailsHidden &&
-    outputCase?.actualOutput !== undefined && outputCase.actualOutput !== null;
   // AppShell 的入场动画会让内容祖先保留 transform；挂到 body 后，
   // fixed 遮罩才能始终以当前视口为参照，不受结果区自动滚动影响。
   const acceptedPopup =
@@ -568,39 +560,13 @@ export function ProblemSubmitForm({
               detailHref={`${detailHrefBase}/${result.id}`}
             />
           ) : (
-            <div className="mt-4 grid gap-2 border border-ink-950/10 bg-white/70 p-4 text-sm font-semibold text-ink-700">
-              <StatusBadge status={result.status} />
-              <span>{result.passedCount}/{result.totalCount} 测试点</span>
-              <span>{formatRuntime(result.runtimeMs)}</span>
-              {outputCase?.studentDetailsHidden ? (
-                <span className="mt-2 border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
-                  正式提交的测试输入、标准输出、程序输出和详细运行错误不公开；请使用公开样例或自定义输入调试。
-                </span>
-              ) : null}
-              {hasActualOutput ? (
-                <div className="mt-2 grid gap-1">
-                  <span className="text-xs font-black text-ink-600">
-                    {`程序输出（测试点 ${outputCase.caseIndex}）`}
-                  </span>
-                  <pre className="max-h-44 overflow-auto border border-ink-950/10 bg-stone-50 p-3 text-xs font-mono font-semibold whitespace-pre-wrap text-ink-800">
-                    {outputCase.actualOutput?.length
-                      ? outputCase.actualOutput
-                      : "（无输出）"}
-                  </pre>
-                </div>
-              ) : null}
-              {result.errorMessage ? (
-                <pre className="mt-2 max-h-44 overflow-auto border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-                  {result.errorMessage}
-                </pre>
-              ) : null}
-              <Link
-                className="btn btn-secondary mt-2 w-full"
-                href={`${detailHrefBase}/${result.id}`}
-              >
-                查看详情
-              </Link>
-            </div>
+            <ProgrammingSubmissionResult
+              detailHref={`${detailHrefBase}/${result.id}`}
+              passedCount={result.passedCount}
+              runtimeMs={result.runtimeMs}
+              status={result.status}
+              totalCount={result.totalCount}
+            />
           )}
           {countedForLearningAssignment ? (
             <p className="mt-3 border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-800">

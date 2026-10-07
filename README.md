@@ -22,7 +22,7 @@
 | --- | --- |
 | 日常做题 | 编程题与选择判断题、Monaco 编辑器、本地草稿、题面公式与表格、提交记录、错题本和天梯 |
 | 共用界面 | 三端沿用纸色、钢蓝和黏土橙；分类、标题图标、标签与空状态统一，练习题目主体及空白区域可直接进入，提交记录与管理按钮保留独立操作 |
-| 编程评测 | C++17、公开样例与自定义输入试运行、正式提交、Docker 资源隔离、按账号公平调度 |
+| 编程评测 | C++17、公开样例与自定义输入试运行、样例输出差异标红、精简提交结果、Docker 资源隔离、按账号公平调度 |
 | 积分奖励 | “我的奖励”独立菜单管理抽奖、挑战和历史；日常/专项新题首次通过抽奖，管理员设定范围；抽奖后 24 小时内接受挑战，接受后另有 24 小时完成，奖励计入天梯 |
 | 天梯与段位 | 学生首页突出刷题入口、个人战绩和前三名；三端共用八档徽章。管理员可加分、扣分、设定总分及修改段位门槛，调分理由与历史仅管理员可见；见 [积分管理说明](docs/ladder-management-2026-10-02.md) |
 | 正式考试 | 同题型组卷、发布快照、倒计时、交卷与计分、防误后退、有审计的误交卷恢复 |
@@ -31,6 +31,8 @@
 | 后台管理 | Markdown 导入、题目分类与排序、软下架、用户权限、AI 配置、站点标题图标和备案页脚 |
 | 问题反馈 | 学生与老师提交文字和截图、查看自己的反馈；管理员统一处理和回复 |
 | 全站公告 | 管理员发布文字通知；学生和老师普通页面弹窗确认、账号级已读同步、历史公告回看，考试期间暂停提醒 |
+
+2026-10-07 的编程反馈简化已在本地实现和验证，尚未部署及推送；界面约定、源码入口与截图见 [编程反馈说明](docs/programming-feedback-2026-10-07.md)。
 
 | 角色 | 可以做什么 | 主要边界 | 操作手册 |
 | --- | --- | --- | --- |
@@ -137,7 +139,7 @@ npm run dev -- --hostname 127.0.0.1
 
 1. 以管理员登录，查看“题目管理”中的演示题，并按需创建老师和学生账号。
 2. 退出后以 `student1` 登录，在“日常刷题”打开“A+B 问题”，编写代码，先运行样例再正式提交。
-3. 看到 Accepted 后，查看提交详情与天梯，确认做题、评测、记录和计分相互贯通。
+3. 看到“通过了”（Accepted）后，查看提交详情与天梯，确认做题、评测、记录和计分相互贯通。
 4. 以管理员或老师创建并发布一场考试，再以学生身份开始、提交、交卷并查看结果。
 5. 在学情页面查看编程提交，给学生下发专项练习，再从学生的专项入口完成它。
 
@@ -209,6 +211,7 @@ AI_CUSTOM_API_KEY=
 | 题面渲染与导入 | [`ProblemRichText.tsx`](src/components/ProblemRichText.tsx)、[`markdownParser.ts`](src/lib/markdownParser.ts) |
 | 登录与权限 | [`auth.ts`](src/lib/auth.ts)、[`src/app/api/auth/`](src/app/api/auth/) |
 | 评测与队列 | [`judge.ts`](src/lib/judge.ts)、[`judgeQueue.ts`](src/lib/judgeQueue.ts)、[Judge 镜像](docker/judge-cpp/) |
+| 样例对比与编程提交结果 | [`OutputComparison.tsx`](src/components/OutputComparison.tsx)、[`ProgrammingSubmissionResult.tsx`](src/components/ProgrammingSubmissionResult.tsx)、[行为与验证记录](docs/programming-feedback-2026-10-07.md) |
 | 学生提交脱敏 | [`submissionVisibility.ts`](src/lib/submissionVisibility.ts) |
 | 考试计分与离开保护 | [`examScoring.ts`](src/lib/examScoring.ts)、[`ExamExitGuard.tsx`](src/components/ExamExitGuard.tsx) |
 | 学情与专项练习 | [`learningAnalytics.ts`](src/lib/learningAnalytics.ts)、[`learningAssignments.ts`](src/lib/learningAssignments.ts) |

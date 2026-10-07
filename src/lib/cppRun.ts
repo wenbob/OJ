@@ -57,9 +57,12 @@ export function normalizeCppOutput(value: string) {
     .trimEnd();
 }
 
-export function truncateCppOutput(value: string, maxLength = 5000) {
+export const CPP_OUTPUT_TRUNCATION_SUFFIX = "\n...（内容过长，已截断）";
+export const CPP_OUTPUT_PREVIEW_LENGTH = 5000;
+
+export function truncateCppOutput(value: string, maxLength = CPP_OUTPUT_PREVIEW_LENGTH) {
   if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength)}\n...（内容过长，已截断）`;
+  return `${value.slice(0, maxLength)}${CPP_OUTPUT_TRUNCATION_SUFFIX}`;
 }
 
 export function buildRunCaseResult({
