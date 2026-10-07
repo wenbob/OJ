@@ -40,10 +40,14 @@
 
 ## Git 保存与说明同步
 
-本次保存范围为应用源码、测试、受控截图及项目说明，同步目标为两个现有仓库的 `main`：
+发布验收后，应用源码、测试、受控截图及项目说明已推送到两个现有仓库的 `main`：
 
 - 公开 `origin`：[wenbob/OJ 应用提交](https://github.com/wenbob/OJ/commit/79ba0214a58acfca55c0c1a7b248354b0f887e80)。
 - 私有 `oj2026`：[wenbob/2026-OJC 应用提交](https://github.com/wenbob/2026-OJC/commit/79ba0214a58acfca55c0c1a7b248354b0f887e80)。
+
+初次发布收尾时，两端 `main` 均已只读核验为文档提交 `6f215d519b85527dfa95238452bf72c94173416b`：[OJ 文档提交](https://github.com/wenbob/OJ/commit/6f215d519b85527dfa95238452bf72c94173416b)、[2026-OJC 文档提交](https://github.com/wenbob/2026-OJC/commit/6f215d519b85527dfa95238452bf72c94173416b)。该提交与应用提交之间仅有文档变更，源码、测试、schema、依赖和脚本没有变化。
+
+服务器 `release.json` 的 `gitCommit` 标识构建应用的 `79ba021`；初次收尾时，`documentationCommit` 单独标识同期说明的 `6f215d5`。后续文档同步可更新 `documentationCommit`，这里保留初次发布版本；文档提交变化不代表重新构建或发布应用。
 
 应用提交与发布后文档提交分别保留。README、文档导航、界面说明和预览索引更新为已发布状态；历史发布事实保持原样。验收结束后删除临时签名会话与远程部署脚本，保留发布包、备份和回滚版本。环境文件、数据库、备份、密钥、临时会话与发布包不入 Git。
 
