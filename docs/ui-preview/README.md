@@ -69,7 +69,7 @@ node docs/ui-preview/serve.mjs
 
 ## 后续实际页面截图
 
-2026-10-07 的编程反馈截图来自隔离的 Next.js 浏览器测试，使用受控样例及提交响应，与上方阶段 A 设计稿分开记录。实现、验证范围和本地发布状态见 [编程反馈说明](../programming-feedback-2026-10-07.md)。
+2026-10-07 的编程反馈截图来自隔离的 Next.js 浏览器测试，使用受控样例及提交响应，与上方阶段 A 设计稿分开记录。实现与验证范围见 [编程反馈说明](../programming-feedback-2026-10-07.md)，正式站点的发布与验收见 [发布记录](../ops-review-2026-10-07-programming-feedback.md)。
 
 - [公开样例输出差异](screenshots/programming-output-diff.png)
 - [编程提交通过](screenshots/programming-submit-success.png)

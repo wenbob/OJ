@@ -2,7 +2,7 @@
 
 本次以既有纸色、钢蓝和黏土橙风格统一界面。学生、老师和管理员共用展示组件，各自的权限、数据范围和管理功能继续由原页面处理。2026-10-02 已发布至正式站点，备份、回滚与线上验证见 [发布记录](ops-review-2026-10-02-ui-unification.md)。
 
-2026-10-07 本地新增的样例差异标红与精简编程提交结果见 [编程反馈说明](programming-feedback-2026-10-07.md)。下方的发布状态和验收数量仍对应 2026-10-02。
+2026-10-07 新增并部署的样例差异标红与精简编程提交结果见 [编程反馈说明](programming-feedback-2026-10-07.md) 和 [本次发布记录](ops-review-2026-10-07-programming-feedback.md)。下方的历史发布状态和验收数量仍对应 2026-10-02。
 
 ## 已处理清单
 
@@ -31,8 +31,8 @@
 | 标题和图标 | [PageHeading](../src/components/PageHeading.tsx)、[UiIcon](../src/components/UiIcon.tsx) | 普通标题 24px、主视觉 32px、区块 20px、题目段落 18px，字重 700；图标按语义选择 |
 | 标签 | [UiBadge](../src/components/UiBadge.tsx) | 原文字与状态含义保留，按语义选颜色，圆角 6px |
 | 题目段落和样例 | [ProblemContentSection](../src/components/ProblemContentSection.tsx)、[ProblemSamples](../src/components/ProblemSamples.tsx) | 复用题面渲染与样例复制，按页面标题层级传入 h2 或 h3 |
-| 样例输出对比（2026-10-07 本地新增） | [OutputComparison](../src/components/OutputComparison.tsx)、[outputDiff](../src/lib/outputDiff.ts) | 标准输出保持原样，程序输出差异标红；保留原始文本复制和评测允许的空白规则 |
-| 编程提交结果（2026-10-07 本地新增） | [ProgrammingSubmissionResult](../src/components/ProgrammingSubmissionResult.tsx) | “通过了 / 未通过”与简短原因；统计合并一行，详情由原角色路径进入 |
+| 样例输出对比（2026-10-07 新增） | [OutputComparison](../src/components/OutputComparison.tsx)、[outputDiff](../src/lib/outputDiff.ts) | 标准输出保持原样，程序输出差异标红；保留原始文本复制和评测允许的空白规则 |
+| 编程提交结果（2026-10-07 新增） | [ProgrammingSubmissionResult](../src/components/ProgrammingSubmissionResult.tsx) | “通过了 / 未通过”与简短原因；统计合并一行，详情由原角色路径进入 |
 | 空状态 | [AcademyEmptyState](../src/components/AcademyEmptyState.tsx) | 学生页复用插画，后台使用 `compact` 图标版；插画记录见 [素材说明](ui-assets.md) |
 | 共用样式与交互层级 | [globals.css](../src/app/globals.css) | 卡片 12px，按钮 / 输入 / 筛选 7px；长文本换行、焦点、触屏和减少动态效果统一维护 |
 
