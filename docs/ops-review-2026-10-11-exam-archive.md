@@ -42,6 +42,6 @@
 
 [历史关联核查](exam-history-audit-2026-10-11.md)检查现存 76 份备份：1,126 条考试提交关联为空，涉及 24 个账号；1,007 条有部分原关联证据，但计分快照不完整，119 条未找到证据，完整恢复候选为 0。未对这些记录自动回填或修改积分。
 
-应用提交已保存并核对私有 [wenbob/2026-OJC](https://github.com/wenbob/2026-OJC/commit/ccfbd68a7bbc71f4bc70e8b0c8fc4564eb62fe92) 的 `main`。公开仓库 `wenbob/OJ` 的推送被自动审批拒绝，原因是需要用户明确授权向该公开目的地披露本次源码；其 `main` 当时仍为 `b87be84`，公开同步等待该授权。
+用户明确授权公开目的地后，应用源码、测试、迁移及发布说明已同步并核对公开 [wenbob/OJ](https://github.com/wenbob/OJ/commit/ccfbd68a7bbc71f4bc70e8b0c8fc4564eb62fe92) 和私有 [wenbob/2026-OJC](https://github.com/wenbob/2026-OJC/commit/ccfbd68a7bbc71f4bc70e8b0c8fc4564eb62fe92) 的 `main`，两个仓库提交一致。环境文件、数据库、备份、密钥和历史审计明细未公开。
 
 文档补充另作提交，服务器 `release.json.gitCommit` 始终标识上述实际构建的应用提交。环境文件、数据库、备份、密钥、临时会话和发布包均不进入 Git；发布备份与回滚版本保留，临时部署及验收文件在验证结束后清理。操作以 [部署手册](deploy.md) 和 [考试归档说明](exam-archiving-2026-10-11.md) 为准。
