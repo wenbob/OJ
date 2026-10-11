@@ -2,6 +2,7 @@ import { StaffPracticeProblemPage } from "@/app/admin/practice/problems/[id]/sta
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default function TeacherPracticeProblemPage(props: PageProps) {

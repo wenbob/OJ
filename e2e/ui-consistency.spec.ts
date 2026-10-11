@@ -64,7 +64,7 @@ function detailPath(role: Role, id = fixture.problemId) {
 }
 
 function detailUrl(role: Role, id = fixture.problemId) {
-  return new RegExp(`${detailPath(role, id)}${role === "student" ? "\\?returnTo=.*" : "$"}`);
+  return new RegExp(`${detailPath(role, id)}\\?returnTo=.*`);
 }
 
 async function expectNoOverflow(page: Page) {

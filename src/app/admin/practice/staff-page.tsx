@@ -2,6 +2,7 @@
 import { PageHeading } from "@/components/PageHeading";
 import { AcademyEmptyState } from "@/components/AcademyEmptyState";
 import { ProblemListTable } from "@/components/ProblemListTable";
+import { ProblemLibraryFilters } from "@/components/ProblemLibraryFilters";
 import { FilterLink as CategoryLink } from "@/components/FilterChip";
 
 import { Code2, ListChecks } from "lucide-react";
@@ -9,7 +10,7 @@ import { Code2, ListChecks } from "lucide-react";
 
 import { Pagination } from "@/components/Pagination";
 
-import { isProblemType } from "@/lib/objectiveProblem";
+import { buildProblemListWhere, problemLibraryHref, readProblemListFilters } from "@/lib/problemListFilters";
 import {
   buildPaginationMeta,
   PROBLEM_LIST_PAGE_SIZE,
@@ -41,26 +42,17 @@ export async function StaffPracticePage({
   const user = await requireStaffPageUser(role);
   const basePath = getStaffBasePath(role);
   const query = await searchParams;
-  const selectedCategory = Array.isArray(query.category)
-    ? query.category[0]
-    : query.category;
-  const normalizedCategory = selectedCategory?.trim() || "";
-  const selectedProblemType = Array.isArray(query.problemType)
-    ? query.problemType[0]
-    : query.problemType;
-  const problemType = isProblemType(selectedProblemType)
-    ? selectedProblemType
-    : "programming";
+  const parsedFilters = readProblemListFilters(query);
+  const problemType = parsedFilters.problemType ?? "programming";
+  const filters = { ...parsedFilters, problemType };
+  const normalizedCategory = filters.category;
+  const libraryPath = `${basePath}/practice` as const;
   const { page, pageSize, skip } = readPaginationFromObject(
     query,
     PROBLEM_LIST_PAGE_SIZE,
   );
-  const where = {
-    archivedAt: null,
-    problemType,
-    ...(normalizedCategory ? { category: normalizedCategory } : {}),
-  };
-  const [problems, total, allCategories] = await Promise.all([
+  const where = buildProblemListWhere(filters, user.id);
+  const [problems, total, allCategories, allDifficulties] = await Promise.all([
     prisma.problem.findMany({
       where,
       select: {
@@ -79,6 +71,7 @@ export async function StaffPracticePage({
       by: ["category"],
       where: { archivedAt: null, problemType },
     }),
+    prisma.problem.groupBy({ by: ["difficulty"], where: { archivedAt: null, problemType }, orderBy: { difficulty: "asc" } }),
   ]);
   const problemIds = problems.map((problem) => problem.id);
   const [submissionCounts, latestAcceptedSubmissionIds] = await Promise.all([
@@ -102,6 +95,9 @@ export async function StaffPracticePage({
     categoryNames,
   );
   const pagination = buildPaginationMeta({ page, pageSize, total });
+  const currentHref = problemLibraryHref(filters, { basePath: libraryPath, page, pageSize });
+  const hasExtraFilters = Boolean(filters.q || filters.difficulty || filters.completion !== "all");
+  const clearHref = problemLibraryHref({ ...filters, category: "", q: "", difficulty: "", completion: "all" }, { basePath: libraryPath, pageSize });
 
   return (
     <>
@@ -124,23 +120,22 @@ export async function StaffPracticePage({
           <div className="mt-5 flex flex-wrap gap-2">
             <CategoryLink
               active={problemType === "programming"}
-              href={`${basePath}/practice?problemType=programming`}
+              href={problemLibraryHref({ ...filters, problemType: "programming", category: "", difficulty: "" }, { basePath: libraryPath, pageSize })}
             >
               <Code2 aria-hidden="true" size={16} />编程题
             </CategoryLink>
             <CategoryLink
               active={problemType === "objective"}
-              href={`${basePath}/practice?problemType=objective`}
+              href={problemLibraryHref({ ...filters, problemType: "objective", category: "", difficulty: "" }, { basePath: libraryPath, pageSize })}
             >
               <ListChecks aria-hidden="true" size={16} />选择判断题
             </CategoryLink>
           </div>
-          <CategoryFilter
-            baseHref={`${basePath}/practice`}
-            categories={categories}
-            problemType={problemType}
-            selectedCategory={normalizedCategory}
-          />
+          <ProblemLibraryFilters key={currentHref} basePath={libraryPath} filters={filters} difficulties={allDifficulties.map((item) => item.difficulty).filter(Boolean)} pageSize={pageSize} />
+          <div className="mt-5 flex flex-wrap gap-2">
+            <CategoryLink active={!normalizedCategory} href={problemLibraryHref({ ...filters, category: "" }, { basePath: libraryPath, pageSize })}>全部</CategoryLink>
+            {categories.map((category) => <CategoryLink active={normalizedCategory === category} href={problemLibraryHref({ ...filters, category }, { basePath: libraryPath, pageSize })} key={category}>{category}</CategoryLink>)}
+          </div>
         </div>
         <ProblemListTable
           problems={problems}
@@ -148,7 +143,9 @@ export async function StaffPracticePage({
           detailHrefBase={`${basePath}/practice/problems`}
           latestAcceptedSubmissionIds={latestAcceptedSubmissionIds}
           submissionHrefBase={`${basePath}/submissions`}
-          emptyState={<AcademyEmptyState compact icon="practice" title="当前分类下还没有题目" description="试试其他分类，继续寻找适合的练习。" href={`${basePath}/practice?problemType=${problemType}`} action="查看全部分类" />}
+          returnTo={Object.keys(query).length ? currentHref : undefined}
+          showProblemId
+          emptyState={<AcademyEmptyState compact icon="practice" title={hasExtraFilters ? "没有找到符合条件的题目" : "当前分类下还没有题目"} description={hasExtraFilters ? "试试其他关键词，或放宽难度和通过状态条件。" : "试试其他分类，继续寻找适合的练习。"} href={clearHref} action={hasExtraFilters ? "清空筛选" : "查看全部分类"} />}
         />
         <Pagination
           basePath={`${basePath}/practice`}
@@ -165,36 +162,4 @@ export async function StaffPracticePage({
 
 export default function AdminPracticePage(props: PageProps) {
   return <StaffPracticePage {...props} role="admin" />;
-}
-
-function CategoryFilter({
-  baseHref,
-  categories,
-  problemType,
-  selectedCategory,
-}: {
-  baseHref: string;
-  categories: string[];
-  problemType: "programming" | "objective";
-  selectedCategory: string;
-}) {
-  return (
-    <div className="mt-5 flex flex-wrap gap-2">
-      <CategoryLink
-        active={!selectedCategory}
-        href={`${baseHref}?problemType=${problemType}`}
-      >
-        全部
-      </CategoryLink>
-      {categories.map((category) => (
-        <CategoryLink
-          active={selectedCategory === category}
-          href={`${baseHref}?problemType=${problemType}&category=${encodeURIComponent(category)}`}
-          key={category}
-        >
-          {category}
-        </CategoryLink>
-      ))}
-    </div>
-  );
 }

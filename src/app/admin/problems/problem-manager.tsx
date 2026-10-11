@@ -2,6 +2,8 @@
 
 import { AcademyEmptyState } from "@/components/AcademyEmptyState";
 import { PageHeading } from "@/components/PageHeading";
+import { ProblemLibraryFilters } from "@/components/ProblemLibraryFilters";
+import { problemLibraryHref, type ProblemListFilters } from "@/lib/problemListFilters";
 import Link from "next/link";
 import {
   ArrowDown,
@@ -44,6 +46,8 @@ import {
 
 export function ProblemManager({
   categories,
+  difficulties,
+  initialFilters,
   initialCategory,
   initialPagination,
   initialProblemType,
@@ -52,6 +56,8 @@ export function ProblemManager({
   openCreateForm,
 }: {
   categories: string[];
+  difficulties: string[];
+  initialFilters: ProblemListFilters;
   initialCategory: string;
   initialPagination: PaginationMeta;
   initialProblemType: ProblemType;
@@ -60,6 +66,8 @@ export function ProblemManager({
   openCreateForm: boolean;
 }) {
   const [categoryOptions, setCategoryOptions] = useState(categories);
+  const [difficultyOptions, setDifficultyOptions] = useState(difficulties);
+  const [listFilters, setListFilters] = useState(initialFilters);
   const [problems, setProblems] = useState(initialProblems);
   const [pagination, setPagination] = useState(initialPagination);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
@@ -77,6 +85,8 @@ export function ProblemManager({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loadingProblemId, setLoadingProblemId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [listError, setListError] = useState("");
+  const [listLoading, setListLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -98,6 +108,13 @@ export function ProblemManager({
   const reloadRequestIdRef = useRef(0);
   const allCurrentPageSelected =
     problems.length > 0 && problems.every((problem) => selectedIds.includes(problem.id));
+  const currentFilters = { ...listFilters, category: selectedCategory, problemType: selectedProblemType };
+  const hasExtraFilters = Boolean(listFilters.q || listFilters.difficulty || listFilters.completion !== "all");
+  const orderBlocked = hasExtraFilters || listLoading || Boolean(listError);
+
+  function listHref(category = selectedCategory, page = pagination.page, problemType = selectedProblemType, sort = selectedSort, filters = listFilters) {
+    return problemLibraryHref({ ...filters, category, problemType }, { basePath: "/admin/problems", page, pageSize: pagination.pageSize, sort });
+  }
 
   useEffect(() => {
     if (!openCreateForm) return;
@@ -124,16 +141,14 @@ export function ProblemManager({
     page = pagination.page,
     problemType = selectedProblemType,
     sort = selectedSort,
+    filters = listFilters,
   ) {
     const requestId = ++reloadRequestIdRef.current;
-    const query = new URLSearchParams();
-    if (category) query.set("category", category);
-    query.set("problemType", problemType);
-    query.set("sort", sort);
-    query.set("page", String(page));
-    query.set("pageSize", String(pagination.pageSize));
+    const query = new URL(listHref(category, page, problemType, sort, filters), "https://local.invalid").search;
+    setListLoading(true);
+    setListError("");
     try {
-      const response = await fetch(`/api/admin/problems?${query}`);
+      const response = await fetch(`/api/admin/problems${query}`);
       const data = await response.json();
       if (requestId !== reloadRequestIdRef.current) return;
       if (response.ok) {
@@ -147,6 +162,7 @@ export function ProblemManager({
           totalPages: data.totalPages ?? 1,
         });
         setSelectedSort(data.sort ?? sort);
+        if (Array.isArray(data.difficulties)) setDifficultyOptions(data.difficulties.filter((value: unknown): value is string => typeof value === "string" && Boolean(value.trim())));
         const categoryValues: unknown[] = Array.isArray(data.categories)
           ? data.categories.filter(
               (value: unknown): value is string =>
@@ -161,23 +177,31 @@ export function ProblemManager({
         );
         return;
       }
-      setError(data.error ?? "题目列表加载失败");
+      setListError(data.error ?? "题目列表加载失败");
     } catch {
       if (requestId !== reloadRequestIdRef.current) return;
-      setError("题目列表加载失败，请稍后重试");
+      setListError("题目列表加载失败，请稍后重试");
+    } finally {
+      if (requestId === reloadRequestIdRef.current) setListLoading(false);
     }
+  }
+
+  async function applyFilters(filters: ProblemListFilters) {
+    resetProblemDrag();
+    setListFilters(filters);
+    setSelectedCategory(filters.category);
+    setSelectedIds([]);
+    setMessage("");
+    setError("");
+    window.history.pushState(null, "", listHref(filters.category, 1, selectedProblemType, selectedSort, filters));
+    await reload(filters.category, 1, selectedProblemType, selectedSort, filters);
   }
 
   async function selectCategory(category: string) {
     setSelectedCategory(category);
     setMessage("");
     setError("");
-    const query = new URLSearchParams({
-      problemType: selectedProblemType,
-      sort: selectedSort,
-    });
-    if (category) query.set("category", category);
-    window.history.pushState(null, "", `/admin/problems?${query}`);
+    window.history.pushState(null, "", listHref(category, 1));
     await reload(category, 1, selectedProblemType, selectedSort);
   }
 
@@ -187,6 +211,9 @@ export function ProblemManager({
     setSelectedProblemType(problemType);
     setSelectedCategory("");
     setCategoryOptions([]);
+    setDifficultyOptions([]);
+    const nextFilters = { ...listFilters, problemType, category: "", difficulty: "" };
+    setListFilters(nextFilters);
     setSelectedIds([]);
     setCategorySortOpen(false);
     setCategoryDraft([]);
@@ -195,9 +222,9 @@ export function ProblemManager({
     window.history.pushState(
       null,
       "",
-      `/admin/problems?problemType=${problemType}&sort=${selectedSort}`,
+      listHref("", 1, problemType, selectedSort, nextFilters),
     );
-    await reload("", 1, problemType, selectedSort);
+    await reload("", 1, problemType, selectedSort, nextFilters);
   }
 
   async function selectSort(sort: ProblemListSort) {
@@ -205,25 +232,14 @@ export function ProblemManager({
     setSelectedSort(sort);
     setMessage("");
     setError("");
-    const query = new URLSearchParams({
-      problemType: selectedProblemType,
-      sort,
-    });
-    if (selectedCategory) query.set("category", selectedCategory);
-    window.history.pushState(null, "", `/admin/problems?${query}`);
+    window.history.pushState(null, "", listHref(selectedCategory, 1, selectedProblemType, sort));
     await reload(selectedCategory, 1, selectedProblemType, sort);
   }
 
   async function goPage(page: number) {
-    const query = new URLSearchParams();
     setMessage("");
     setError("");
-    if (selectedCategory) query.set("category", selectedCategory);
-    query.set("problemType", selectedProblemType);
-    query.set("sort", selectedSort);
-    query.set("page", String(page));
-    query.set("pageSize", String(pagination.pageSize));
-    window.history.pushState(null, "", `/admin/problems?${query}`);
+    window.history.pushState(null, "", listHref(selectedCategory, page));
     await reload(selectedCategory, page, selectedProblemType, selectedSort);
   }
 
@@ -502,7 +518,7 @@ export function ProblemManager({
     problem: ProblemItem,
     direction: "up" | "down",
   ) {
-    if (selectedSort !== "custom" || movingProblemId !== null) return;
+    if (orderBlocked || selectedSort !== "custom" || movingProblemId !== null) return;
 
     setMovingProblemId(problem.id);
     setMessage("");
@@ -556,7 +572,7 @@ export function ProblemManager({
     problemId: number,
   ) {
     if (
-      selectedSort !== "custom" ||
+      orderBlocked || selectedSort !== "custom" ||
       movingProblemId !== null ||
       pending ||
       savingCurrentOrder
@@ -604,7 +620,7 @@ export function ProblemManager({
     if (
       problemId === null ||
       problemId === targetProblemId ||
-      selectedSort !== "custom" ||
+      orderBlocked || selectedSort !== "custom" ||
       movingProblemId !== null
     ) {
       return;
@@ -683,7 +699,7 @@ export function ProblemManager({
 
   async function saveCurrentProblemOrder() {
     if (
-      selectedSort === "custom" ||
+      orderBlocked || selectedSort === "custom" ||
       savingCurrentOrder ||
       movingProblemId !== null
     ) {
@@ -868,7 +884,7 @@ export function ProblemManager({
             </p>
             <PageHeading kind="problem" className="mt-2">题目管理</PageHeading>
             <p className="mt-2 text-sm font-semibold text-ink-600">
-              当前 {problems.length} 道题
+              共 {pagination.total} 道题 · 当前 {problems.length} 道
             </p>
           </div>
           <Link className="btn btn-primary" href="/admin/problems/import">
@@ -913,7 +929,7 @@ export function ProblemManager({
               {selectedSort !== "custom" ? (
                 <button
                   className="btn btn-primary px-3 py-2"
-                  disabled={savingCurrentOrder || movingProblemId !== null}
+                  disabled={orderBlocked || savingCurrentOrder || movingProblemId !== null}
                   onClick={() => void saveCurrentProblemOrder()}
                   type="button"
                 >
@@ -923,11 +939,14 @@ export function ProblemManager({
               ) : null}
             </div>
             <p className="max-w-xl text-xs font-semibold leading-5 text-ink-600">
-              {selectedSort === "custom"
+              {hasExtraFilters ? "当前结果已按搜索、难度或通过状态筛选；清空筛选后可调整和保存题序。" : selectedSort === "custom"
                 ? "可拖动当前页题目快速排序；跨页继续使用上下按钮。学生端会跟随保存后的顺序。"
                 : "当前是管理员预览；可将当前筛选范围的全部分页保存为自定义题序。"}
             </p>
           </div>
+          <ProblemLibraryFilters key={listHref()} basePath="/admin/problems" compact filters={currentFilters} difficulties={difficultyOptions} pageSize={pagination.pageSize} onApply={applyFilters} />
+          {listLoading ? <p className="mt-3 text-sm font-semibold text-ink-600" role="status">正在更新题目列表…</p> : null}
+          {listError ? <p className="mt-3 text-sm font-semibold text-red-700" role="alert">{listError}。当前仍显示上次结果，请重新搜索。</p> : null}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-2">
               <CategoryButton
@@ -1122,11 +1141,13 @@ export function ProblemManager({
                           aria-label={`拖动题目 ${problem.title}`}
                           className="cursor-grab p-1 text-steel active:cursor-grabbing"
                           disabled={
+                            orderBlocked ||
                             movingProblemId !== null ||
                             pending ||
                             savingCurrentOrder
                           }
                           draggable={
+                            !orderBlocked &&
                             movingProblemId === null &&
                             !pending &&
                             !savingCurrentOrder
@@ -1147,6 +1168,7 @@ export function ProblemManager({
                           aria-label={`上移题目 ${problem.title}`}
                           className="btn btn-secondary p-2"
                           disabled={
+                            orderBlocked ||
                             !problem.canMoveUp ||
                             movingProblemId !== null ||
                             pending ||
@@ -1162,6 +1184,7 @@ export function ProblemManager({
                           aria-label={`下移题目 ${problem.title}`}
                           className="btn btn-secondary p-2"
                           disabled={
+                            orderBlocked ||
                             !problem.canMoveDown ||
                             movingProblemId !== null ||
                             pending ||
@@ -1180,7 +1203,7 @@ export function ProblemManager({
                       </span>
                     )}
                   </td>
-                  <td className="px-5 py-4 font-black">{problem.title}</td>
+                  <td className="max-w-md break-words px-5 py-4 font-black"><span className="mb-1 block text-xs font-semibold text-ink-500">题号 #{problem.id}</span>{problem.title}</td>
                   <td className="px-5 py-4 text-sm font-semibold text-ink-700">
                     {problem.difficulty}
                   </td>
@@ -1231,7 +1254,7 @@ export function ProblemManager({
                     className="px-5 py-12 text-center text-sm font-semibold text-ink-600"
                     colSpan={9}
                   >
-                    <AcademyEmptyState compact icon="problem" title="当前分类下还没有题目" description="可以调整分类和题型，或使用已有入口新建、导入题目。" />
+                    <AcademyEmptyState compact icon="problem" title={hasExtraFilters ? "没有找到符合条件的题目" : "当前分类下还没有题目"} description={hasExtraFilters ? "试试其他关键词，或放宽难度和通过状态条件。" : "可以调整分类和题型，或使用已有入口新建、导入题目。"} />
                   </td>
                 </tr>
               ) : null}

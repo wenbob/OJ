@@ -32,4 +32,18 @@ describe("problem library filter boundaries", () => {
     for (const value of ["https://evil.test", "//evil.test", "/student/problems/123", "/student/problems/../exams", "/admin"]) expect(safeProblemLibraryReturnTo(value)).toBe("/student/problems");
     expect(safeProblemLibraryReturnTo("/student/problems?returnTo=https://evil.test&page=-1&pageSize=999")).toBe("/student/problems");
   });
+  it("keeps staff return links within the current role and accepts server-page query objects", () => {
+    const filters = readProblemListFilters({ q: [" 加法 ", "ignored"], category: "循环", problemType: "objective", completion: "accepted", difficulty: "入门" });
+    expect(filters.q).toBe("加法");
+    for (const basePath of ["/teacher/practice", "/admin/practice"] as const) {
+      const href = problemLibraryHref(filters, { basePath, page: 2, pageSize: 1 });
+      expect(safeProblemLibraryReturnTo(href, basePath)).toBe(href);
+      const otherRolePath = basePath === "/teacher/practice" ? "/admin/practice" : "/teacher/practice";
+      for (const value of ["/student/problems", basePath + "/1", basePath + "/../exams", "https://evil.test" + basePath, otherRolePath + "?q=test"]) {
+        expect(safeProblemLibraryReturnTo(value, basePath)).toBe(basePath);
+      }
+      expect(safeProblemLibraryReturnTo(basePath + "?q=test&next=https://evil.test", basePath)).toBe(basePath + "?q=test");
+    }
+    expect(problemLibraryHref(filters, { basePath: "/admin/problems", sort: "title-asc" })).toContain("sort=title-asc");
+  });
 });

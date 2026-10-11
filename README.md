@@ -208,7 +208,7 @@ AI_CUSTOM_API_KEY=
 | 页面、布局、API | [`src/app/`](src/app/) |
 | 三端共用 UI 与题目入口 | [`PageHeading.tsx`](src/components/PageHeading.tsx)、[`ProblemEntryLink.tsx`](src/components/ProblemEntryLink.tsx)、[组件、交互与验证清单](docs/ui-unification-2026-10-02.md) |
 | Monaco 编辑器 | [`CodeEditor.tsx`](src/components/CodeEditor.tsx) |
-| 账号草稿与学生题库筛选 | [`problemDraft.ts`](src/lib/problemDraft.ts)、[`problemListFilters.ts`](src/lib/problemListFilters.ts)、[行为与验证](docs/drafts-and-library-2026-10-11.md) |
+| 账号草稿与三端题库筛选 | [`problemDraft.ts`](src/lib/problemDraft.ts)、[`problemListFilters.ts`](src/lib/problemListFilters.ts)、[草稿与学生题库](docs/drafts-and-library-2026-10-11.md)、[老师与管理员筛选](docs/staff-library-2026-10-11.md) |
 | 题面渲染与导入 | [`ProblemRichText.tsx`](src/components/ProblemRichText.tsx)、[`markdownParser.ts`](src/lib/markdownParser.ts) |
 | 登录与权限 | [`auth.ts`](src/lib/auth.ts)、[`src/app/api/auth/`](src/app/api/auth/) |
 | 评测与队列 | [`judge.ts`](src/lib/judge.ts)、[`judgeQueue.ts`](src/lib/judgeQueue.ts)、[Judge 镜像](docker/judge-cpp/) |
@@ -253,7 +253,7 @@ AI_CUSTOM_API_KEY=
 | 认证 | `POST /api/auth/login`、`POST /api/auth/logout`、`GET /api/auth/me` |
 | 健康与公共配置 | `GET /api/health`、`GET /api/settings/public` |
 | 题库与提交 | `/api/problems/*`、`/api/submissions/*`、`/api/exam-submissions/*` |
-| 题库筛选 | `GET /api/problems` 支持 `q`（题名包含或数字题号）、`difficulty`、`completion=all/accepted/unaccepted`，与题型、分类、分页组合；通过状态读取当前账号全部历史 Accepted |
+| 题库筛选 | `GET /api/problems`、管理员专用 `GET /api/admin/problems` 支持 `q`（题名包含或数字题号）、`difficulty`、`completion=all/accepted/unaccepted`，与题型、分类、分页组合；通过状态读取当前账号全部历史 Accepted；老师与管理员题目练习使用相同服务端筛选 |
 | 编程试运行 | `POST /api/problems/[id]/run` |
 | 学生 AI | `POST /api/ai/problem-assist`、`POST /api/problems/[id]/objective-explanation` |
 | 学生考试 | `/api/exams/*`，包括开始、答题、交卷和超时结算 |

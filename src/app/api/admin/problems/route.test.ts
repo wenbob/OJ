@@ -303,4 +303,18 @@ describe("admin problem archiving", () => {
       }),
     );
   });
+  it("combines all filters before counting and paginating and keeps Accepted scoped to the admin", async () => {
+    mocks.requireApiUser.mockResolvedValue({ user: { id: 37, role: "admin" } });
+    mocks.prisma.problem.count.mockResolvedValue(3);
+    mocks.prisma.problem.findMany.mockResolvedValue([{ id: 101, title: "101 回归", category: "综合", problemType: "programming", testCases: [] }]);
+    mocks.prisma.problem.groupBy.mockImplementation(({ by }: { by: string[] }) => Promise.resolve(by[0] === "difficulty" ? [{ difficulty: "入门" }, { difficulty: "进阶" }] : [{ category: "综合" }]));
+    const response = await GET(new NextRequest("http://local.test/api/admin/problems?problemType=programming&category=综合&q=00101&difficulty=入门&completion=accepted&page=2&pageSize=1"));
+    const body = await response.json();
+    const where = { archivedAt: null, problemType: "programming", category: "综合", difficulty: "入门", OR: [{ id: 101 }, { title: { contains: "00101" } }], submissions: { some: { userId: 37, status: "Accepted" } } };
+    expect(mocks.prisma.problem.count).toHaveBeenCalledWith({ where });
+    expect(mocks.prisma.problem.findMany).toHaveBeenCalledWith(expect.objectContaining({ where, skip: 1, take: 1 }));
+    expect(body).toMatchObject({ total: 3, page: 2, pageSize: 1, difficulties: ["入门", "进阶"] });
+    expect(body.items[0]).toMatchObject({ canMoveUp: false, canMoveDown: false });
+    expect(mocks.requireApiUser).toHaveBeenCalledWith(expect.any(NextRequest), "admin");
+  });
 });

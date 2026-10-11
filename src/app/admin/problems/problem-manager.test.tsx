@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ProblemListSort } from "@/lib/problemOrdering";
 import { ProblemManager } from "./problem-manager";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const problem = {
   id: 2,
@@ -20,6 +22,8 @@ function renderManager(initialSort: ProblemListSort) {
   return renderToStaticMarkup(
     <ProblemManager
       categories={["基础语法", "循环"]}
+      difficulties={["入门", "进阶"]}
+      initialFilters={{ problemType: "programming", category: "", q: "", difficulty: "", completion: "all" }}
       initialCategory=""
       initialPagination={{
         page: 1,

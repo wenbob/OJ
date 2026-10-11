@@ -5,6 +5,7 @@ import {
   toAdminProblemSummary,
 } from "@/lib/adminProblemSummary";
 import { isProblemType } from "@/lib/objectiveProblem";
+import { buildProblemListWhere, readProblemListFilters } from "@/lib/problemListFilters";
 import {
   buildPaginationMeta,
   PROBLEM_LIST_PAGE_SIZE,
@@ -33,7 +34,6 @@ export async function GET(request: NextRequest) {
   const auth = await requireApiUser(request, "admin");
   if (auth.response) return auth.response;
 
-  const category = request.nextUrl.searchParams.get("category")?.trim();
   const problemType = request.nextUrl.searchParams.get("problemType")?.trim();
   if (problemType && !isProblemType(problemType)) {
     return NextResponse.json({ error: "题型不合法" }, { status: 400 });
@@ -45,12 +45,10 @@ export async function GET(request: NextRequest) {
     request.nextUrl.searchParams,
     PROBLEM_LIST_PAGE_SIZE,
   );
-  const where = {
-    archivedAt: null,
-    ...(category ? { category } : {}),
-    ...(problemType ? { problemType } : {}),
-  };
-  const [total, categoryRows, titleRows] = await Promise.all([
+  const filters = readProblemListFilters(request.nextUrl.searchParams);
+  const hasExtraFilters = Boolean(filters.q || filters.difficulty || filters.completion !== "all");
+  const where = buildProblemListWhere(filters, auth.user.id);
+  const [total, categoryRows, titleRows, difficultyRows] = await Promise.all([
     prisma.problem.count({ where }),
     prisma.problem.groupBy({
       by: ["category"],
@@ -66,6 +64,7 @@ export async function GET(request: NextRequest) {
           take: TITLE_SORT_PREVIEW_LIMIT + 1,
         })
       : Promise.resolve([]),
+    prisma.problem.groupBy({ by: ["difficulty"], where: { archivedAt: null, ...(problemType ? { problemType } : {}) }, orderBy: { difficulty: "asc" } }),
   ]);
   const problems = await (async () => {
     if (isTitleProblemListSort(listSort)) {
@@ -105,8 +104,8 @@ export async function GET(request: NextRequest) {
     ...toAdminProblemSummary(problem),
     submissions: submissionCounts.get(problem.id) ?? 0,
     sortPosition: skip + index + 1,
-    canMoveUp: skip + index > 0,
-    canMoveDown: skip + index + 1 < total,
+    canMoveUp: !hasExtraFilters && skip + index > 0,
+    canMoveDown: !hasExtraFilters && skip + index + 1 < total,
   }));
 
   const categoryNames = Array.from(
@@ -124,6 +123,7 @@ export async function GET(request: NextRequest) {
     items,
     problems: items,
     categories,
+    difficulties: difficultyRows.map((item) => item.difficulty).filter(Boolean),
     sort: listSort,
     ...buildPaginationMeta({ page, pageSize, total }),
   });

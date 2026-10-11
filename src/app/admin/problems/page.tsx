@@ -8,7 +8,7 @@ import {
   PROBLEM_LIST_PAGE_SIZE,
   readPaginationFromObject,
 } from "@/lib/pagination";
-import { isProblemType } from "@/lib/objectiveProblem";
+import { buildProblemListWhere, readProblemListFilters } from "@/lib/problemListFilters";
 import { prisma } from "@/lib/prisma";
 import {
   getOrderedProblemCategories,
@@ -27,18 +27,13 @@ type PageProps = {
 };
 
 export default async function AdminProblemsPage({ searchParams }: PageProps) {
-  await requirePageUser("admin");
+  const user = await requirePageUser("admin");
   const query = await searchParams;
-  const selectedCategory = Array.isArray(query.category)
-    ? query.category[0]
-    : query.category;
-  const normalizedCategory = selectedCategory?.trim() || "";
-  const selectedProblemType = Array.isArray(query.problemType)
-    ? query.problemType[0]
-    : query.problemType;
-  const problemType = isProblemType(selectedProblemType)
-    ? selectedProblemType
-    : "programming";
+  const parsedFilters = readProblemListFilters(query);
+  const problemType = parsedFilters.problemType ?? "programming";
+  const filters = { ...parsedFilters, problemType };
+  const normalizedCategory = filters.category;
+  const hasExtraFilters = Boolean(filters.q || filters.difficulty || filters.completion !== "all");
   const createValue = Array.isArray(query.create) ? query.create[0] : query.create;
   const sortValue = Array.isArray(query.sort) ? query.sort[0] : query.sort;
   const listSort = normalizeProblemListSort(sortValue);
@@ -46,12 +41,8 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
     query,
     PROBLEM_LIST_PAGE_SIZE,
   );
-  const where = {
-    archivedAt: null,
-    problemType,
-    ...(normalizedCategory ? { category: normalizedCategory } : {}),
-  };
-  const [total, allCategories, titleRows] = await Promise.all([
+  const where = buildProblemListWhere(filters, user.id);
+  const [total, allCategories, titleRows, allDifficulties] = await Promise.all([
     prisma.problem.count({ where }),
     prisma.problem.groupBy({
       by: ["category"],
@@ -64,6 +55,7 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
           take: TITLE_SORT_PREVIEW_LIMIT + 1,
         })
       : Promise.resolve([]),
+    prisma.problem.groupBy({ by: ["difficulty"], where: { archivedAt: null, problemType }, orderBy: { difficulty: "asc" } }),
   ]);
   const problems = await (async () => {
     if (isTitleProblemListSort(listSort)) {
@@ -104,8 +96,8 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
     ...toAdminProblemSummary(problem),
     submissions: submissionCounts.get(problem.id) ?? 0,
     sortPosition: skip + index + 1,
-    canMoveUp: skip + index > 0,
-    canMoveDown: skip + index + 1 < total,
+    canMoveUp: !hasExtraFilters && skip + index > 0,
+    canMoveDown: !hasExtraFilters && skip + index + 1 < total,
   }));
 
   const categoryNames = Array.from(
@@ -124,13 +116,15 @@ export default async function AdminProblemsPage({ searchParams }: PageProps) {
   return (
     <>
       <ProblemManager
+        initialFilters={filters}
+        difficulties={allDifficulties.map((item) => item.difficulty).filter(Boolean)}
         categories={categories}
         initialCategory={normalizedCategory}
         initialPagination={buildPaginationMeta({ page, pageSize, total })}
         initialProblemType={problemType}
         initialProblems={initialProblems}
         initialSort={listSort}
-        key={`${problemType}:${normalizedCategory}:${listSort}:${page}:${pageSize}:${createValue === "1" ? "create" : "list"}`}
+        key={`${problemType}:${normalizedCategory}:${filters.q}:${filters.difficulty}:${filters.completion}:${listSort}:${page}:${pageSize}:${createValue === "1" ? "create" : "list"}`}
         openCreateForm={createValue === "1"}
       />
     </>

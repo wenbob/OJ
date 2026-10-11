@@ -4,12 +4,15 @@ import { useRouter } from "next/navigation";
 import { useTransition, type FormEvent } from "react";
 import { Search } from "lucide-react";
 import { NavigationLink } from "@/components/NavigationLink";
-import { problemLibraryHref, type ProblemListFilters } from "@/lib/problemListFilters";
+import { problemLibraryHref, type ProblemLibraryPath, type ProblemListFilters } from "@/lib/problemListFilters";
 
-export function ProblemLibraryFilters({ filters, difficulties, pageSize }: {
+export function ProblemLibraryFilters({ filters, difficulties, pageSize, basePath = "/student/problems", compact = false, onApply }: {
   filters: ProblemListFilters;
   difficulties: string[];
   pageSize: number;
+  basePath?: ProblemLibraryPath;
+  compact?: boolean;
+  onApply?: (filters: ProblemListFilters) => Promise<void>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -23,7 +26,14 @@ export function ProblemLibraryFilters({ filters, difficulties, pageSize }: {
       difficulty: String(data.get("difficulty") ?? ""),
       completion: completion === "accepted" || completion === "unaccepted" ? completion : "all",
     };
-    startTransition(() => router.push(problemLibraryHref(nextFilters, { pageSize })));
+    changeFilters(nextFilters);
+  }
+
+  function changeFilters(nextFilters: ProblemListFilters) {
+    startTransition(async () => {
+      if (onApply) await onApply(nextFilters);
+      else router.push(problemLibraryHref(nextFilters, { pageSize, basePath }));
+    });
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -31,9 +41,10 @@ export function ProblemLibraryFilters({ filters, difficulties, pageSize }: {
     apply(event.currentTarget);
   }
 
-  const clearHref = problemLibraryHref({ ...filters, category: "", q: "", difficulty: "", completion: "all" }, { pageSize });
+  const clearedFilters: ProblemListFilters = { ...filters, category: "", q: "", difficulty: "", completion: "all" };
+  const clearHref = problemLibraryHref(clearedFilters, { pageSize, basePath });
   return (
-    <form aria-label="题库搜索和筛选" aria-busy={pending} className="mt-5 grid min-w-0 items-end gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(9rem,auto)_minmax(9rem,auto)_auto]" onSubmit={submit}>
+    <form aria-label="题库搜索和筛选" aria-busy={pending} className={`mt-5 grid min-w-0 items-end gap-3 sm:grid-cols-2 ${compact ? "" : "lg:grid-cols-[minmax(0,1fr)_minmax(9rem,auto)_minmax(9rem,auto)_auto]"}`} onSubmit={submit}>
       <label className="min-w-0 text-xs font-bold text-ink-700">
         题名 / 题号
         <input className="field mt-1 w-full min-w-0" defaultValue={filters.q} maxLength={100} name="q" placeholder="输入题名或题号，如 101" type="search" />
@@ -55,7 +66,7 @@ export function ProblemLibraryFilters({ filters, difficulties, pageSize }: {
       </label>
       <div className="flex flex-wrap items-center gap-3">
         <button className="btn btn-primary" disabled={pending} type="submit"><Search aria-hidden="true" size={16} />{pending ? "查询中…" : "搜索"}</button>
-        <NavigationLink className="academy-text-link text-sm" href={clearHref}>清空筛选</NavigationLink>
+        {onApply ? <button className="academy-text-link text-sm" disabled={pending} onClick={() => changeFilters(clearedFilters)} type="button">清空筛选</button> : <NavigationLink className="academy-text-link text-sm" href={clearHref}>清空筛选</NavigationLink>}
       </div>
     </form>
   );

@@ -3,6 +3,8 @@ import { PageHeading } from "@/components/PageHeading";
 import { UiBadge } from "@/components/UiBadge";
 import { ProblemContentSection as ProblemSection } from "@/components/ProblemContentSection";
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import { safeProblemLibraryReturnTo } from "@/lib/problemListFilters";
 import { AcceptedProblemIndicator } from "@/components/AcceptedProblemIndicator";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
@@ -42,14 +44,19 @@ import {
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export async function StaffPracticeProblemPage({
   params,
+  searchParams,
   role,
 }: PageProps & { role: StaffRole }) {
   const user = await requireStaffPageUser(role);
   const basePath = getStaffBasePath(role);
+  const query = await searchParams;
+  const returnValue = Array.isArray(query.returnTo) ? query.returnTo[0] : query.returnTo;
+  const returnHref = safeProblemLibraryReturnTo(returnValue, `${basePath}/practice`);
   const { id } = await params;
   const problemId = Number(id);
   if (!Number.isInteger(problemId)) notFound();
@@ -113,6 +120,7 @@ export async function StaffPracticeProblemPage({
 
   return (
     <>
+      <Link className="academy-text-link mb-4 inline-flex" href={returnHref}>返回题库</Link>
       <StaffObjectiveAnswerVisibilityProvider
         key={`staff-objective-answers-${problem.id}`}
       >
