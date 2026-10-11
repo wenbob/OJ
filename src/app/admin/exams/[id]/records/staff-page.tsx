@@ -49,6 +49,8 @@ export async function StaffExamRecordsPage({
     where: getExamAccessWhere(user, examId),
     include: {
       _count: { select: { problems: true } },
+      archiveAudits: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 10,
+        select: { action: true, operatorUsername: true, operatorRole: true, createdAt: true } },
     },
   });
 
@@ -157,11 +159,18 @@ export async function StaffExamRecordsPage({
             <p className="mt-2 text-sm font-semibold text-ink-600">
               当前 {totalRecords} 条记录，考试题目 {exam._count.problems} 道。
             </p>
+            {exam.archivedAt ? <p className="mt-2 text-sm font-bold text-steel">已归档 · {formatDate(exam.archivedAt)}，成绩和提交记录继续保留。</p> : null}
           </div>
-          <Link className="btn btn-secondary" href={`${basePath}/exams`}>
+          <Link className="btn btn-secondary" href={`${basePath}/exams${exam.archivedAt ? "?view=archived" : ""}`}>
             返回考试管理
           </Link>
         </div>
+        {exam.archiveAudits.length > 0 ? <details className="mt-4 text-sm font-semibold text-ink-600">
+          <summary className="cursor-pointer">最近归档操作</summary>
+          <ul className="mt-2 space-y-1">{exam.archiveAudits.map((audit, index) => <li key={index}>
+            {formatDate(audit.createdAt)} · {audit.operatorUsername}（{audit.operatorRole === "admin" ? "管理员" : "老师"}）· {audit.action === "archive" ? "归档" : "取消归档"}
+          </li>)}</ul>
+        </details> : null}
         <form className="mt-5 flex flex-wrap gap-3" method="GET">
           <label className="grid gap-2 text-sm font-bold text-ink-800">
             用户名

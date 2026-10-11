@@ -24,9 +24,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const exam = await prisma.$transaction(async (tx) => {
       const existingExam = await tx.exam.findFirst({
         where: getExamAccessWhere(auth.user, examId),
-        select: { id: true, status: true },
+        select: { id: true, status: true, archivedAt: true },
       });
       if (!existingExam) throw new ExamUnpublishError(404, "考试不存在");
+      if (existingExam.archivedAt) throw new ExamUnpublishError(409, "已归档考试不能取消发布");
       if (existingExam.status === "ended") {
         throw new ExamUnpublishError(409, "已结束的考试不能重新改为草稿");
       }

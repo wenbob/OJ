@@ -40,8 +40,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
     },
   });
 
-  if (!exam || exam.status !== "published") {
+  if (!exam) {
     return NextResponse.json({ error: "考试不存在或尚未发布" }, { status: 404 });
+  }
+  if (exam.archivedAt || exam.status !== "published") {
+    const ownRecord = await prisma.examRecord.findUnique({ where: { examId_userId: { examId, userId: auth.user.id } }, select: { id: true } });
+    if (!ownRecord) return NextResponse.json({ error: "考试不存在或尚未发布" }, { status: 404 });
   }
 
   return NextResponse.json({ exam });

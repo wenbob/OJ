@@ -6,6 +6,7 @@ import { ProblemTypeBadge } from "@/components/ProblemTypeBadge";
 import { StartExamButton } from "@/components/StartExamButton";
 import { requirePageUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { UiBadge } from "@/components/UiBadge";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -57,6 +58,7 @@ export default async function StudentExamDetailPage({ params }: PageProps) {
             <PageHeading kind="exam" className="mt-2">{exam.title}</PageHeading>
             <div className="mt-3">
               <ProblemTypeBadge type={exam.examType} />
+              {exam.archivedAt ? <UiBadge className="ml-2">已归档</UiBadge> : null}
             </div>
             <p className="mt-3 max-w-3xl whitespace-pre-wrap leading-7 text-ink-700">
               {exam.description || "暂无考试说明"}
@@ -70,7 +72,7 @@ export default async function StudentExamDetailPage({ params }: PageProps) {
           </div>
         </div>
         <div className="mt-6 flex flex-wrap gap-3">
-          {exam.status === "published" ? (
+          {!exam.archivedAt && exam.status === "published" ? (
             <StartExamButton
               examId={exam.id}
               initialStatus={examRecord?.status}
@@ -81,7 +83,7 @@ export default async function StudentExamDetailPage({ params }: PageProps) {
               <ChevronRight size={16} />
             </Link>
           )}
-          <Link className="btn btn-secondary" href="/student/exams">
+          <Link className="btn btn-secondary" href={exam.archivedAt || exam.status === "ended" ? "/student/exams?view=history" : "/student/exams"}>
             返回考试列表
           </Link>
         </div>

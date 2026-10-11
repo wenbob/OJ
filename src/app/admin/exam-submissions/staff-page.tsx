@@ -207,7 +207,7 @@ export async function StaffExamSubmissionsPage({
                 <tr className="border-b border-ink-950/10" key={submission.id}>
                   <td className="px-5 py-4 text-sm font-black">{submission.id}</td>
                   <td className="px-5 py-4 font-black">
-                    {submission.exam?.title ?? "已删除考试"}
+                    {submission.exam?.title ?? "历史考试关联缺失"}
                   </td>
                   <td className="px-5 py-4 font-black">{submission.user.username}</td>
                   <td className="px-5 py-4 text-sm font-semibold text-ink-700">

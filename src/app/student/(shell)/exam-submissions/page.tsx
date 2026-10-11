@@ -22,7 +22,8 @@ export default async function StudentExamSubmissionsPage({
   const user = await requirePageUser("student");
   const query = await searchParams;
   const { page, pageSize, skip } = readPaginationFromObject(query);
-  const where = { userId: user.id, submissionType: "exam" };
+  const requestedExamId = Number(Array.isArray(query.examId) ? query.examId[0] : query.examId);
+  const where = { userId: user.id, submissionType: "exam", ...(Number.isInteger(requestedExamId) && requestedExamId > 0 ? { examId: requestedExamId } : {}) };
   const [submissions, total] = await Promise.all([
     prisma.submission.findMany({
       where,
@@ -31,6 +32,8 @@ export default async function StudentExamSubmissionsPage({
           select: {
             id: true,
             title: true,
+            status: true,
+            archivedAt: true,
             records: {
               where: { userId: user.id },
               select: { status: true },
@@ -89,14 +92,16 @@ export default async function StudentExamSubmissionsPage({
                         {submission.exam.title}
                       </Link>
                     ) : (
-                      "已删除考试"
+                      "历史考试关联缺失"
                     )}
                   </td>
                   <td className="px-5 py-4 font-black">
                     {submission.exam ? (
                       <Link
                         className="hover:text-steel"
-                        href={`/student/exams/${submission.exam.id}/take?problemId=${submission.problem.id}`}
+                        href={submission.exam.status === "published" && !submission.exam.archivedAt && submission.exam.records[0]?.status === "in_progress"
+                          ? `/student/exams/${submission.exam.id}/take?problemId=${submission.problem.id}`
+                          : `/student/submissions/${submission.id}`}
                       >
                         {submission.problem.title}
                       </Link>
@@ -121,7 +126,7 @@ export default async function StudentExamSubmissionsPage({
                       <CopyCodeButton
                         endpoint={`/api/submissions/${submission.id}`}
                       />
-                      {submission.exam?.records[0]?.status === "in_progress" ? (
+                      {submission.exam?.status === "published" && !submission.exam.archivedAt && submission.exam.records[0]?.status === "in_progress" ? (
                         <Link
                           className="btn btn-primary px-3 py-2 text-sm"
                           href={`/student/exams/${submission.exam.id}/take?problemId=${submission.problem.id}&fromSubmission=${submission.id}`}

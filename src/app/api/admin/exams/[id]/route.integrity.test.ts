@@ -50,6 +50,8 @@ describe("exam status transition integrity", () => {
       status: "draft",
       title: "正式考试",
     });
+    mocks.prisma.$transaction.mockImplementation(async (task) => task(mocks.prisma));
+    mocks.prisma.examProblem.findMany.mockResolvedValue([]);
   });
 
   it("does not let a draft exam skip directly to ended", async () => {
@@ -59,7 +61,7 @@ describe("exam status transition integrity", () => {
 
     expect(response.status).toBe(409);
     expect(mocks.prisma.examProblem.findMany).not.toHaveBeenCalled();
-    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+    expect(mocks.prisma.$transaction).toHaveBeenCalledOnce();
   });
 
   it("requires a positive duration before publishing through the edit route", async () => {
@@ -73,6 +75,14 @@ describe("exam status transition integrity", () => {
     expect(await response.json()).toMatchObject({
       error: "考试时长必须大于 0 分钟",
     });
-    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+    expect(mocks.prisma.$transaction).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a stale editor when the exam became ended after the first read", async () => {
+    mocks.prisma.exam.findFirst.mockResolvedValueOnce({ id: 3, status: "draft" })
+      .mockResolvedValueOnce({ id: 3, status: "ended", archivedAt: new Date() });
+    const response = await PUT(request("draft"), { params: Promise.resolve({ id: "3" }) });
+    expect(response.status).toBe(409);
+    expect(mocks.prisma.examProblem.findMany).not.toHaveBeenCalled();
   });
 });

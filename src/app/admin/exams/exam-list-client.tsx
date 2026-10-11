@@ -16,20 +16,24 @@ type ExamListItem = {
   durationMin: number | null;
   status: string;
   examType: string;
+  archivedAt: string | null;
   createdAt: Date | string;
   createdBy: {
     role: string;
     username: string;
   } | null;
-  _count: { problems: number };
+  _count: { problems: number; records: number; submissions: number; aiConversations: number; archiveAudits: number };
+  archiveAudits: Array<{ action: string; operatorUsername: string; operatorRole: string; createdAt: string }>;
 };
 
 export function ExamListClient({
   basePath,
   exams,
+  archived,
 }: {
   basePath: "/admin" | "/teacher";
   exams: ExamListItem[];
+  archived: boolean;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -71,6 +75,7 @@ export function ExamListClient({
               <th className="table-head px-5 py-3">状态</th>
               <th className="table-head px-5 py-3">类型</th>
               <th className="table-head px-5 py-3">题目数</th>
+              <th className="table-head px-5 py-3">参加人数</th>
               <th className="table-head px-5 py-3">时长</th>
               <th className="table-head px-5 py-3">创建时间</th>
               <th className="table-head px-5 py-3 text-right">操作</th>
@@ -98,9 +103,13 @@ export function ExamListClient({
                   <p className="mt-1 line-clamp-2 text-sm font-semibold text-ink-600">
                     {exam.description || "暂无说明"}
                   </p>
+                  {exam.archiveAudits[0] ? <p className="mt-2 text-xs font-semibold text-ink-600">
+                    {exam.archiveAudits[0].action === "archive" ? "归档" : "取消归档"}：{exam.archiveAudits[0].operatorUsername} · {formatDate(new Date(exam.archiveAudits[0].createdAt))}
+                  </p> : null}
                 </td>
                 <td className="px-5 py-4">
                   <StatusBadge status={exam.status} />
+                  {exam.archivedAt ? <UiBadge className="ml-2">已归档</UiBadge> : null}
                 </td>
                 <td className="px-5 py-4">
                   <ProblemTypeBadge type={exam.examType} />
@@ -108,6 +117,7 @@ export function ExamListClient({
                 <td className="px-5 py-4 text-sm font-semibold text-ink-700">
                   {exam._count.problems}
                 </td>
+                <td className="px-5 py-4 text-sm font-semibold text-ink-700">{exam._count.records}</td>
                 <td className="px-5 py-4 text-sm font-semibold text-ink-700">
                   {exam.durationMin ? `${exam.durationMin} 分钟` : "不限时"}
                 </td>
@@ -116,25 +126,26 @@ export function ExamListClient({
                 </td>
                 <td className="px-5 py-4 text-right">
                   <div className="flex flex-wrap justify-end gap-2">
-                    <Link
+                    {!exam.archivedAt ? <Link
                       className="btn btn-secondary px-3 py-2 text-sm"
                       href={`${basePath}/exams/${exam.id}/practice`}
                     >
                       进入做题
-                    </Link>
-                    <Link
+                    </Link> : null}
+                    {!exam.archivedAt && exam.status !== "ended" ? <Link
                       className="btn btn-secondary px-3 py-2 text-sm"
                       href={`${basePath}/exams/${exam.id}/edit`}
                     >
                       编辑
-                    </Link>
+                    </Link> : null}
                     <Link
                       className="btn btn-secondary px-3 py-2 text-sm"
                       href={`${basePath}/exams/${exam.id}/records`}
                     >
                       考试记录
                     </Link>
-                    {exam.status === "published" ? (
+                    {!exam.archivedAt && exam.status === "published" ? (
+                      <>
                       <button
                         className="btn btn-secondary px-3 py-2 text-sm"
                         disabled={pendingId === exam.id}
@@ -147,7 +158,13 @@ export function ExamListClient({
                       >
                         取消发布
                       </button>
-                    ) : exam.status === "draft" ? (
+                      <button className="btn btn-secondary px-3 py-2 text-sm" disabled={pendingId !== null} type="button" onClick={() => {
+                        if (window.confirm(`确定结束考试《${exam.title}》吗？学生将不能继续作答，已收到的提交会继续评测并计分。`)) {
+                          mutate(`/api/admin/exams/${exam.id}/end`, { method: "POST" });
+                        }
+                      }}>结束考试</button>
+                      </>
+                    ) : !exam.archivedAt && exam.status === "draft" ? (
                       <button
                         className="btn btn-primary px-3 py-2 text-sm"
                         disabled={pendingId === exam.id}
@@ -161,13 +178,19 @@ export function ExamListClient({
                         发布
                       </button>
                     ) : null}
-                    <button
+                    {exam.status === "ended" ? <button className="btn btn-secondary px-3 py-2 text-sm" disabled={pendingId !== null} type="button" onClick={() => {
+                      const text = exam.archivedAt
+                        ? `取消归档《${exam.title}》后，将回到未归档列表，考试仍保持已结束。`
+                        : `归档《${exam.title}》后，将移入已归档列表，学生成绩、代码和提交记录继续保留。`;
+                      if (window.confirm(text)) mutate(`/api/admin/exams/${exam.id}/archive`, { method: exam.archivedAt ? "DELETE" : "POST" });
+                    }}>{exam.archivedAt ? "取消归档" : "归档"}</button> : null}
+                    {!exam.archivedAt && exam.status === "draft" && exam._count.records === 0 && exam._count.submissions === 0 && exam._count.aiConversations === 0 && exam._count.archiveAudits === 0 ? <button
                       className="btn btn-danger px-3 py-2 text-sm"
                       disabled={pendingId === exam.id}
                       onClick={() => {
                         if (
                           !window.confirm(
-                            `确定要删除考试《${exam.title}》吗？该操作可能影响考试记录，请谨慎操作。`,
+                            `确定永久删除草稿《${exam.title}》及其题单吗？该草稿没有考试历史，删除后无法恢复。`,
                           )
                         ) {
                           return;
@@ -178,8 +201,8 @@ export function ExamListClient({
                       }}
                       type="button"
                     >
-                      删除
-                    </button>
+                      删除草稿
+                    </button> : null}
                   </div>
                 </td>
               </tr>
@@ -188,9 +211,9 @@ export function ExamListClient({
               <tr>
                 <td
                   className="px-5 py-12 text-center text-sm font-semibold text-ink-600"
-                  colSpan={7}
+                  colSpan={8}
                 >
-                  <AcademyEmptyState compact icon="exam" title="暂无考试" description="先创建一场考试，再添加同一题型的题目。" href={`${basePath}/exams/new`} action="新建考试" />
+                  <AcademyEmptyState compact icon="exam" title={archived ? "暂无归档考试" : "暂无考试"} description={archived ? "已结束的考试归档后会显示在这里，历史成绩和提交继续保留。" : "先创建一场考试，再添加同一题型的题目。"} />
                 </td>
               </tr>
             ) : null}

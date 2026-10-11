@@ -51,11 +51,11 @@ export async function GET(request: NextRequest) {
   if (auth.response) return auth.response;
 
   const exams = await prisma.exam.findMany({
-    where: getExamAccessWhere(auth.user),
+    where: { ...getExamAccessWhere(auth.user), archivedAt: request.nextUrl.searchParams.get("view") === "archived" ? { not: null } : null },
     orderBy: { createdAt: "desc" },
     include: {
       createdBy: { select: { id: true, role: true, username: true } },
-      _count: { select: { problems: true } },
+      _count: { select: { problems: true, records: true } },
     },
   });
 

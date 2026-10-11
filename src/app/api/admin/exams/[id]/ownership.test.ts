@@ -14,6 +14,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    $transaction: vi.fn(async (task) => task({ exam: { delete: mocks.examDelete, findFirst: mocks.examFindFirst } })),
     exam: {
       delete: mocks.examDelete,
       findFirst: mocks.examFindFirst,

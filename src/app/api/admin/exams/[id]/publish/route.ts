@@ -46,6 +46,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         },
       });
       if (!existingExam) throw new ExamPublishError(404, "考试不存在");
+      if (existingExam.archivedAt) throw new ExamPublishError(409, "已归档考试不能发布");
       if (existingExam.status !== "draft") {
         throw new ExamPublishError(
           409,

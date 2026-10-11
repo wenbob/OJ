@@ -21,6 +21,7 @@ model User {
   createdLearningAssignments       LearningAssignment[]      @relation("LearningAssignmentCreator")
   createdExams                     Exam[]                    @relation("ExamCreator")
   examRecordResumeAudits           ExamRecordResumeAudit[]   @relation("ExamRecordResumeOperator")
+  examArchiveAudits                ExamArchiveAudit[]        @relation("ExamArchiveOperator")
   learningInsightSnapshots         LearningInsightSnapshot[]
   aiConversations                  AiConversation[]
   generatedObjectiveAiExplanations ObjectiveAiExplanation[]  @relation("ObjectiveAiExplanationGenerator")
@@ -360,14 +361,31 @@ model Exam {
   createdById     Int?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+  archivedAt      DateTime?
   createdBy       User?            @relation("ExamCreator", fields: [createdById], references: [id], onDelete: SetNull)
   problems        ExamProblem[]
   submissions     Submission[]
   records         ExamRecord[]
   aiConversations AiConversation[]
+  archiveAudits   ExamArchiveAudit[]
 
   @@index([examType, status])
   @@index([createdById, createdAt])
+  @@index([archivedAt, status, createdAt])
+}
+
+model ExamArchiveAudit {
+  id               Int      @id @default(autoincrement())
+  examId           Int
+  action           String
+  operatorId       Int?
+  operatorUsername String
+  operatorRole     String
+  createdAt        DateTime @default(now())
+  exam             Exam     @relation(fields: [examId], references: [id], onDelete: Restrict)
+  operator         User?    @relation("ExamArchiveOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([examId, createdAt, id])
 }
 
 model ExamRecord {

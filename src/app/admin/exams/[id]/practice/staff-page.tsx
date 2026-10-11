@@ -5,7 +5,7 @@ import { UiBadge } from "@/components/UiBadge";
 import { ProblemContentSection as ProblemSection } from "@/components/ProblemContentSection";
 import { ProblemEntryLink } from "@/components/ProblemEntryLink";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { AcceptedProblemIndicator } from "@/components/AcceptedProblemIndicator";
 import { CopyProblemButton } from "@/components/CopyProblemButton";
 import { ObjectiveProblemContent } from "@/components/ObjectiveProblemContent";
@@ -96,6 +96,7 @@ export async function StaffExamPracticePage({
   ]);
 
   if (!exam) notFound();
+  if (exam.archivedAt) redirect(`${basePath}/exams/${exam.id}/records`);
 
   const problemIds = exam.problems.map((item) => item.problemId);
   const [latestSubmissions, latestAcceptedSubmissionIds] = await Promise.all([

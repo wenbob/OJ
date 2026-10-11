@@ -172,6 +172,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         where: { id: examId },
         select: {
           durationMin: true,
+          archivedAt: true,
           examType: true,
           status: true,
           problems: {
@@ -199,7 +200,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { status: 400 },
       );
     }
-    if (exam.status !== "published") {
+    if (exam.archivedAt || exam.status !== "published") {
       return NextResponse.json(
         { error: "该考试未发布或已经结束" },
         { status: 403 },

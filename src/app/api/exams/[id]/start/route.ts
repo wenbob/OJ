@@ -24,6 +24,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         where: { id: examId },
         select: {
           durationMin: true,
+          archivedAt: true,
           id: true,
           status: true,
         },
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
           },
         },
       });
-      if (exam.status !== "published") {
+      if (exam.archivedAt || exam.status !== "published") {
         return {
           existingRecord,
           kind: "unavailable" as const,

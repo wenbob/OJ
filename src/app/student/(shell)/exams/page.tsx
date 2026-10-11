@@ -8,11 +8,15 @@ import { StartExamButton } from "@/components/StartExamButton";
 import { requirePageUser } from "@/lib/auth";
 import { formatDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
+import { FilterLink } from "@/components/FilterChip";
+import { StudentExamHistory } from "./exam-history";
 
-export default async function StudentExamsPage() {
+export default async function StudentExamsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await requirePageUser("student");
+  const query = await searchParams;
+  if (query.view === "history") return <StudentExamHistory userId={user.id} query={query} />;
   const exams = await prisma.exam.findMany({
-    where: { status: "published" },
+    where: { status: "published", archivedAt: null },
     orderBy: { createdAt: "desc" },
     include: {
       records: {
@@ -31,6 +35,10 @@ export default async function StudentExamsPage() {
           Mock Exam
         </p>
         <PageHeading kind="exam" className="mt-2 flex items-center gap-2">模拟考试</PageHeading>
+        <nav aria-label="模拟考试列表" className="mt-4 flex flex-wrap gap-2">
+          <FilterLink active href="/student/exams" pendingLabel="正在加载考试">可参加考试</FilterLink>
+          <FilterLink active={false} href="/student/exams?view=history" pendingLabel="正在加载历史考试">我的历史考试</FilterLink>
+        </nav>
       </section>
 
       <section className="mt-6 grid gap-4">

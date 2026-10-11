@@ -1,7 +1,7 @@
 // Shared server page for administrator and teacher shells.
 import { PageHeading } from "@/components/PageHeading";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { normalizeProblemType } from "@/lib/objectiveProblem";
 import { prisma } from "@/lib/prisma";
 import { getOrderedProblemCategories } from "@/lib/problemOrdering";
@@ -48,6 +48,7 @@ export async function StaffEditExamPage({
   });
 
   if (!exam) notFound();
+  if (exam.archivedAt) redirect(`${basePath}/exams/${exam.id}/records`);
   const categoryRows = await prisma.problem.groupBy({
     by: ["category"],
     where: { archivedAt: null, problemType: exam.examType },

@@ -54,10 +54,10 @@ describe("staff exam collection access", () => {
     expect(mocks.examFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         include: {
-          _count: { select: { problems: true } },
+          _count: { select: { problems: true, records: true } },
           createdBy: { select: { id: true, role: true, username: true } },
         },
-        where: { createdById: 7 },
+        where: { createdById: 7, archivedAt: null },
       }),
     );
   });

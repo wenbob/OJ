@@ -13,6 +13,7 @@ import {
 } from "@/lib/examScoring";
 import { formatDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
+import { UiBadge } from "@/components/UiBadge";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -34,6 +35,7 @@ export default async function StudentExamResultPage({ params }: PageProps) {
         durationMin: true,
         status: true,
         examType: true,
+        archivedAt: true,
       },
     }),
     expireExamRecordIfNeeded({ examId, userId: user.id }),
@@ -88,6 +90,7 @@ export default async function StudentExamResultPage({ params }: PageProps) {
               Exam Result
             </p>
             <PageHeading kind="exam" className="mt-2">{exam.title}</PageHeading>
+            {exam.archivedAt ? <UiBadge className="mt-3">已归档，成绩和提交记录继续保留</UiBadge> : null}
             <div className="mt-3">
               <ProblemTypeBadge type={exam.examType} />
             </div>
@@ -112,6 +115,10 @@ export default async function StudentExamResultPage({ params }: PageProps) {
             value={record.submittedAt ? formatDate(record.submittedAt) : "尚未交卷"}
           />
         </dl>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Link className="btn btn-secondary" href="/student/exams?view=history">返回历史考试</Link>
+          <Link className="btn btn-secondary" href={`/student/exam-submissions?examId=${examId}`}>查看本场提交与代码</Link>
+        </div>
 
         {!isFinished ? (
           <div className="mt-6 border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">

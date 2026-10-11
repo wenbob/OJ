@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   if (auth.response) return auth.response;
 
   const exams = await prisma.exam.findMany({
-    where: { status: "published" },
+    where: { status: "published", archivedAt: null },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
