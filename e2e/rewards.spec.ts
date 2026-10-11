@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
+import { seedBrowserDraft } from "./draft-fixtures";
 
 test("first Accepted artwork, persistent draw, double challenge and mobile rewards", async ({ page, browser }) => {
   const errors: string[] = [];
@@ -11,7 +12,7 @@ test("first Accepted artwork, persistent draw, double challenge and mobile rewar
   await page.getByLabel("密码").fill("e2e-reward-password");
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(page).toHaveURL(/\/student$/);
-  await page.evaluate(() => { localStorage.setItem("oj-code-problem-110", "A"); localStorage.setItem("oj-code-problem-111", "A"); });
+  for (const id of [110, 111]) await seedBrowserDraft(page, { userId: 5, role: "student", scope: "practice" }, "objective", id, "A");
   await page.goto("/student/problems/110");
   await page.getByRole("button", { name: "提交答案", exact: true }).click();
   await expect(page.getByLabel("通过此题提示", { exact: true })).toBeVisible();
@@ -82,7 +83,7 @@ test("offer countdown expires live, accepted challenge has its own deadline and 
     await page.getByLabel("密码").fill("e2e-offer-password");
     await page.getByRole("button", { name: "登录", exact: true }).click();
     await expect(page).toHaveURL(/\/student$/);
-    await page.evaluate(() => localStorage.setItem("oj-code-problem-114", "A"));
+    await seedBrowserDraft(page, { userId: 7, role: "student", scope: "practice" }, "objective", 114, "A");
     await page.goto("/student/problems/114");
     await page.getByRole("button", { name: "提交答案", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "通过奖励" });

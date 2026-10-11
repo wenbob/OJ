@@ -251,6 +251,7 @@ AI_CUSTOM_API_KEY=
 | 认证 | `POST /api/auth/login`、`POST /api/auth/logout`、`GET /api/auth/me` |
 | 健康与公共配置 | `GET /api/health`、`GET /api/settings/public` |
 | 题库与提交 | `/api/problems/*`、`/api/submissions/*`、`/api/exam-submissions/*` |
+| 题库筛选 | `GET /api/problems` 支持 `q`（题名包含或数字题号）、`difficulty`、`completion=all/accepted/unaccepted`，与题型、分类、分页组合；通过状态读取当前账号全部历史 Accepted |
 | 编程试运行 | `POST /api/problems/[id]/run` |
 | 学生 AI | `POST /api/ai/problem-assist`、`POST /api/problems/[id]/objective-explanation` |
 | 学生考试 | `/api/exams/*`，包括开始、答题、交卷和超时结算 |

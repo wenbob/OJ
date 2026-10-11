@@ -88,4 +88,14 @@ describe("problems API accepted marker", () => {
       expect.objectContaining({ skip: 20, take: 20 }),
     );
   });
+
+  it("filters before both count and pagination with the authenticated account", async () => {
+    await GET(new NextRequest("http://oj.local/api/problems?q=2&difficulty=入门&completion=unaccepted&pageSize=1"));
+    const where = {
+      archivedAt: null, difficulty: "入门", OR: [{ id: 2 }, { title: { contains: "2" } }],
+      submissions: { none: { userId: 9, status: "Accepted" } },
+    };
+    expect(mocks.count).toHaveBeenCalledWith({ where });
+    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ where, skip: 0, take: 1 }));
+  });
 });

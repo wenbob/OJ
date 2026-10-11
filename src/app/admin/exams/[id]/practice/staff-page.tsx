@@ -324,7 +324,7 @@ export async function StaffExamPracticePage({
                     key={`${role}-exam-practice-${exam.id}-problem-${selectedProblem.id}`}
                     defaultCodeTemplate={defaultCodeTemplate}
                     detailHrefBase={`${basePath}/submissions`}
-                    draftStorageKey={`oj-code-${role}-exam-practice-${exam.id}-problem-${selectedProblem.id}`}
+                    draftContext={{ userId: user.id, role: user.role, scope: "exam-practice", examId: exam.id }}
                     objectiveCompact
                     problemType={selectedProblemType}
                     problemId={selectedProblem.id}
@@ -371,7 +371,7 @@ export async function StaffExamPracticePage({
                   key={`${role}-exam-practice-${exam.id}-problem-${selectedProblem.id}`}
                   defaultCodeTemplate={defaultCodeTemplate}
                   detailHrefBase={`${basePath}/submissions`}
-                  draftStorageKey={`oj-code-${role}-exam-practice-${exam.id}-problem-${selectedProblem.id}`}
+                  draftContext={{ userId: user.id, role: user.role, scope: "exam-practice", examId: exam.id }}
                   problemType={selectedProblemType}
                   problemId={selectedProblem.id}
                   refreshOnSuccess

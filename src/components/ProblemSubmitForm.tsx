@@ -4,7 +4,7 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { SendHorizontal } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
 import { useAutomaticOverlay } from "@/lib/automaticOverlay";
 import { ObjectiveSubmissionBreakdown } from "@/components/ObjectiveSubmissionBreakdown";
@@ -18,6 +18,13 @@ import {
   preloadAcSuccessImage,
 } from "@/lib/acSuccessImage";
 import type { ProblemType } from "@/lib/objectiveProblem";
+import {
+  getProblemDraftKey,
+  getObjectiveResultKey,
+  parseProblemDraft,
+  serializeProblemDraft,
+  type ProblemDraftContext,
+} from "@/lib/problemDraft";
 import {
   createObjectiveSubmissionRefreshState,
   parseObjectiveSubmissionRefreshState,
@@ -43,7 +50,12 @@ int main() {
 
 const objectiveAnswerEditorHeight = "clamp(360px, 44dvh, 520px)";
 
-export function ProblemSubmitForm({
+export function ProblemSubmitForm(props: ComponentProps<typeof ProblemSubmitFormContent>) {
+  const draftKey = getProblemDraftKey(props.draftContext, props.problemType ?? "programming", props.problemId);
+  return <ProblemSubmitFormContent key={`${draftKey}:${props.fromSubmissionId ?? "draft"}`} {...props} />;
+}
+
+function ProblemSubmitFormContent({
   aiCooldownSeconds,
   aiEndpoint,
   aiEnabled = false,
@@ -53,7 +65,7 @@ export function ProblemSubmitForm({
   detailHrefBase = "/student/submissions",
   disabled = false,
   disabledMessage,
-  draftStorageKey,
+  draftContext,
   examId,
   examEndsAt,
   fromSubmissionId,
@@ -75,7 +87,7 @@ export function ProblemSubmitForm({
   detailHrefBase?: string;
   disabled?: boolean;
   disabledMessage?: string;
-  draftStorageKey?: string;
+  draftContext: ProblemDraftContext;
   examId?: number;
   examEndsAt?: string | null;
   fromSubmissionId?: number;
@@ -90,11 +102,7 @@ export function ProblemSubmitForm({
 }) {
   const router = useRouter();
   const objective = problemType === "objective";
-  const storageKey =
-    draftStorageKey ??
-    (examId
-      ? `oj-code-exam-${examId}-problem-${problemId}`
-      : `oj-code-problem-${problemId}`);
+  const storageKey = getProblemDraftKey(draftContext, problemType, problemId);
   const initialCode = objective
     ? ""
     : defaultCodeTemplate && defaultCodeTemplate.trim()
@@ -105,9 +113,11 @@ export function ProblemSubmitForm({
   const [loadedStorageKey, setLoadedStorageKey] = useState<string | null>(null);
   const [loadMessage, setLoadMessage] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [draftStatus, setDraftStatus] = useState<"loading" | "saved" | "error">("loading");
+  const mountedRef = useRef(true);
   const objectiveRefreshStorageKey =
     objective && refreshOnSuccess
-      ? `oj:objective-submission-result:v1:${examId ?? "practice"}:${problemId}`
+      ? getObjectiveResultKey(storageKey)
       : null;
   const [result, setResult] = useState<ObjectiveSubmissionResult | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -128,7 +138,13 @@ export function ProblemSubmitForm({
     objective && examId !== undefined;
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     const frame = window.requestAnimationFrame(async () => {
       if (cancelled) return;
@@ -147,10 +163,15 @@ export function ProblemSubmitForm({
       setCode(initialCode);
 
       if (objectiveRefreshStorageKey) {
-        const restored = parseObjectiveSubmissionRefreshState(
-          window.sessionStorage.getItem(objectiveRefreshStorageKey),
-        );
-        window.sessionStorage.removeItem(objectiveRefreshStorageKey);
+        let restored = null;
+        try {
+          restored = parseObjectiveSubmissionRefreshState(
+            window.sessionStorage.getItem(objectiveRefreshStorageKey),
+          );
+          window.sessionStorage.removeItem(objectiveRefreshStorageKey);
+        } catch {
+          // 本机存储不可用时，仍允许作答和提交。
+        }
         if (restored) {
           setRewardUpdate(restored.rewards ?? null);
           setResult(restored.result);
@@ -163,8 +184,9 @@ export function ProblemSubmitForm({
 
       if (fromSubmissionId) {
         try {
-          const response = await fetch(`/api/submissions/${fromSubmissionId}`);
+          const response = await fetch(`/api/submissions/${fromSubmissionId}`, { signal: controller.signal });
           const data = await response.json();
+          if (cancelled) return;
 
           if (!response.ok) {
             throw new Error(data.error ?? "历史代码加载失败");
@@ -189,20 +211,23 @@ export function ProblemSubmitForm({
           }
 
           const historicalCode = data.submission.code;
+          if (typeof historicalCode !== "string") throw new Error("历史代码格式不正确");
           setCode(historicalCode);
-          window.localStorage.setItem(storageKey, historicalCode);
           setLoadMessage("已加载历史提交代码，你可以继续修改后重新提交。");
           setDraftLoaded(true);
           setLoadedStorageKey(storageKey);
           return;
         } catch {
+          if (cancelled) return;
           setLoadError("历史代码加载失败，请重新进入提交详情页。");
         }
       }
 
-      const savedCode = window.localStorage.getItem(storageKey);
-      if (savedCode !== null) {
-        setCode(savedCode);
+      try {
+        const savedCode = parseProblemDraft(window.localStorage.getItem(storageKey), storageKey);
+        if (savedCode !== null) setCode(savedCode);
+      } catch {
+        setDraftStatus("error");
       }
       setDraftLoaded(true);
       setLoadedStorageKey(storageKey);
@@ -210,6 +235,7 @@ export function ProblemSubmitForm({
 
     return () => {
       cancelled = true;
+      controller.abort();
       window.cancelAnimationFrame(frame);
     };
   }, [
@@ -238,7 +264,14 @@ export function ProblemSubmitForm({
 
   useEffect(() => {
     if (!draftLoaded || loadedStorageKey !== storageKey) return;
-    window.localStorage.setItem(storageKey, code);
+    let status: "saved" | "error" = "saved";
+    try {
+      window.localStorage.setItem(storageKey, serializeProblemDraft(storageKey, code));
+    } catch {
+      status = "error";
+    }
+    const frame = window.requestAnimationFrame(() => setDraftStatus(status));
+    return () => window.cancelAnimationFrame(frame);
   }, [code, draftLoaded, loadedStorageKey, storageKey]);
 
   useEffect(() => {
@@ -264,13 +297,14 @@ export function ProblemSubmitForm({
       });
     });
 
-    if (objectiveRefreshStorageKey) {
-      window.setTimeout(() => {
-        window.sessionStorage.removeItem(objectiveRefreshStorageKey);
-      }, 5_000);
-    }
+    const timer = objectiveRefreshStorageKey ? window.setTimeout(() => {
+      try { window.sessionStorage.removeItem(objectiveRefreshStorageKey); } catch { /* 存储失败不影响提交结果。 */ }
+    }, 5_000) : undefined;
 
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
   }, [objectiveRefreshStorageKey, result]);
 
   async function submit() {
@@ -307,6 +341,7 @@ export function ProblemSubmitForm({
       body: JSON.stringify({ code, examId, learningAssignmentId }),
     });
     const data = await response.json();
+    if (!mountedRef.current) return;
 
     if (!response.ok) {
       setPending(false);
@@ -320,6 +355,7 @@ export function ProblemSubmitForm({
         { method: "POST" },
       );
       const examData = await examResponse.json().catch(() => ({}));
+      if (!mountedRef.current) return;
 
       if (!examResponse.ok) {
         setPending(false);
@@ -336,6 +372,7 @@ export function ProblemSubmitForm({
     setCountedForLearningAssignment(Boolean(data.countedForLearningAssignment));
     setLearningAssignmentDetached(Boolean(data.learningAssignmentDetached));
     if (objectiveRefreshStorageKey) {
+      try {
       window.sessionStorage.setItem(
         objectiveRefreshStorageKey,
         createObjectiveSubmissionRefreshState({
@@ -349,9 +386,13 @@ export function ProblemSubmitForm({
           rewards: data.rewards,
         }),
       );
+      } catch {
+        // 答案已在服务端提交成功，本机结果缓存失败不应被当成网络失败。
+      }
     }
     if (data.submission?.status === "Accepted") {
       const artworkReady = await preloadAcSuccessImage();
+      if (!mountedRef.current) return;
       setAcceptedArtworkReady(artworkReady);
       setShowAcceptedPopup(true);
       setRewardUpdate(data.rewards ?? null);
@@ -365,9 +406,9 @@ export function ProblemSubmitForm({
       router.refresh();
     }
     } catch {
-      setError("网络异常，未能确认提交结果。请查看提交记录；奖励会保存在“我的奖励”中。");
+      if (mountedRef.current) setError("网络异常，未能确认提交结果。请查看提交记录；奖励会保存在“我的奖励”中。");
     } finally {
-      setPending(false);
+      if (mountedRef.current) setPending(false);
     }
   }
 
@@ -478,6 +519,9 @@ export function ProblemSubmitForm({
           onChange={setCode}
         />
       </div>
+      <p className={`mt-2 text-xs font-semibold ${draftStatus === "error" ? "text-amber-800" : "text-ink-600"}`} data-testid="draft-status" role="status">
+        {draftStatus === "loading" ? "正在读取本机草稿…" : draftStatus === "saved" ? "已保存到本机" : "本机草稿保存不可用，请保留当前内容；仍可正常提交。"}
+      </p>
       {loadMessage ? (
         <p className="mt-3 border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
           {loadMessage}

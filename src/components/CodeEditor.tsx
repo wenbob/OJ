@@ -18,10 +18,15 @@ const fontSizeStorageKey = "oj-code-editor-font-size";
 function readInitialFontSize() {
   if (typeof window === "undefined") return defaultFontSize;
 
-  const savedValue = Number(window.localStorage.getItem(fontSizeStorageKey));
-  if (!Number.isFinite(savedValue)) return defaultFontSize;
-
-  return Math.min(maxFontSize, Math.max(minFontSize, savedValue));
+  try {
+    const rawValue = window.localStorage.getItem(fontSizeStorageKey);
+    if (rawValue === null) return defaultFontSize;
+    const savedValue = Number(rawValue);
+    if (!Number.isFinite(savedValue)) return defaultFontSize;
+    return Math.min(maxFontSize, Math.max(minFontSize, savedValue));
+  } catch {
+    return defaultFontSize;
+  }
 }
 
 export default function CodeEditor({
@@ -38,7 +43,7 @@ export default function CodeEditor({
       Math.max(minFontSize, nextFontSize),
     );
     setFontSize(safeFontSize);
-    window.localStorage.setItem(fontSizeStorageKey, String(safeFontSize));
+    try { window.localStorage.setItem(fontSizeStorageKey, String(safeFontSize)); } catch { /* 字号仍在本页生效。 */ }
   }
 
   return (

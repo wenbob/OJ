@@ -184,6 +184,7 @@ export async function StaffPracticeProblemPage({
                   </div>
                 ) : null}
                 <ProblemSubmitForm
+                  draftContext={{ userId: user.id, role: user.role, scope: "practice" }}
                   defaultCodeTemplate={defaultCodeTemplate}
                   detailHrefBase={`${basePath}/submissions`}
                   objectiveCompact
@@ -223,6 +224,7 @@ export async function StaffPracticeProblemPage({
                 </section>
               ) : null}
               <ProblemSubmitForm
+                draftContext={{ userId: user.id, role: user.role, scope: "practice" }}
                 aiCooldownSeconds={staffProgrammingCooldownSeconds ?? 30}
                 aiEnabled={staffProgrammingAiEnabled}
                 aiEndpoint={`/api/admin/problems/${problem.id}/programming-assist`}

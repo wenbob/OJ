@@ -24,6 +24,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { boolSetting, getDefaultCppTemplate, getSetting } from "@/lib/settings";
 import { getStudentObjectiveAiDisplayState } from "@/lib/studentObjectiveAi";
+import { safeProblemLibraryReturnTo } from "@/lib/problemListFilters";
 import { SubmitForm } from "./submit-form";
 
 type PageProps = {
@@ -31,6 +32,7 @@ type PageProps = {
   searchParams: Promise<{
     assignment?: string | string[];
     fromSubmission?: string | string[];
+    returnTo?: string | string[];
   }>;
 };
 
@@ -41,6 +43,7 @@ export default async function StudentProblemDetailPage({
   const user = await requirePageUser("student");
   const { id } = await params;
   const query = await searchParams;
+  const returnTo = safeProblemLibraryReturnTo(Array.isArray(query.returnTo) ? query.returnTo[0] : query.returnTo);
   const fromSubmissionValue = Array.isArray(query.fromSubmission)
     ? query.fromSubmission[0]
     : query.fromSubmission;
@@ -137,7 +140,7 @@ export default async function StudentProblemDetailPage({
 
   return (
     <>
-      <Link className="academy-text-link mb-4" href="/student/problems"><ArrowLeft aria-hidden="true" size={15} />返回日常刷题</Link>
+      <Link className="academy-text-link mb-4" href={returnTo}><ArrowLeft aria-hidden="true" size={15} />返回日常刷题</Link>
       {assignment ? (
         <section className="mb-5 flex flex-wrap items-center justify-between gap-3 border border-steel/30 bg-[#eef6fb] px-4 py-3">
           <div>
@@ -204,6 +207,7 @@ export default async function StudentProblemDetailPage({
             <ObjectiveAiExplanationPanel />
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3">
               <SubmitForm
+                draftContext={{ userId: user.id, role: user.role, scope: "practice" }}
                 enableRewards
                 defaultCodeTemplate={defaultCodeTemplate}
                 fromSubmissionId={
@@ -224,6 +228,7 @@ export default async function StudentProblemDetailPage({
         ) : (
         <aside className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-4 xl:self-start">
           <SubmitForm
+            draftContext={{ userId: user.id, role: user.role, scope: "practice" }}
             enableRewards
             aiCooldownSeconds={aiCooldownSeconds ?? undefined}
             aiEnabled={

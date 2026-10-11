@@ -6,6 +6,7 @@ import {
   readPaginationFromUrl,
 } from "@/lib/pagination";
 import { isProblemType } from "@/lib/objectiveProblem";
+import { readProblemListFilters, buildProblemListWhere } from "@/lib/problemListFilters";
 import { prisma } from "@/lib/prisma";
 import { getProblemOrderBy } from "@/lib/problemOrdering";
 import {
@@ -17,7 +18,6 @@ export async function GET(request: NextRequest) {
   const auth = await requireApiUser(request);
   if (auth.response) return auth.response;
 
-  const category = request.nextUrl.searchParams.get("category")?.trim();
   const problemTypeValue = request.nextUrl.searchParams.get("problemType")?.trim();
   if (problemTypeValue && !isProblemType(problemTypeValue)) {
     return NextResponse.json({ error: "题型不合法" }, { status: 400 });
@@ -26,11 +26,7 @@ export async function GET(request: NextRequest) {
     request.nextUrl.searchParams,
     PROBLEM_LIST_PAGE_SIZE,
   );
-  const where = {
-    archivedAt: null,
-    ...(category ? { category } : {}),
-    ...(problemTypeValue ? { problemType: problemTypeValue } : {}),
-  };
+  const where = buildProblemListWhere(readProblemListFilters(request.nextUrl.searchParams), auth.user.id);
   const [problems, total] = await Promise.all([
     prisma.problem.findMany({
       where,

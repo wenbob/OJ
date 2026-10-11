@@ -306,6 +306,7 @@ export default async function StudentExamTakePage({
               </section>
             ) : null}
             <ProblemSubmitForm
+              draftContext={{ userId: user.id, role: user.role, scope: "exam", examId: exam.id }}
               aiCooldownSeconds={aiCooldownSeconds ?? undefined}
               aiEnabled={
                 selectedProblemType === "programming" &&

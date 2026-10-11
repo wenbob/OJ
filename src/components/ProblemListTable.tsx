@@ -23,6 +23,8 @@ export function ProblemListTable({
   latestAcceptedSubmissionIds,
   submissionHrefBase,
   emptyState,
+  returnTo,
+  showProblemId = false,
 }: {
   problems: ProblemListItem[];
   detailHrefBase: string;
@@ -31,6 +33,8 @@ export function ProblemListTable({
   latestAcceptedSubmissionIds?: ReadonlyMap<number, number>;
   submissionHrefBase?: string;
   emptyState: ReactNode;
+  returnTo?: string;
+  showProblemId?: boolean;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -50,6 +54,7 @@ export function ProblemListTable({
               <tr className={`problem-entry border-b border-ink-950/10 ${isAccepted ? "" : "problem-hover-incomplete"}`} data-accepted={isAccepted} key={problem.id}>
                 <td className="max-w-sm break-words px-5 py-4 font-semibold">
                   <span className="inline-flex flex-wrap items-center gap-2">
+                    {showProblemId ? <span className="text-xs font-bold tabular-nums text-ink-500">#{problem.id}</span> : null}
                     <span className="[overflow-wrap:anywhere]" id={`problem-title-${problem.id}`}>{problem.title}</span>
                     {acceptedSubmissionId && submissionHrefBase ? (
                       <AcceptedProblemIndicator detailHrefBase={submissionHrefBase} problemTitle={problem.title} problemType={normalizeProblemType(problem.problemType)} submissionId={acceptedSubmissionId} />
@@ -67,7 +72,7 @@ export function ProblemListTable({
                   ) : submissionCounts.get(problem.id) ?? 0}
                 </td>
                 <td className="px-5 py-4 text-right">
-                  <ProblemEntryLink aria-describedby={`problem-title-${problem.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-steel hover:text-clay" href={`${detailHrefBase}/${problem.id}`}>
+                  <ProblemEntryLink aria-describedby={`problem-title-${problem.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-steel hover:text-clay" href={`${detailHrefBase}/${problem.id}${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ""}`}>
                     {isAccepted ? "再次练习" : submissionHrefBase ? "进入做题" : "开始做题"}<ChevronRight aria-hidden="true" size={16} />
                   </ProblemEntryLink>
                 </td>

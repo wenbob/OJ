@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { seedBrowserDraft } from "./draft-fixtures";
 
 type BrowserResponse = {
   body: Record<string, unknown>;
@@ -81,7 +82,7 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
       .not.toBe("none");
     await expect(
       studentIncompleteRow.getByRole("link", { name: "开始做题" }),
-    ).toHaveAttribute("href", "/student/problems/101");
+    ).toHaveAttribute("href", /^\/student\/problems\/101\?returnTo=/);
 
     await page.goto("/student/problems?problemType=objective");
     const studentAcceptedRow = page.getByRole("row").filter({
@@ -246,12 +247,7 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
       submitRequestsDuringSwitch += 1;
       await route.continue();
     });
-    await page.evaluate(() => {
-      window.localStorage.setItem(
-        "oj-code-exam-205-problem-104",
-        "// BACK_GUARD_DRAFT",
-      );
-    });
+    const examDraftKey = await seedBrowserDraft(page, { userId: 2, role: "student", scope: "exam", examId: 205 }, "programming", 104, "// BACK_GUARD_DRAFT");
     await acceptedTab.click();
     await expect(page).toHaveURL(/problemId=104/);
     await expect(
@@ -264,9 +260,7 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
 
     await expect
       .poll(() =>
-        page.evaluate(() =>
-          window.localStorage.getItem("oj-code-exam-205-problem-104"),
-        ),
+        page.evaluate((key) => window.localStorage.getItem(key), examDraftKey),
       )
       .toContain("BACK_GUARD_DRAFT");
 
@@ -281,9 +275,7 @@ test("critical student, exam, AI, Judge, and administrator boundaries", async ({
     ).toBeVisible();
     await expect
       .poll(() =>
-        page.evaluate(() =>
-          window.localStorage.getItem("oj-code-exam-205-problem-104"),
-        ),
+        page.evaluate((key) => window.localStorage.getItem(key), examDraftKey),
       )
       .toContain("BACK_GUARD_DRAFT");
     expect(submitRequestsDuringSwitch).toBe(0);

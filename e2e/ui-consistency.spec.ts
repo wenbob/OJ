@@ -63,6 +63,10 @@ function detailPath(role: Role, id = fixture.problemId) {
   return `/${role}/${role === "student" ? "problems" : "practice/problems"}/${id}`;
 }
 
+function detailUrl(role: Role, id = fixture.problemId) {
+  return new RegExp(`${detailPath(role, id)}${role === "student" ? "\\?returnTo=.*" : "$"}`);
+}
+
 async function expectNoOverflow(page: Page) {
   try {
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), { message: `Horizontal overflow at ${page.url()}` }).toBe(true);
@@ -130,7 +134,7 @@ test("all roles share filters and support whole-row, keyboard and new-tab naviga
         await row.hover();
         await expect.poll(() => row.evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgba(79, 111, 136, 0.12)");
         await clickInsideRow(row, cell, blank);
-        await expect(page).toHaveURL(new RegExp(`${detailPath(role)}$`));
+        await expect(page).toHaveURL(detailUrl(role));
         await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
       }
       await page.goto(listPath(role));
@@ -148,10 +152,10 @@ test("all roles share filters and support whole-row, keyboard and new-tab naviga
       const mainLink = page.getByRole("row").filter({ hasText: title }).locator("[data-problem-entry-link]");
       await mainLink.focus();
       await mainLink.press("Enter");
-      await expect(page).toHaveURL(new RegExp(`${detailPath(role)}$`));
+      await expect(page).toHaveURL(detailUrl(role));
       await page.goto(listPath(role));
       const [tab] = await Promise.all([context.waitForEvent("page"), mainLink.click({ modifiers: ["Control"] })]);
-      await expect(tab).toHaveURL(new RegExp(`${detailPath(role)}$`));
+      await expect(tab).toHaveURL(detailUrl(role));
       await tab.close();
 
       if (role !== "student") {
@@ -202,7 +206,7 @@ test("role lists, long problem details and empty states fit four viewport widths
       await expect(page).toHaveURL(/problemType=objective/);
       await expect(page.getByRole("row").filter({ hasText: "UI 选择判断题" })).toBeVisible();
       await clickInsideRow(page.getByRole("row").filter({ hasText: "UI 选择判断题" }), 1);
-      await expect(page).toHaveURL(new RegExp(`${detailPath(role, fixture.objectiveId)}$`));
+      await expect(page).toHaveURL(detailUrl(role, fixture.objectiveId));
       await expect(page.getByRole("heading", { name: "UI 选择判断题", exact: true })).toBeVisible();
     } finally { await context.close(); }
   }
@@ -282,7 +286,7 @@ test("category buttons, common pages and touch feedback keep their original acti
     await touch.goto(listPath("student"));
     expect(await touch.evaluate(() => matchMedia("(hover: hover)").matches)).toBe(false);
     await touch.getByRole("row").filter({ hasText: title }).tap({ position: { x: 8, y: 8 } });
-    await expect(touch).toHaveURL(new RegExp(`${detailPath("student")}$`));
+    await expect(touch).toHaveURL(detailUrl("student"));
     await touch.goto(listPath("student"));
     await touch.emulateMedia({ reducedMotion: "reduce" });
     const durations = await touch.getByRole("row").filter({ hasText: title }).evaluate(el => getComputedStyle(el).transitionDuration);

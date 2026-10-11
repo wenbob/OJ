@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
+import { seedBrowserDraft } from "./draft-fixtures";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 const e2eDatabaseUrl = `file:${path.resolve("prisma/e2e.db").replaceAll("\\", "/")}`;
@@ -99,7 +100,7 @@ test("announcement publishing, persistent reads, overlay queue, exam suppression
     await student.getByRole("button", { name: "我知道了" }).click();
     await db.learningAssignment.update({ where: { id: assignment.id }, data: { archivedAt: new Date() } });
 
-    await student.evaluate(() => localStorage.setItem("oj-code-problem-112", "A"));
+    await seedBrowserDraft(student, { userId: 6, role: "student", scope: "practice" }, "objective", 112, "A");
     await student.goto("/student/problems/112");
     await student.getByRole("button", { name: "提交答案", exact: true }).click();
     const reward = student.getByRole("dialog", { name: "通过奖励" });
