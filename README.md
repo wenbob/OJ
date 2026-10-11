@@ -20,7 +20,7 @@
 
 | 场景 | 已实现的能力 |
 | --- | --- |
-| 日常做题 | 编程题与选择判断题、Monaco 编辑器、本地草稿、题面公式与表格、提交记录、错题本和天梯 |
+| 日常做题 | 编程题与选择判断题、Monaco 编辑器、账号隔离草稿、题名/题号搜索与筛选、题面公式与表格、提交记录、错题本和天梯 |
 | 共用界面 | 三端沿用纸色、钢蓝和黏土橙；分类、标题图标、标签与空状态统一，练习题目主体及空白区域可直接进入，提交记录与管理按钮保留独立操作 |
 | 编程评测 | C++17、公开样例与自定义输入试运行、样例输出差异标红、精简提交结果、Docker 资源隔离、按账号公平调度 |
 | 积分奖励 | “我的奖励”独立菜单管理抽奖、挑战和历史；日常/专项新题首次通过抽奖，管理员设定范围；抽奖后 24 小时内接受挑战，接受后另有 24 小时完成，奖励计入天梯 |
@@ -32,7 +32,7 @@
 | 问题反馈 | 学生与老师提交文字和截图、查看自己的反馈；管理员统一处理和回复 |
 | 全站公告 | 管理员发布文字通知；学生和老师普通页面弹窗确认、账号级已读同步、历史公告回看，考试期间暂停提醒 |
 
-2026-10-07 的编程反馈简化已部署到正式站点；界面约定、源码入口与截图见 [编程反馈说明](docs/programming-feedback-2026-10-07.md)，备份与线上验收见 [发布记录](docs/ops-review-2026-10-07-programming-feedback.md)。
+2026-10-11 的账号草稿隔离与学生题库搜索筛选已部署到正式站点；行为与源码入口见 [草稿与题库说明](docs/drafts-and-library-2026-10-11.md)，备份与线上验收见 [发布记录](docs/ops-review-2026-10-11-drafts-library.md)。此前的编程反馈简化见 [编程反馈说明](docs/programming-feedback-2026-10-07.md) 与 [2026-10-07 发布记录](docs/ops-review-2026-10-07-programming-feedback.md)。
 
 | 角色 | 可以做什么 | 主要边界 | 操作手册 |
 | --- | --- | --- | --- |
@@ -208,6 +208,7 @@ AI_CUSTOM_API_KEY=
 | 页面、布局、API | [`src/app/`](src/app/) |
 | 三端共用 UI 与题目入口 | [`PageHeading.tsx`](src/components/PageHeading.tsx)、[`ProblemEntryLink.tsx`](src/components/ProblemEntryLink.tsx)、[组件、交互与验证清单](docs/ui-unification-2026-10-02.md) |
 | Monaco 编辑器 | [`CodeEditor.tsx`](src/components/CodeEditor.tsx) |
+| 账号草稿与学生题库筛选 | [`problemDraft.ts`](src/lib/problemDraft.ts)、[`problemListFilters.ts`](src/lib/problemListFilters.ts)、[行为与验证](docs/drafts-and-library-2026-10-11.md) |
 | 题面渲染与导入 | [`ProblemRichText.tsx`](src/components/ProblemRichText.tsx)、[`markdownParser.ts`](src/lib/markdownParser.ts) |
 | 登录与权限 | [`auth.ts`](src/lib/auth.ts)、[`src/app/api/auth/`](src/app/api/auth/) |
 | 评测与队列 | [`judge.ts`](src/lib/judge.ts)、[`judgeQueue.ts`](src/lib/judgeQueue.ts)、[Judge 镜像](docker/judge-cpp/) |
