@@ -34,6 +34,8 @@
 
 2026-10-11 的账号草稿隔离与学生题库搜索筛选已部署到正式站点；行为与源码入口见 [草稿与题库说明](docs/drafts-and-library-2026-10-11.md)，备份与线上验收见 [发布记录](docs/ops-review-2026-10-11-drafts-library.md)。此前的编程反馈简化见 [编程反馈说明](docs/programming-feedback-2026-10-07.md) 与 [2026-10-07 发布记录](docs/ops-review-2026-10-07-programming-feedback.md)。
 
+2026-10-12 已将题名/题号、难度、通过状态筛选补齐到老师题目练习、管理员题目练习和题目管理；行为见 [后台题库筛选说明](docs/staff-library-2026-10-11.md)，备份及验收见 [本次发布记录](docs/ops-review-2026-10-12-staff-library.md)。
+
 | 角色 | 可以做什么 | 主要边界 | 操作手册 |
 | --- | --- | --- | --- |
 | 学生 | 做题、参加考试、完成专项练习、使用已授权 AI | 只读自己的提交；正式评测隐藏测试数据；客观题 AI 须单独解锁 | [学生使用说明](docs/student-guide.md) |
